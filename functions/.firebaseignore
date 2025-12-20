@@ -1,0 +1,8 @@
+cat > .firebaseignore <<'EOF'
+node_modules
+lib
+dist
+.cache
+build
+.tmp
+EOF

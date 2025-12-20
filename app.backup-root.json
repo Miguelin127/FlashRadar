@@ -1,0 +1,8 @@
+{
+  "android": {
+    "package": "com.miguelin1.flashradarapp"
+  },
+  "ios": {
+    "bundleIdentifier": "com.miguelin1.flashradarapp"
+  }
+}

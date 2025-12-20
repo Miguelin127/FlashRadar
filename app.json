@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "FlashRadar",
+    "slug": "flashradar",
+    "sdkVersion": "54.0.0",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.miguelin1.flashradarapp",
+      "buildNumber": "4"
+    },
+
+    "android": {
+      "package": "com.miguelin1.flashradarapp",
+      "versionCode": 3,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+
+    "extra": {
+      "eas": {
+        "projectId": "10e28c1b-9e8d-4608-b9e1-9b3a263a1aea"
+      }
+    },
+
+    "owner": "miguelin1"
+  }
+}
+Step 1 (Root VS terminal)
+
+From your project root (~/FlashRadarProject/FlashRadar), run:
+
+npx eas build --platform ios --profile production --auto-submit
+
+Step 2
+
+When it finishes, paste the last ~10 lines (it will show a build URL and/or submit status).
+
+miguel@Miguels-MacBook-Air FlashRadarProject % npx eas build --platform ios --profile production --auto-submit
+
+npm error could not determine executable to run
+npm error A complete log of this run can be found in: /Users/miguel/.npm/_logs/2025-12-20T06_25_01_233Z-debug-0.log
+miguel@Miguels-MacBook-Air FlashRadarProject %
+
+Run it with the EAS CLI directly (your npx can’t find the executable).
+
+Step 1 (Root VS terminal):
+
+npx --yes eas-cli@latest build --platform ios --profile production --auto-submit
+
+
+If that still errors, do this (same terminal):
+
+npm i -g eas-cli
+eas --version
+eas build --platform ios --profile production --auto-submit
+

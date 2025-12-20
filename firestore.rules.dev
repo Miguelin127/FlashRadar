@@ -1,0 +1,41 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users — allow signed-in users to manage during dev
+    match /users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Favorites — allow during dev
+    match /users/{userId}/favorites/{favId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Referrals — allow during dev
+    match /users/{userId}/referrals/{referralId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Deals — public read/write in dev
+    match /deals/{dealId} {
+      allow read, write: if true;
+    }
+
+    // Online deals — public read/write in dev
+    match /deals_online/{dealId} {
+      allow read, write: if true;
+    }
+
+    // Rewards — allow signed-in users during dev
+    match /rewards/{rewardId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Default — allow signed-in users everything in dev
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

@@ -1,0 +1,10 @@
+// ✅ Firebase Admin initialization (for CommonJS build)
+import * as admin from "firebase-admin";
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+const db = admin.firestore();
+
+export { admin, db };

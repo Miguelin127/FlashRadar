@@ -1,0 +1,45 @@
+{
+  "users": {
+    "Ua12T5IJtLRYlflZMGnZX8BeZEb2": {
+      "email": "premium@example.com",
+      "isPremium": true,
+      "subscriptionStatus": "premium",
+      "radius": 10,
+      "city": "Chicago",
+      "state": "Illinois",
+      "referralCode": "PREM10",
+      "referralsCount": 20,
+      "rewardUnlocked": true,
+      "rewardGranted": false,
+      "stripeCustomerId": "cus_test_premium",
+      "updatedAt": "2025-11-04T18:00:00.000Z"
+    },
+    "Xb92KJ8kVtPRyLRoZg8yKbzxQeJ3": {
+      "email": "freeuser@example.com",
+      "isPremium": false,
+      "subscriptionStatus": "free",
+      "radius": 5,
+      "city": "Chicago",
+      "state": "Illinois",
+      "referralCode": "FREE22",
+      "referralsCount": 0,
+      "rewardUnlocked": false,
+      "rewardGranted": false,
+      "updatedAt": "2025-11-04T18:00:00.000Z"
+    },
+    "Tn67FD3PbYQk8aEZ9LhUrfX2cVo5": {
+      "email": "referred@example.com",
+      "isPremium": false,
+      "subscriptionStatus": "free",
+      "radius": 5,
+      "city": "Aurora",
+      "state": "Illinois",
+      "referralCode": "JOIN99",
+      "referredBy": "Ua12T5IJtLRYlflZMGnZX8BeZEb2",
+      "referralsCount": 0,
+      "rewardUnlocked": false,
+      "rewardGranted": false,
+      "updatedAt": "2025-11-04T18:00:00.000Z"
+    }
+  }
+}

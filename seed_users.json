@@ -1,0 +1,15 @@
+{
+  "users": {
+    "testUser": { "isPremium": true, "referredBy": "abc123" },
+    "user1":    { "isPremium": false, "referredBy": "testUser" },
+    "user2":    { "isPremium": false, "referredBy": "testUser" },
+    "user3":    { "isPremium": false, "referredBy": "testUser" },
+    "user4":    { "isPremium": false, "referredBy": "testUser" },
+    "user5":    { "isPremium": false, "referredBy": "testUser" },
+    "user6":    { "isPremium": false, "referredBy": "testUser" },
+    "user7":    { "isPremium": false, "referredBy": "testUser" },
+    "user8":    { "isPremium": false, "referredBy": "testUser" },
+    "user9":    { "isPremium": false, "referredBy": "testUser" },
+    "user10":   { "isPremium": false, "referredBy": "testUser" }
+  }
+}

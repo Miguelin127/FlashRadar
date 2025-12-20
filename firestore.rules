@@ -1,0 +1,37 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───── USERS ─────
+    match /users/{userId} {
+      // Signed-in users can read and write their own document
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Allow all sub-collections owned by the same user
+      match /{subCollection}/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // ───── DEALS (read-only) ─────
+    match /deals/{dealId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /deals_online/{dealId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ───── NOTIFICATIONS ─────
+    match /notifications/{notifId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // 🚫 Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

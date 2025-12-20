@@ -1,0 +1,66 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ✅ Users
+    match /users/{userId} {
+      // Allow user to read their own profile
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+
+      // Prevent client from modifying subscription-related fields
+      allow update: if request.auth != null && request.auth.uid == userId
+        && !(
+          'premium' in request.resource.data
+          || 'trialActive' in request.resource.data
+          || 'subscriptionStatus' in request.resource.data
+          || 'trialEnds' in request.resource.data
+          || 'stripeCustomerId' in request.resource.data
+          || 'totalEarnings' in request.resource.data
+        );
+
+      // ✅ Allow subcollections (favorites, flips, scans)
+      match /{subCollection}/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // ✅ Notifications — users can read their own
+    match /notifications/{notifId} {
+      allow read: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow write: if false; // only backend writes
+    }
+
+    // ✅ Referrals — readable by referrer or referred
+    match /referrals/{referralId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.referrerUid
+          || request.auth.uid == resource.data.referredUid);
+      allow write: if false;
+    }
+
+    // ✅ Deals
+    match /deals/{dealId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ✅ Online deals
+    match /deals_online/{dealId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ✅ Payouts (read only for owner)
+    match /payouts/{payoutId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow write: if false;
+    }
+
+    // 🚫 Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,16 @@
+cat > .gcloudignore <<'EOF'
+# Firebase & GCP ignore rules
+node_modules/
+lib/
+dist/
+.cache/
+build/
+.tmp/
+npm-debug.log
+firebase-debug.log
+.env
+.env.local
+__tests__/
+coverage/
+*.map
+EOF

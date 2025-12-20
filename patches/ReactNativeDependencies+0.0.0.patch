@@ -1,0 +1,8 @@
+--- a/ios/Pods/Headers/Public/ReactNativeDependencies/folly/Expected.h
++++ b/ios/Pods/Headers/Public/ReactNativeDependencies/folly/Expected.h
+@@ -1584,7 +1584,7 @@
+ // Inspired by https://github.com/toby-allsopp/coroutine_monad
+-#if FOLLY_HAS_COROUTINES
++#if 0
+ #include <folly/coro/Coroutine.h>
+ #endif
