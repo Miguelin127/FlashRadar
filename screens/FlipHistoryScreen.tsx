@@ -1,359 +1,328 @@
 // flashradar/screens/FlipHistoryScreen.tsx
-import React, { useEffect, useState } from "react";
+
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   SectionList,
-  ActivityIndicator,
   TouchableOpacity,
   Alert,
-  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+
 import { useTheme } from "../context/ThemeContext";
-import { db } from "../firebaseConfig";
 import { useAuth } from "../context/AuthContext";
+import { db } from "../firebaseConfig";
+
+import {
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+} from "firebase/firestore";
+
 import firebase from "firebase/compat/app";
-import "firebase/compat/firestore";
 
 type FlipItem = {
   id: string;
-  query?: string;
   title?: string;
-  image?: string;
   low?: number;
   high?: number;
-  profit?: number | string;
+  quantity?: number;
   timestamp?: firebase.firestore.Timestamp;
-  type: "manual" | "scan";
 };
+
+type Period = "month" | "quarter" | "year";
 
 export default function FlipHistoryScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const [flips, setFlips] = useState<FlipItem[]>([]);
-  const [loading, setLoading] = useState(true);
 
+  const [flips, setFlips] = useState<FlipItem[]>([]);
+  const [period, setPeriod] = useState<Period>("month");
+
+  /* ───────── Load flips ───────── */
   useEffect(() => {
     if (!user) return;
 
-    let flipsData: FlipItem[] = [];
-    let scansData: FlipItem[] = [];
+    const ref = query(
+      collection(db, "users", user.uid, "flips"),
+      orderBy("timestamp", "desc")
+    );
 
-    // ✅ define merge function first
-    const mergeData = () => {
-      const combined = [...flipsData, ...scansData].sort((a, b) => {
-        const ta = a.timestamp?.toMillis?.() || 0;
-        const tb = b.timestamp?.toMillis?.() || 0;
-        return tb - ta;
-      });
-      setFlips(combined);
-      setLoading(false);
-    };
+    const unsub = onSnapshot(ref, snap => {
+      const rows: FlipItem[] = [];
+      snap.forEach(d => rows.push({ id: d.id, ...d.data() } as FlipItem));
+      setFlips(rows);
+    });
 
-    const unsubFlips = db
-      .collection("users")
-      .doc(user.uid)
-      .collection("flips")
-      .orderBy("timestamp", "desc")
-      .onSnapshot(
-        (snap) => {
-          flipsData = snap.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            type: "manual" as const,
-          })) as FlipItem[];
-          mergeData();
-        },
-        (error) => console.error("Flip history error:", error)
-      );
-
-    const unsubScans = db
-      .collection("users")
-      .doc(user.uid)
-      .collection("scans")
-      .orderBy("timestamp", "desc")
-      .onSnapshot(
-        (snap) => {
-          scansData = snap.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            type: "scan" as const,
-          })) as FlipItem[];
-          mergeData();
-        },
-        (error) => console.error("Scan history error:", error)
-      );
-
-    return () => {
-      unsubFlips();
-      unsubScans();
-    };
+    return () => unsub();
   }, [user]);
 
-  // ──────────── Summary Metrics ────────────
-  const totalFlips = flips.length;
-  const avgMargin =
-    totalFlips > 0
-      ? flips.reduce((acc, f) => {
-          if (f.low && f.high) return acc + ((f.high - f.low) / f.low) * 100;
-          return acc;
-        }, 0) / totalFlips
-      : 0;
+  /* ───────── Filter by period ───────── */
+  const filtered = useMemo(() => {
+    const now = new Date();
 
-  const highestMargin = totalFlips
-    ? Math.max(
-        ...flips.map((f) =>
-          f.low && f.high ? ((f.high - f.low) / f.low) * 100 : 0
-        )
-      )
-    : 0;
+    return flips.filter(f => {
+      if (!f.timestamp) return false;
+      const d = f.timestamp.toDate();
 
-  // ──────────── Export CSV ────────────
-  const handleExportCSV = async () => {
-    try {
-      if (flips.length === 0) {
-        Alert.alert("No Data", "There are no flips or scans to export yet.");
-        return;
+      if (period === "month") {
+        return d.getMonth() === now.getMonth() &&
+               d.getFullYear() === now.getFullYear();
       }
 
-      let csv = "Type,Title/Query,Low,High,Profit,Date\n";
-      flips.forEach((f) => {
-        const date = f.timestamp?.toDate().toLocaleDateString() ?? "—";
-        const margin =
-          f.low && f.high ? ((f.high - f.low) / f.low) * 100 : "—";
-        csv += `${f.type},${f.query || f.title || "—"},${f.low || "—"},${
-          f.high || "—"
-        },${margin},${date}\n`;
-      });
-
-      const dir =
-        (FileSystem as any).documentDirectory ||
-        (FileSystem as any).cacheDirectory ||
-        "";
-
-      const fileUri = `${dir}flip_history.csv`;
-      await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: "utf8" });
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri);
-      } else {
-        Alert.alert("Exported", `File saved to: ${fileUri}`);
+      if (period === "quarter") {
+        const q = Math.floor(now.getMonth() / 3);
+        return Math.floor(d.getMonth() / 3) === q &&
+               d.getFullYear() === now.getFullYear();
       }
-    } catch (error) {
-      console.error("CSV export error:", error);
-      Alert.alert("Error", "Failed to export CSV file.");
+
+      return d.getFullYear() === now.getFullYear();
+    });
+  }, [flips, period]);
+
+  /* ───────── Stats ───────── */
+  const stats = useMemo(() => {
+    let revenue = 0;
+    let cost = 0;
+
+    filtered.forEach(f => {
+      const qty = f.quantity ?? 1;
+      revenue += (f.high ?? 0) * qty;
+      cost += (f.low ?? 0) * qty;
+    });
+
+    return {
+      revenue,
+      cost,
+      profit: revenue - cost,
+    };
+  }, [filtered]);
+
+  /* ───────── CSV Export ───────── */
+  const exportCSV = async () => {
+    if (!filtered.length) {
+      Alert.alert("Nothing to export");
+      return;
     }
+
+    const rows = [
+      "Title,Cost,Revenue,Quantity,Date",
+      ...filtered.map(f =>
+        `"${f.title ?? "Item"}",${f.low ?? 0},${f.high ?? 0},${f.quantity ?? 1},"${f.timestamp?.toDate().toISOString()}"`
+      ),
+    ];
+
+    const baseDir =
+  (FileSystem as any).cacheDirectory ||
+  (FileSystem as any).documentDirectory;
+
+const path = `${baseDir}flips.csv`;
+    await FileSystem.writeAsStringAsync(path, rows.join("\n"));
+
+    await Sharing.shareAsync(path);
   };
 
-  // ──────────── Render Item ────────────
-  const renderItem = ({ item }: { item: FlipItem }) => {
-    const margin =
-      item.low && item.high ? ((item.high - item.low) / item.low) * 100 : null;
-    const profitColor =
-      margin == null
-        ? colors.subtext
-        : margin > 50
-        ? "#4CAF50"
-        : margin > 20
-        ? "#FFC107"
-        : "#FF5722";
-    const date = item.timestamp?.toDate().toLocaleDateString() ?? "—";
-
-    return (
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
-        <View style={styles.row}>
-          {item.image ? (
-            <Image
-              source={{ uri: item.image }}
-              style={{ width: 50, height: 50, borderRadius: 8, marginRight: 10 }}
-            />
-          ) : (
-            <View style={styles.placeholderThumb} />
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.query, { color: colors.text }]}>
-              {item.title || item.query || "Untitled"}
-            </Text>
-            <Text style={[styles.date, { color: colors.subtext }]}>{date}</Text>
-            {margin !== null && (
-              <Text style={[styles.margin, { color: profitColor }]}>
-                Margin ≈ {margin.toFixed(1)}%
-              </Text>
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  // ──────────── Group Data ────────────
-  const sections = [
+  /* ───────── Group list ───────── */
+  const sections = useMemo(() => [
     {
-      title: "📸 Scanned Items",
-      data: flips.filter((item) => item.type === "scan"),
+      title: "Saved Flips",
+      data: filtered,
     },
-    {
-      title: "💰 Manual Estimates",
-      data: flips.filter((item) => item.type === "manual"),
-    },
-  ].filter((section) => section.data.length > 0);
-
-  if (loading)
-    return (
-      <SafeAreaView
-        style={[styles.safeArea, { backgroundColor: colors.background }]}
-      >
-        <ActivityIndicator
-          size="large"
-          color={colors.accent}
-          style={{ marginTop: 40 }}
-        />
-      </SafeAreaView>
-    );
+  ], [filtered]);
 
   return (
-    <SafeAreaView
-      style={[styles.safeArea, { backgroundColor: colors.background }]}
-    >
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <Text style={[styles.header, { color: colors.accent }]}>
-          🧾 Flip Tracker History
-        </Text>
-        <TouchableOpacity onPress={handleExportCSV}>
-          <Text style={[styles.clearText, { color: colors.subtext }]}>
-            📤 Export CSV
-          </Text>
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      <SectionList
+        sections={sections}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.scroll}
+        ListHeaderComponent={
+          <>
+            {/* Period Toggle */}
+            <View style={styles.toggleRow}>
+              {(["month", "quarter", "year"] as Period[]).map(p => (
+                <TouchableOpacity
+                  key={p}
+                  onPress={() => setPeriod(p)}
+                  style={[
+                    styles.toggleBtn,
+                    period === p && styles.toggleActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.toggleText,
+                      period === p && styles.toggleTextActive,
+                    ]}
+                  >
+                    {p.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-      {/* Summary */}
-      {flips.length > 0 && (
-        <View style={[styles.summaryBox, { backgroundColor: colors.card }]}>
-          <Text style={[styles.summaryTitle, { color: colors.accent }]}>
-            Summary
-          </Text>
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryText, { color: colors.text }]}>
-              Total Items:
-            </Text>
-            <Text style={[styles.summaryValue, { color: colors.text }]}>
-              {totalFlips}
-            </Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryText, { color: colors.text }]}>
-              Avg Margin:
-            </Text>
-            <Text
-              style={[
-                styles.summaryValue,
-                { color: avgMargin > 50 ? "#4CAF50" : "#FFC107" },
-              ]}
-            >
-              {avgMargin.toFixed(1)}%
-            </Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryText, { color: colors.text }]}>
-              Highest Margin:
-            </Text>
-            <Text
-              style={[
-                styles.summaryValue,
-                { color: highestMargin > 50 ? "#4CAF50" : "#FF5722" },
-              ]}
-            >
-              {highestMargin.toFixed(1)}%
-            </Text>
-          </View>
-        </View>
-      )}
+            {/* Summary */}
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryTitle}>Profit Summary</Text>
 
-      {/* Data List */}
-      {sections.length === 0 ? (
-        <Text style={[styles.empty, { color: colors.subtext }]}>
-          No flips or scans recorded yet.
-        </Text>
-      ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          renderSectionHeader={({ section: { title } }) => (
-            <Text style={[styles.sectionHeader, { color: colors.accent }]}>
-              {title}
+              <Row label="Revenue" value={`$${stats.revenue.toFixed(2)}`} green />
+              <Row label="Cost" value={`$${stats.cost.toFixed(2)}`} red />
+              <Row
+                label="Net Profit"
+                value={`$${stats.profit.toFixed(2)}`}
+                strong
+                green
+              />
+            </View>
+
+            {/* Chart */}
+            <View style={styles.chart}>
+              <Bar label="Revenue" value={stats.revenue} color="#1E9E39" />
+              <Bar label="Cost" value={stats.cost} color="#E53935" />
+              <Bar label="Profit" value={stats.profit} color="#FF7A00" />
+            </View>
+
+            {/* Export */}
+            <TouchableOpacity style={styles.exportBtn} onPress={exportCSV}>
+              <Text style={styles.exportText}>Export CSV</Text>
+            </TouchableOpacity>
+          </>
+        }
+        renderItem={({ item }) => (
+          <View style={styles.item}>
+            <Text style={styles.itemTitle}>{item.title ?? "Item"}</Text>
+            <Text style={styles.itemSub}>
+              Profit: $
+              {((item.high ?? 0) - (item.low ?? 0)) *
+                (item.quantity ?? 1)}
             </Text>
-          )}
-          contentContainerStyle={{ padding: 20 }}
-        />
-      )}
+          </View>
+        )}
+      />
     </SafeAreaView>
   );
 }
 
+/* ───────── Small Components ───────── */
+
+const Row = ({ label, value, green, red, strong }: any) => (
+  <View style={styles.row}>
+    <Text style={[strong && styles.bold]}>{label}</Text>
+    <Text
+      style={[
+        strong && styles.bold,
+        green && { color: "#1E9E39" },
+        red && { color: "#E53935" },
+      ]}
+    >
+      {value}
+    </Text>
+  </View>
+);
+
+const Bar = ({ label, value, color }: any) => (
+  <View style={styles.barRow}>
+    <Text style={styles.barLabel}>{label}</Text>
+    <View style={[styles.bar, { width: Math.min(value / 10, 240), backgroundColor: color }]} />
+  </View>
+);
+
+/* ───────── Styles ───────── */
+
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  headerRow: {
+  safe: { flex: 1 },
+  scroll: { padding: 16 },
+
+  toggleRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  toggleBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#222",
+  },
+  toggleActive: {
+    backgroundColor: "#FF7A00",
+  },
+  toggleText: {
+    color: "#aaa",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  toggleTextActive: {
+    color: "#000",
+  },
+
+  summaryCard: {
+    backgroundColor: "#111",
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 16,
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#FF7A00",
+    marginBottom: 8,
+  },
+
+  row: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 15,
-  },
-  header: { fontSize: 22, fontWeight: "700" },
-  clearText: { fontSize: 14 },
-  sectionHeader: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginTop: 10,
     marginBottom: 6,
   },
-  empty: {
-    textAlign: "center",
-    marginTop: 40,
-    fontSize: 16,
+  bold: { fontWeight: "800" },
+
+  chart: {
+    backgroundColor: "#111",
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 16,
   },
-  summaryBox: {
-    marginHorizontal: 20,
-    marginTop: 15,
-    borderRadius: 10,
-    padding: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  summaryTitle: { fontSize: 18, fontWeight: "700", marginBottom: 8 },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginVertical: 2,
-  },
-  summaryText: { fontSize: 15, fontWeight: "500" },
-  summaryValue: { fontSize: 15, fontWeight: "700" },
-  card: {
-    borderRadius: 10,
-    padding: 14,
+  barRow: {
     marginBottom: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
   },
-  row: { flexDirection: "row", alignItems: "center" },
-  placeholderThumb: {
-    width: 50,
-    height: 50,
-    borderRadius: 8,
-    backgroundColor: "#ccc",
-    marginRight: 10,
+  barLabel: {
+    color: "#aaa",
+    marginBottom: 4,
   },
-  query: { fontSize: 16, fontWeight: "600" },
-  margin: { fontSize: 13, fontWeight: "600" },
-  date: { fontSize: 12, marginTop: 2 },
+  bar: {
+    height: 10,
+    borderRadius: 6,
+  },
+
+  exportBtn: {
+    backgroundColor: "#FF7A00",
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  exportText: {
+    fontWeight: "800",
+    color: "#000",
+  },
+
+  item: {
+    backgroundColor: "#111",
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  itemTitle: {
+    fontWeight: "700",
+    color: "#fff",
+  },
+  itemSub: {
+    color: "#aaa",
+    marginTop: 4,
+  },
 });

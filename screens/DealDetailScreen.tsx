@@ -1,448 +1,301 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   View,
   Text,
-  Image,
   StyleSheet,
+  Image,
   ScrollView,
   TouchableOpacity,
-  Share,
   Linking,
-  Animated,
-  Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
+import { RouteProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { RootStackParamList } from "../navigation/RootNavigator";
-import { useTheme } from "../context/ThemeContext";
-import { auth, db } from "../firebaseConfig";
-import { doc, deleteDoc, setDoc } from "firebase/firestore";
-import { usePulseAnimation } from "../FlashRadar/hooks/usePulseAnimation";
+import { Deal } from "../components/DealCard";
 
-type DealDetailRouteProp = RouteProp<RootStackParamList, "DealDetail">;
+/* ───────────────────── TYPES ───────────────────── */
 
-export default function DealDetailScreen() {
-  const route = useRoute<DealDetailRouteProp>();
-  const navigation = useNavigation();
-  const { colors, theme } = useTheme();
-  const isDark = theme === "dark";
+type DealWithHistory = Deal & {
+  originalPrice?: number | null;
+  avg30?: number | null;
+  avg60?: number | null;
+  avg90?: number | null;
+  timestamp?: any;
+};
 
-  const deal = route.params?.deal;
-  const [isSaved, setIsSaved] = useState(deal?.isSaved || false);
-  const { triggerPulse, ringStyle } = usePulseAnimation(500, 1.25);
+type Props = {
+  route: RouteProp<{ params: { deal: DealWithHistory } }, "params">;
+};
 
-  if (!deal) {
+/* ───────────────────── HELPERS ───────────────────── */
+
+function timeAgo(timestamp?: any) {
+  if (!timestamp?.seconds) return "Recently";
+
+  const diffMs = Date.now() - timestamp.seconds * 1000;
+  const minutes = Math.floor(diffMs / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+function dealStrength(deal: Deal) {
+  if (deal.lightning) return { label: "Lightning Deal", color: "#FF3B30" };
+  if (deal.rare) return { label: "Rare Find", color: "#9B59B6" };
+  if (deal.hot) return { label: "Hot Deal", color: "#FF7A00" };
+  return { label: "Standard Deal", color: "#777" };
+}
+
+function normalizeImage(url?: string | null) {
+  if (!url || typeof url !== "string") return null;
+  return url.replace(/^http:\/\//i, "https://");
+}
+
+/* ───────────────────── SCREEN ───────────────────── */
+
+export default function DealDetailScreen({ route }: Props) {
+  const { deal } = route.params;
+
+  // ✅ FIXED IMAGE RESOLUTION
+  const imageUri = useMemo(() => {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text }}>No deal data.</Text>
-      </View>
+      normalizeImage(deal.imageUrl) ||
+      normalizeImage(deal.image) ||
+      null
     );
-  }
+  }, [deal.image, deal.imageUrl]);
 
-  /* ---------------- PRICE COMPARISON ---------------- */
-  const priceComparison = useMemo(() => {
-    if (!deal.priceComparison) return [];
-    return Object.entries(deal.priceComparison) as [string, number][];
-  }, [deal.priceComparison]);
+  const dealUrl =
+    deal.merchantUrl || deal.affiliateUrl || deal.url || null;
 
-  const bestPrice = useMemo(() => {
-    if (!priceComparison.length) return null;
-    return priceComparison.reduce((a, b) => (a[1] < b[1] ? a : b));
-  }, [priceComparison]);
+  const strength = dealStrength(deal);
 
-  /* ---------------- NEARBY STORES ---------------- */
-  const nearbyStores = useMemo(() => {
-    if (!deal.nearbyStores) return [];
-    return [...deal.nearbyStores].sort(
-      (a: any, b: any) => a.distance - b.distance
-    );
-  }, [deal.nearbyStores]);
+  const currentPrice =
+    typeof deal.price === "number" && deal.price > 0
+      ? deal.price
+      : null;
 
-  const lowInventory = nearbyStores.some(
-    (s: any) => s.inventory !== undefined && s.inventory <= 2
-  );
+  const historyPrices = [
+    deal.originalPrice,
+    deal.avg30,
+    deal.avg60,
+    deal.avg90,
+  ].filter((p): p is number => typeof p === "number" && p > 0);
 
-  /* ---------------- AI BUY / WAIT VERDICT ---------------- */
-  const verdict = useMemo(() => {
-    if (deal.price && deal.historyLow && deal.price <= deal.historyLow) {
-      return {
-        label: "BUY NOW",
-        reason: "Lowest price recorded",
-        color: "#1E9E39",
-        icon: "flash",
-      };
-    }
+  const oldPrice =
+    historyPrices.length && currentPrice
+      ? Math.max(...historyPrices)
+      : null;
 
-    if (lowInventory) {
-      return {
-        label: "BUY NOW",
-        reason: "Very limited inventory nearby",
-        color: "#FF3B30",
-        icon: "warning",
-      };
-    }
-
-    if (deal.rare && deal.isHot) {
-      return {
-        label: "BUY NOW",
-        reason: "Rare + Hot combo",
-        color: "#8E44AD",
-        icon: "sparkles",
-      };
-    }
-
-    if (deal.price && deal.historyAvg && deal.price > deal.historyAvg) {
-      return {
-        label: "WAIT",
-        reason: "Price above historical average",
-        color: "#FF9500",
-        icon: "time",
-      };
-    }
-
-    return {
-      label: "WATCH",
-      reason: "Insufficient price history",
-      color: "#0A84FF",
-      icon: "eye",
-    };
-  }, [deal, lowInventory]);
-
-  const openMaps = (lat: number, lng: number, label?: string) => {
-    const url = Platform.select({
-      ios: `maps://?q=${label || "Store"}&ll=${lat},${lng}`,
-      android: `geo:${lat},${lng}?q=${label || "Store"}`,
-    });
-    if (url) Linking.openURL(url);
-  };
-
-  const openKeepa = () => {
-    if (!deal.asin) return;
-    Linking.openURL(`https://keepa.com/#!product/1-${deal.asin}`);
-  };
-
-  const toggleSave = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    triggerPulse();
-    const ref = doc(db, "users", user.uid, "favorites", deal.id);
-
-    if (isSaved) await deleteDoc(ref);
-    else await setDoc(ref, deal, { merge: true });
-
-    setIsSaved(!isSaved);
-  };
+  const discountPercent =
+    currentPrice && oldPrice && oldPrice > currentPrice
+      ? Math.round(((oldPrice - currentPrice) / oldPrice) * 100)
+      : null;
 
   return (
-    <SafeAreaView
-      style={[
-        styles.safe,
-        { backgroundColor: colors.background },
-      ]}
-    >
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {deal.image && (
-          <Image source={{ uri: deal.image }} style={styles.image} />
-        )}
-
-        {/* HEADER */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>
-            {deal.title}
+    <ScrollView style={styles.container}>
+      {/* IMAGE */}
+      {imageUri ? (
+        <Image source={{ uri: imageUri }} style={styles.image} />
+      ) : (
+        <View style={styles.imageFallback}>
+          <Ionicons name="image-outline" size={48} color="#555" />
+          <Text style={styles.imageFallbackText}>
+            Image unavailable
           </Text>
+        </View>
+      )}
 
-          <View style={styles.priceRow}>
+      <View style={styles.content}>
+        {/* TITLE */}
+        <Text style={styles.title}>{deal.title}</Text>
+
+        {/* STORE */}
+        <Text style={styles.store}>{deal.store}</Text>
+
+        {/* DEAL STRENGTH */}
+        <View style={styles.strengthRow}>
+          <Ionicons name="flash" size={16} color={strength.color} />
+          <Text style={[styles.strengthText, { color: strength.color }]}>
+            {strength.label}
+          </Text>
+        </View>
+
+        {/* PRICE */}
+        <View style={styles.priceRow}>
+          {currentPrice ? (
             <Text style={styles.price}>
-              {deal.price ? `$${deal.price}` : "N/A"}
+              ${currentPrice.toFixed(2)}
             </Text>
-            <Text style={[styles.store, { color: colors.text }]}>
-              {deal.store}
-            </Text>
-          </View>
+          ) : (
+            <Text style={styles.priceUnavailable}>See deal</Text>
+          )}
 
-          <View style={styles.actions}>
-            <TouchableOpacity onPress={toggleSave}>
-              <Animated.View style={ringStyle}>
-                <Ionicons
-                  name={isSaved ? "heart" : "heart-outline"}
-                  size={26}
-                  color="#FF6600"
-                />
-              </Animated.View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() =>
-                Share.share({ message: deal.url || deal.title })
-              }
-            >
-              <Ionicons
-                name="share-outline"
-                size={26}
-                color={colors.text}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* AI VERDICT */}
-        <View
-          style={[
-            styles.verdictCard,
-            {
-              borderColor: verdict.color,
-              backgroundColor: isDark ? "#1A1A1A" : "#FAFAFA",
-            },
-          ]}
-        >
-          <Ionicons
-            name={verdict.icon as any}
-            size={22}
-            color={verdict.color}
-          />
-          <View>
-            <Text
-              style={[styles.verdictTitle, { color: verdict.color }]}
-            >
-              {verdict.label}
-            </Text>
-            <Text
-              style={[
-                styles.verdictReason,
-                { color: colors.text },
-              ]}
-            >
-              {verdict.reason}
-            </Text>
-          </View>
-        </View>
-
-        {/* PRICE COMPARISON */}
-        {priceComparison.length > 0 && (
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: isDark ? "#1A1A1A" : "#F6F6F6" },
-            ]}
-          >
-            <Text
-              style={[styles.sectionTitle, { color: colors.text }]}
-            >
-              Price comparison
-            </Text>
-
-            {priceComparison.map(([store, price]) => (
-              <View key={store} style={styles.compareRow}>
-                <Text
-                  style={[styles.compareStore, { color: colors.text }]}
-                >
-                  {store}
-                </Text>
-                <Text
-                  style={[
-                    styles.comparePrice,
-                    bestPrice?.[0] === store && styles.bestPrice,
-                  ]}
-                >
-                  ${price}
+          {oldPrice && discountPercent && (
+            <>
+              <Text style={styles.originalPrice}>
+                ${oldPrice.toFixed(2)}
+              </Text>
+              <View style={styles.discountBadge}>
+                <Text style={styles.discountText}>
+                  {discountPercent}% OFF
                 </Text>
               </View>
-            ))}
-          </View>
-        )}
+            </>
+          )}
+        </View>
 
-        {/* KEEPA */}
-        {deal.isPremium && deal.asin && (
+        {/* META */}
+        <View style={styles.metaRow}>
+          <Ionicons name="time-outline" size={14} color="#aaa" />
+          <Text style={styles.metaText}>
+            Posted {timeAgo(deal.timestamp)}
+          </Text>
+        </View>
+
+        {/* DESCRIPTION */}
+        <Text style={styles.description}>
+          This deal is live and may sell out quickly. Pricing and availability
+          can change at any time.
+        </Text>
+
+        {/* CTA */}
+        {dealUrl && (
           <TouchableOpacity
-            style={[
-              styles.keepaBtn,
-              { backgroundColor: isDark ? "#2C2C2C" : "#2C2C2C" },
-            ]}
-            onPress={openKeepa}
+            style={styles.openBtn}
+            onPress={() => Linking.openURL(dealUrl)}
           >
-            <Ionicons name="stats-chart" size={18} color="#fff" />
-            <Text style={styles.keepaText}>
-              View Keepa Price History
-            </Text>
+            <Text style={styles.openText}>Get Deal</Text>
           </TouchableOpacity>
         )}
-
-        {/* NEARBY STORES */}
-        {nearbyStores.length > 0 && (
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: isDark ? "#1A1A1A" : "#F6F6F6" },
-            ]}
-          >
-            <Text
-              style={[styles.sectionTitle, { color: colors.text }]}
-            >
-              Nearby stores
-            </Text>
-
-            {nearbyStores.map((store: any) => (
-              <TouchableOpacity
-                key={store.id}
-                style={[
-                  styles.storeRow,
-                  { borderColor: isDark ? "#333" : "#ddd" },
-                ]}
-                onPress={() =>
-                  openMaps(store.latitude, store.longitude, store.name)
-                }
-              >
-                <View>
-                  <Text
-                    style={[styles.storeName, { color: colors.text }]}
-                  >
-                    {store.name}
-                  </Text>
-                  <Text
-                    style={[styles.storeMeta, { color: colors.text }]}
-                  >
-                    {store.distance.toFixed(1)} mi
-                    {store.inventory !== undefined &&
-                      ` • ${store.inventory} left`}
-                  </Text>
-                </View>
-                <Ionicons
-                  name="navigate"
-                  size={20}
-                  color="#FF6600"
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </ScrollView>
-
-      {/* STICKY CTA */}
-      <View
-        style={[
-          styles.sticky,
-          { backgroundColor: isDark ? "#000" : "#000" },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.cta}
-          onPress={() =>
-            deal.latitude && deal.longitude
-              ? openMaps(deal.latitude, deal.longitude, deal.store)
-              : Linking.openURL(deal.url)
-          }
-        >
-          <Ionicons
-            name={deal.latitude ? "car" : "link-outline"}
-            size={18}
-            color="#fff"
-          />
-          <Text style={styles.ctaText}>
-            {deal.latitude ? "Get Directions" : "View Deal"}
-          </Text>
-        </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </ScrollView>
   );
 }
 
-/* ---------------- STYLES ---------------- */
-const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  scroll: { paddingBottom: 140 },
-  image: { width: "100%", height: 260 },
+/* ───────────────────── STYLES ───────────────────── */
 
-  header: { padding: 18 },
-  title: { fontSize: 22, fontWeight: "800", marginBottom: 6 },
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#000" },
+
+  image: {
+    width: "100%",
+    height: 320,
+    resizeMode: "contain",
+    backgroundColor: "#111",
+  },
+
+  imageFallback: {
+    height: 320,
+    backgroundColor: "#111",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  imageFallbackText: {
+    marginTop: 8,
+    color: "#666",
+    fontSize: 13,
+  },
+
+  content: { padding: 16 },
+
+  title: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 6,
+  },
+
+  store: {
+    color: "#aaa",
+    fontSize: 13,
+    marginBottom: 8,
+  },
+
+  strengthRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+
+  strengthText: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
 
   priceRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-  },
-
-  price: { fontSize: 22, fontWeight: "800", color: "#FF6600" },
-  store: { fontSize: 15, opacity: 0.7 },
-
-  actions: { flexDirection: "row", gap: 20, marginTop: 12 },
-
-  verdictCard: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "center",
-    marginHorizontal: 18,
-    marginBottom: 14,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 2,
-  },
-
-  verdictTitle: { fontSize: 16, fontWeight: "900" },
-  verdictReason: { fontSize: 14, opacity: 0.85 },
-
-  sectionTitle: { fontWeight: "800", marginBottom: 10 },
-
-  card: {
-    marginHorizontal: 18,
-    marginBottom: 14,
-    padding: 14,
-    borderRadius: 14,
-  },
-
-  compareRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 6,
-  },
-
-  compareStore: { fontWeight: "600" },
-  comparePrice: { fontWeight: "700", color: "#FF6600" },
-  bestPrice: { color: "#1E9E39" },
-
-  keepaBtn: {
-    marginHorizontal: 18,
-    marginBottom: 14,
-    padding: 14,
-    borderRadius: 14,
-    flexDirection: "row",
-    justifyContent: "center",
     gap: 8,
+    marginBottom: 12,
+    flexWrap: "wrap",
   },
 
-  keepaText: { color: "#fff", fontWeight: "800" },
+  price: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#FF7A00",
+  },
 
-  storeRow: {
+  priceUnavailable: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#bbb",
+  },
+
+  originalPrice: {
+    fontSize: 14,
+    color: "#aaa",
+    textDecorationLine: "line-through",
+  },
+
+  discountBadge: {
+    backgroundColor: "#FF3B30",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+
+  discountText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+
+  metaRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: 0.5,
+    gap: 6,
+    marginBottom: 12,
   },
 
-  storeName: { fontWeight: "700" },
-  storeMeta: { fontSize: 13, opacity: 0.75 },
-
-  sticky: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
+  metaText: {
+    color: "#aaa",
+    fontSize: 12,
   },
 
-  cta: {
+  description: {
+    color: "#ddd",
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+
+  openBtn: {
     backgroundColor: "#FF6600",
-    borderRadius: 16,
     paddingVertical: 14,
-    flexDirection: "row",
-    justifyContent: "center",
+    borderRadius: 14,
     alignItems: "center",
-    gap: 8,
+    marginTop: 10,
   },
 
-  ctaText: { color: "#fff", fontSize: 16, fontWeight: "800" },
-
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  openText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "900",
+  },
 });

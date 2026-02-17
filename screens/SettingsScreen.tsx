@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+// flashradar/screens/SettingsScreen.tsx
+
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,16 +11,15 @@ import {
   Switch,
   ScrollView,
   Share,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
+import { registerForPushToken } from "../utils";
 import {
   doc,
   onSnapshot,
@@ -27,356 +28,352 @@ import {
   where,
   orderBy,
   limit,
-  onSnapshot as onSnapshotCol,
+  updateDoc,
 } from "firebase/firestore";
+
+/* ───────── URLs ───────── */
 
 const CHECKOUT_URL =
   "https://us-central1-flashradar-71c93.cloudfunctions.net/createCheckoutSession";
+
 const BILLING_PORTAL_URL =
   "https://us-central1-flashradar-71c93.cloudfunctions.net/createBillingPortal";
+
+/* ───────── TYPES ───────── */
 
 interface NotificationItem {
   id: string;
   title: string;
   message: string;
-  createdAt?: any;
   read: boolean;
 }
 
+/* ───────────────────────── SCREEN ───────────────────────── */
+
 export default function SettingsScreen() {
+  const { colors, toggleTheme, darkMode } = useTheme();
+  const { user } = useAuth();
+
   const [loading, setLoading] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [trialActive, setTrialActive] = useState(false);
   const [trialEnds, setTrialEnds] = useState<Date | null>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [selectedPlan, setSelectedPlan] =
+    useState<"monthly" | "yearly">("monthly");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { colors, toggleTheme, darkMode } = useTheme();
-  const { user } = useAuth();
-
-  // 🧩 Listen for Premium + trial status
+  /* ───────── USER STATUS ───────── */
   useEffect(() => {
     if (!user) return;
-    const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
-      if (!snap.exists()) return;
-      const data = snap.data();
-      setIsPremium(!!data.premium);
-      setTrialActive(!!data.trialActive);
-      setTrialEnds(data.trialEnds ? data.trialEnds.toDate?.() ?? new Date(data.trialEnds) : null);
+
+    return onSnapshot(doc(db, "users", user.uid), (snap) => {
+      const d = snap.data();
+      setIsPremium(!!d?.isPremium); // ✅ FIXED
+      setTrialActive(!!d?.trialActive);
+      setTrialEnds(d?.trialEnds?.toDate?.() ?? null);
+      setNotificationsEnabled(!!d?.notificationsEnabled);
     });
-    return () => unsub();
   }, [user]);
 
-  // 🔔 Fetch latest notifications
+  /* ───────── ALERTS ───────── */
   useEffect(() => {
     if (!user) return;
+
     const q = query(
       collection(db, "notifications"),
       where("uid", "==", user.uid),
       orderBy("createdAt", "desc"),
       limit(5)
     );
-    const unsub = onSnapshotCol(q, (snapshot) => {
-      const data = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })) as NotificationItem[];
-      setNotifications(data);
+
+    return onSnapshot(q, (snap) => {
+      setNotifications(
+        snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
+      );
     });
-    return () => unsub();
   }, [user]);
 
-  // ⏳ Trial countdown
-  const getTrialCountdown = () => {
-    if (!trialActive || !trialEnds) return null;
-    const now = new Date();
-    const diffMs = trialEnds.getTime() - now.getTime();
-    const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-    if (daysLeft === 0) return "⏳ Your trial ends today!";
-    if (daysLeft === 1) return "⏳ Trial ends in 1 day";
-    return `⏳ Trial ends in ${daysLeft} days`;
-  };
-
-  // 🔐 Logout
-  const handleLogout = async () => {
+  const markRead = async (id: string) => {
     try {
-      await auth.signOut();
-      Alert.alert("Logged out", "You have been logged out successfully.");
-    } catch {
-      Alert.alert("Error", "Something went wrong while logging out.");
-    }
+      await updateDoc(doc(db, "notifications", id), { read: true });
+    } catch {}
   };
 
-  // 💌 Invite Friends
-  const handleInviteFriends = async () => {
-    const message = `🚀 Join me on FlashRadar! Unlock exclusive local & online deals — plus rewards for referrals. Download now: https://flashradarapp.com`;
-    try {
-      await Share.share({ message });
-    } catch {
-      Alert.alert("Error", "Unable to share invite.");
+  /* ───────── PUSH TOGGLE ───────── */
+  const handleToggleNotifications = async (value: boolean) => {
+    if (!user) return;
+
+    if (value) {
+      await registerForPushToken();
     }
+
+    await updateDoc(doc(db, "users", user.uid), {
+      notificationsEnabled: value,
+    });
+
+    setNotificationsEnabled(value);
   };
 
-  // 💳 Upgrade to Premium
+  /* ───────── ACTIONS ───────── */
+
   const handleUpgrade = async () => {
     try {
+      if (!user?.uid) return;
       setLoading(true);
-      if (!user?.uid) return Alert.alert("Error", "You must be logged in to upgrade.");
 
       const res = await fetch(CHECKOUT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ uid: user.uid, plan: selectedPlan }),
       });
+
       const data = await res.json();
-      if (data?.url) await WebBrowser.openBrowserAsync(data.url);
-      else throw new Error("Missing checkout URL.");
-    } catch (e: any) {
-      Alert.alert("Error", e.message || "Upgrade failed");
+      await WebBrowser.openBrowserAsync(data.url);
+    } catch {
+      Alert.alert("Error", "Upgrade failed");
     } finally {
       setLoading(false);
     }
   };
 
   const handleManageSubscription = async () => {
-    if (!user?.uid) return Alert.alert("Error", "No user found.");
     try {
+      if (!user?.uid) return;
       setLoading(true);
+
       const res = await fetch(BILLING_PORTAL_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ uid: user.uid }),
       });
+
       const data = await res.json();
-      if (data?.url) await WebBrowser.openBrowserAsync(data.url);
-      else throw new Error("Missing billing portal URL.");
-    } catch (e: any) {
-      Alert.alert("Error", e.message || "Unable to open billing portal.");
+      await WebBrowser.openBrowserAsync(data.url);
+    } catch {
+      Alert.alert("Error", "Unable to open billing portal");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreatorDashboard = () =>
-    Alert.alert("Coming Soon 🔥", "Creator Dashboard will launch soon!");
+  const handleInviteFriends = async () => {
+    await Share.share({
+      message:
+        "🚀 Join me on FlashRadar and unlock powerful deal alerts: https://flashradarapp.com",
+    });
+  };
 
-  // ─────────────────────────── UI ───────────────────────────
+  const handleLogout = async () => {
+    Alert.alert("Log out", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Log out",
+        style: "destructive",
+        onPress: async () => await auth.signOut(),
+      },
+    ]);
+  };
+
+  /* ───────── TOGGLE PILL ───────── */
+  const TogglePill = ({
+    value,
+    onToggle,
+  }: {
+    value: boolean;
+    onToggle: (v: boolean) => void;
+  }) => {
+    const pillBg = darkMode ? "rgba(255,255,255,0.10)" : "#F2F2F2";
+    const pillBorder = darkMode ? "rgba(255,255,255,0.18)" : "#D6D6D6";
+    const trackOn = "#FF7A00";
+    const trackOff = darkMode ? "rgba(255,255,255,0.25)" : "#CFCFCF";
+
+    return (
+      <View
+        style={[
+          styles.togglePill,
+          { backgroundColor: pillBg, borderColor: pillBorder },
+        ]}
+      >
+        <Text style={[styles.pillLabel, { color: "#FF7A00" }]}>
+          {value ? "ON" : "OFF"}
+        </Text>
+        <Switch
+          value={value}
+          onValueChange={onToggle}
+          trackColor={{ false: trackOff, true: trackOn }}
+          thumbColor="#FFFFFF"
+          ios_backgroundColor={trackOff}
+          style={
+            Platform.OS === "ios"
+              ? { transform: [{ scaleX: 0.95 }, { scaleY: 0.95 }] }
+              : undefined
+          }
+        />
+      </View>
+    );
+  };
+
+  /* ───────── UI ───────── */
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={[styles.header, { color: colors.accent }]}>⚙️ Settings</Text>
+        <Text style={[styles.header, { color: colors.accent }]}>
+          <Ionicons name="settings" size={18} color={colors.accent} /> Settings
+        </Text>
 
-        {/* 🌟 Premium Info */}
-        <View style={[styles.premiumCard, { borderColor: colors.accent }]}>
-          {isPremium ? (
-            <>
-              <Text style={[styles.premiumTitle, { color: colors.accent }]}>
-                ⭐ Premium Active
-              </Text>
-              {trialActive && trialEnds && (
-                <Text style={[styles.trialText, { color: colors.text }]}>
-                  {getTrialCountdown()}
-                </Text>
-              )}
-            </>
-          ) : (
-            <Text style={{ color: colors.text }}>
-              You’re currently on the Free Plan. Upgrade to unlock all features.
-            </Text>
-          )}
-        </View>
-
-        {/* 🔔 Notifications */}
-        <View
-          style={[
-            styles.notificationsCard,
-            {
-              backgroundColor: darkMode ? "#1E1E1E" : "#fff",
-              borderColor: darkMode ? "#333" : "#ddd",
-            },
-          ]}
-        >
-          <Text style={[styles.notificationsTitle, { color: colors.text }]}>
-            🔔 Latest Notifications
+        {/* PLAN STATUS */}
+        <View style={[styles.card, { borderColor: colors.accent }]}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>
+            {isPremium ? "Premium Active" : "Free Plan"}
           </Text>
-          {notifications.length === 0 ? (
-            <Text style={{ color: darkMode ? "#aaa" : "#444", marginTop: 6 }}>
-              No notifications yet.
+          {trialActive && trialEnds && (
+            <Text style={{ color: colors.text }}>
+              Trial ends {trialEnds.toLocaleDateString()}
             </Text>
-          ) : (
-            notifications.map((n) => (
-              <View key={n.id} style={styles.notificationItem}>
-                <Text style={[styles.notificationTitle, { color: colors.accent }]}>
-                  🎉 {n.title}
-                </Text>
-                <Text style={[styles.notificationMsg, { color: colors.text }]}>
-                  {n.message}
-                </Text>
-              </View>
-            ))
           )}
         </View>
 
-        {/* 💳 Subscription */}
-        {!isPremium ? (
-          <>
-            <View style={styles.planSelectorContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.planButton,
-                  selectedPlan === "monthly" && styles.activePlanButton,
-                ]}
-                onPress={() => setSelectedPlan("monthly")}
-              >
-                <Text
-                  style={[
-                    styles.planButtonText,
-                    selectedPlan === "monthly" && styles.activePlanText,
-                  ]}
-                >
-                  Monthly $6.99
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.planButton,
-                  selectedPlan === "yearly" && styles.activePlanButton,
-                ]}
-                onPress={() => setSelectedPlan("yearly")}
-              >
-                <Text
-                  style={[
-                    styles.planButtonText,
-                    selectedPlan === "yearly" && styles.activePlanText,
-                  ]}
-                >
-                  Yearly $59.99
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity style={styles.button} onPress={handleUpgrade}>
-              <Text style={styles.buttonText}>
-                {loading
-                  ? "Loading..."
-                  : `Upgrade to ${
-                      selectedPlan === "yearly" ? "Yearly" : "Monthly"
-                    } Premium`}
-              </Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <TouchableOpacity style={styles.button} onPress={handleManageSubscription}>
-            <Text style={styles.buttonText}>
-              {loading ? "Loading..." : "Manage Subscription"}
-            </Text>
+        {/* UNLOCK DEALS */}
+        {!isPremium && (
+          <TouchableOpacity style={styles.button} onPress={handleUpgrade}>
+            <Text style={styles.buttonText}>🔓 Unlock Premium Deals</Text>
           </TouchableOpacity>
         )}
 
-        {/* 🕹️ Toggles */}
+        {/* SUBSCRIPTION */}
+        {isPremium && (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={handleManageSubscription}
+          >
+            <Text style={styles.buttonText}>Manage Subscription</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* ALERTS */}
+        <View style={styles.card}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Alerts
+          </Text>
+          {notifications.length === 0 && (
+            <Text style={{ color: "#777" }}>No notifications yet.</Text>
+          )}
+          {notifications.map((n) => (
+            <TouchableOpacity
+              key={n.id}
+              onPress={() => markRead(n.id)}
+              style={[styles.notification, !n.read && styles.unread]}
+            >
+              <Text style={{ color: colors.accent, fontWeight: "700" }}>
+                {n.title}
+              </Text>
+              <Text style={{ color: colors.text }}>{n.message}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* TOGGLES */}
         <View style={styles.toggleRow}>
-          <Text style={[styles.toggleText, { color: colors.text }]}>Push Notifications</Text>
-          <Switch
+          <Text style={[styles.toggleText, { color: colors.text }]}>
+            Push Notifications
+          </Text>
+          <TogglePill
             value={notificationsEnabled}
-            onValueChange={setNotificationsEnabled}
-            trackColor={{ false: "#ccc", true: colors.accent }}
+            onToggle={handleToggleNotifications}
           />
         </View>
 
         <View style={styles.toggleRow}>
-          <View style={styles.darkModeLabel}>
-            <Ionicons
-              name={darkMode ? "moon" : "sunny"}
-              size={20}
-              color={colors.accent}
-              style={{ marginRight: 8 }}
-            />
-            <Text style={[styles.toggleText, { color: colors.text }]}>Dark Mode</Text>
-          </View>
-          <Switch
-            value={darkMode}
-            onValueChange={toggleTheme}
-            trackColor={{ false: "#ccc", true: colors.accent }}
-          />
+          <Text style={[styles.toggleText, { color: colors.text }]}>
+            Dark Mode
+          </Text>
+          <TogglePill value={darkMode} onToggle={() => toggleTheme()} />
         </View>
 
-        {/* 💌 Invite Friends */}
         <TouchableOpacity style={styles.button} onPress={handleInviteFriends}>
           <Text style={styles.buttonText}>Invite Friends</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.button} onPress={handleCreatorDashboard}>
-          <Text style={styles.buttonText}>Creator Dashboard 📊</Text>
+        {/* LOGOUT */}
+        <TouchableOpacity style={styles.logout} onPress={handleLogout}>
+          <Text style={styles.logoutText}>Log out</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={[styles.logoutText, { color: colors.accent }]}>Log Out</Text>
-        </TouchableOpacity>
-
-        {loading && <ActivityIndicator size="large" color={colors.accent} style={{ marginTop: 20 }} />}
+        {loading && <ActivityIndicator color={colors.accent} />}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─────────────────────────── STYLES ───────────────────────────
+/* ───────── STYLES ───────── */
+
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  container: { flexGrow: 1, padding: 20 },
-  header: { fontSize: 24, fontWeight: "700", marginBottom: 20, textAlign: "center" },
-  premiumCard: { borderWidth: 1, borderRadius: 10, padding: 15, marginBottom: 20 },
-  premiumTitle: { fontSize: 18, fontWeight: "700" },
-  trialText: { marginTop: 5, fontSize: 14, fontWeight: "500" },
-  notificationsCard: {
+  safe: { flex: 1 },
+  container: { padding: 20, paddingBottom: 120 },
+  header: {
+    fontSize: 26,
+    fontWeight: "900",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  card: {
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 20,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
   },
-  notificationsTitle: { fontSize: 18, fontWeight: "700", marginBottom: 8 },
-  notificationItem: { paddingVertical: 8, borderRadius: 8, marginBottom: 8 },
-  notificationTitle: { fontWeight: "600", fontSize: 15 },
-  notificationMsg: { fontSize: 14 },
-  planSelectorContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  planButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+  cardTitle: { fontSize: 18, fontWeight: "800" },
+  sectionTitle: { fontSize: 18, fontWeight: "900", marginBottom: 6 },
+  notification: { paddingVertical: 8 },
+  unread: {
+    backgroundColor: "rgba(255,122,0,0.10)",
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#FF6600",
-    marginHorizontal: 6,
+    padding: 8,
   },
-  activePlanButton: { backgroundColor: "#FF6600" },
-  planButtonText: { color: "#FF6600", fontWeight: "600" },
-  activePlanText: { color: "#fff" },
   button: {
-    backgroundColor: "#FF6600",
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: "#FF7A00",
+    padding: 14,
+    borderRadius: 14,
+    alignItems: "center",
     marginBottom: 12,
-    alignItems: "center",
   },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  logoutButton: {
-    borderColor: "#FF6600",
-    borderWidth: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 20,
-  },
-  logoutText: { fontSize: 16, fontWeight: "600" },
+  buttonText: { color: "#fff", fontWeight: "900", fontSize: 18 },
   toggleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginVertical: 8,
+    marginVertical: 12,
   },
-  darkModeLabel: { flexDirection: "row", alignItems: "center" },
-  toggleText: { fontSize: 16 },
+  toggleText: { fontSize: 18, fontWeight: "600" },
+  togglePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingLeft: 14,
+    paddingRight: 10,
+    minWidth: 120,
+    justifyContent: "space-between",
+  },
+  pillLabel: {
+    fontWeight: "900",
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  logout: {
+    borderWidth: 2,
+    borderColor: "#FF3B30",
+    padding: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  logoutText: {
+    color: "#FF3B30",
+    fontWeight: "900",
+    fontSize: 18,
+  },
 });

@@ -1,9 +1,8 @@
-// flashradar/navigation/BottomTabsNavigator.tsx
-import React, { useEffect, useState } from "react";
+// navigation/BottomTabsNavigator.tsx
+
+import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { onSnapshot, doc } from "firebase/firestore";
-import { auth, db } from "../firebaseConfig";
 
 import RadarScreen from "../screens/RadarScreen";
 import ExploreScreen from "../screens/ExploreScreen";
@@ -24,27 +23,6 @@ export type RootTabParamList = {
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
 export default function BottomTabsNavigator() {
-  const [isPremium, setIsPremium] = useState<boolean | null>(null);
-
-  // 🔥 Listen for premium status in real time
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) {
-      setIsPremium(false);
-      return;
-    }
-
-    const userRef = doc(db, "users", user.uid);
-    const unsub = onSnapshot(userRef, (docSnap) => {
-      const data = docSnap.data();
-      setIsPremium(data?.isPremium === true);
-    });
-
-    return () => unsub();
-  }, []);
-
-  if (isPremium === null) return null; // Wait for Firestore
-
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -57,7 +35,8 @@ export default function BottomTabsNavigator() {
           borderTopColor: "#ddd",
         },
         tabBarIcon: ({ color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = "home-outline";
+          let iconName: keyof typeof Ionicons.glyphMap;
+
           switch (route.name) {
             case "Radar":
               iconName = "radio-outline";
@@ -77,7 +56,10 @@ export default function BottomTabsNavigator() {
             case "Settings":
               iconName = "settings-outline";
               break;
+            default:
+              iconName = "ellipse-outline";
           }
+
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}

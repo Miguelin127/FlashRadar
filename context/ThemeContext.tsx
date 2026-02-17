@@ -1,4 +1,5 @@
 // flashradar/context/ThemeContext.tsx
+
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Appearance, useColorScheme } from "react-native";
 
@@ -17,7 +18,7 @@ interface ThemeContextType {
   theme: Theme;
   colors: ThemeColors;
   toggleTheme: () => void;
-  darkMode: boolean; // ✅ added
+  darkMode: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -31,25 +32,32 @@ const ThemeContext = createContext<ThemeContextType>({
     accentLight: "#FFA500",
   },
   toggleTheme: () => {},
-  darkMode: false, // ✅ default value added
+  darkMode: false,
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const systemScheme = useColorScheme();
-  const [theme, setTheme] = useState<Theme>(systemScheme ?? "light");
+  const systemScheme = useColorScheme() ?? "light";
 
-  // React to system appearance changes
+  const [theme, setTheme] = useState<Theme>(systemScheme);
+  const [manualOverride, setManualOverride] = useState(false);
+
+  // 👇 ONLY follow system if user has NOT manually chosen
   useEffect(() => {
+    if (manualOverride) return;
+
     const listener = Appearance.addChangeListener(({ colorScheme }) => {
       if (colorScheme) setTheme(colorScheme);
     });
-    return () => listener.remove();
-  }, []);
 
-  const toggleTheme = () =>
+    return () => listener.remove();
+  }, [manualOverride]);
+
+  const toggleTheme = () => {
+    setManualOverride(true);
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
 
   const colors: ThemeColors =
     theme === "dark"
@@ -70,7 +78,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
           accentLight: "#FFA500",
         };
 
-  const darkMode = theme === "dark"; // ✅ boolean added
+  const darkMode = theme === "dark";
 
   return (
     <ThemeContext.Provider value={{ theme, colors, toggleTheme, darkMode }}>

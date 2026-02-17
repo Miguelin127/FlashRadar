@@ -1,4 +1,6 @@
 // flashradar/screens/FavoritesScreen.tsx
+// FULL FILE — URL-AWARE (merchantUrl / affiliateUrl) — NO SHORTENING
+
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
@@ -28,21 +30,38 @@ import { useTheme } from "../context/ThemeContext";
 import { StatusBar } from "expo-status-bar";
 import { usePulseAnimation } from "../FlashRadar/hooks/usePulseAnimation";
 
+/* ───────────────── TYPES ───────────────── */
+
 type Deal = {
   id: string;
   title: string;
   store: string;
   price: number;
-  discount?: number;
-  image?: string;
-  rare?: boolean;
+  image?: string | null;
+  imageUrl?: string | null;
+
+  merchantUrl?: string;
+  affiliateUrl?: string;
+  url?: string;
+
   isSaved?: boolean;
+  hot?: boolean;
+  rare?: boolean;
+  lightning?: boolean;
+  live?: boolean;
+
+  source?: "local" | "online";
+  discountPercent?: number | null;
+
   timestamp?: any;
+  expiresAt?: number | null;
   address?: string;
   latitude?: number;
   longitude?: number;
-  source?: "local" | "online";
 };
+
+
+/* ───────────────── GEO HELPERS ───────────────── */
 
 function distanceMiles(
   a: { latitude: number; longitude: number },
@@ -64,16 +83,21 @@ function distanceMiles(
   return meters / 1609.344;
 }
 
+/* ───────────────── SCREEN ───────────────── */
+
 export default function FavoritesScreen() {
   const [favorites, setFavorites] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(
-    null
-  );
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   const navigation = useNavigation();
   const { theme, colors } = useTheme();
   const isDarkMode = theme === "dark";
+
+  /* ───────── LOCATION ───────── */
 
   useEffect(() => {
     (async () => {
@@ -88,6 +112,8 @@ export default function FavoritesScreen() {
     })();
   }, []);
 
+  /* ───────── LOAD FAVORITES ───────── */
+
   const fetchFavorites = async () => {
     try {
       const user = auth.currentUser;
@@ -96,13 +122,16 @@ export default function FavoritesScreen() {
         setLoading(false);
         return;
       }
+
       const favsRef = collection(db, "users", user.uid, "favorites");
-      const querySnapshot = await getDocs(favsRef);
-      const saved: Deal[] = querySnapshot.docs.map((docSnap) => ({
+      const snap = await getDocs(favsRef);
+
+      const saved: Deal[] = snap.docs.map((docSnap) => ({
         id: docSnap.id,
         ...(docSnap.data() as Omit<Deal, "id">),
         isSaved: true,
       }));
+
       setFavorites(saved);
     } catch (err) {
       console.error("Error fetching favorites:", err);
@@ -117,16 +146,20 @@ export default function FavoritesScreen() {
     }, [])
   );
 
+  /* ───────── SAVE / UNSAVE ───────── */
+
   const toggleSave = async (deal: Deal) => {
     const user = auth.currentUser;
     if (!user) return;
-    const favRef = doc(db, "users", user.uid, "favorites", deal.id);
+
+    const ref = doc(db, "users", user.uid, "favorites", deal.id);
+
     try {
       if (deal.isSaved) {
-        await deleteDoc(favRef);
+        await deleteDoc(ref);
         setFavorites((prev) => prev.filter((d) => d.id !== deal.id));
       } else {
-        await setDoc(favRef, deal, { merge: true });
+        await setDoc(ref, deal, { merge: true });
         setFavorites((prev) => [...prev, { ...deal, isSaved: true }]);
       }
     } catch (err) {
@@ -134,13 +167,15 @@ export default function FavoritesScreen() {
     }
   };
 
+  /* ───────── CLEAR ALL ───────── */
+
   const clearAll = async () => {
     const user = auth.currentUser;
     if (!user) return;
+
     try {
-      for (let fav of favorites) {
-        const favRef = doc(db, "users", user.uid, "favorites", fav.id);
-        await deleteDoc(favRef);
+      for (const fav of favorites) {
+        await deleteDoc(doc(db, "users", user.uid, "favorites", fav.id));
       }
       setFavorites([]);
     } catch (err) {
@@ -148,48 +183,41 @@ export default function FavoritesScreen() {
     }
   };
 
-  const getDistanceBadge = (deal: Deal) => {
-    if (
-      deal.source === "online" ||
-      !deal.latitude ||
-      !deal.longitude ||
-      !userLocation
-    ) {
-      return null;
+  /* ───────── OPEN DEAL (DIRECT MERCHANT) ───────── */
+
+  const openDeal = async (deal: Deal) => {
+    const url =
+      deal.merchantUrl ||
+      deal.affiliateUrl ||
+      deal.url;
+
+    if (!url) return;
+
+    try {
+      await Linking.openURL(url);
+    } catch (e) {
+      console.warn("Failed to open deal URL", e);
     }
-
-    const miles = distanceMiles(userLocation, {
-      latitude: deal.latitude,
-      longitude: deal.longitude,
-    });
-
-    if (miles > 500 || isNaN(miles)) return null;
-
-    return (
-      <Text
-        style={[
-          styles.distanceBadge,
-          {
-            backgroundColor: isDarkMode ? "#333" : "#eee",
-            color: isDarkMode ? "#eee" : "#333",
-          },
-        ]}
-      >
-        {miles.toFixed(1)} mi
-      </Text>
-    );
   };
 
+  /* ───────── MAPS ───────── */
+
   const openMaps = (deal: Deal) => {
-    if (deal.source === "online") return; // ✅ skip for online deals
+    if (deal.source === "online") return;
+
     if (deal.latitude && deal.longitude) {
       const url = Platform.select({
         ios: `maps://?q=${deal.address || deal.store}&ll=${deal.latitude},${deal.longitude}`,
-        android: `geo:${deal.latitude},${deal.longitude}?q=${deal.address || deal.store}`,
+        android: `geo:${deal.latitude},${deal.longitude}?q=${
+          deal.address || deal.store
+        }`,
       });
+
       if (url) Linking.openURL(url);
     }
   };
+
+  /* ───────── TAG ───────── */
 
   const PulseTag = ({ text, color }: { text: string; color: string }) => {
     const { triggerPulse, ringStyle } = usePulseAnimation(500, 1.3);
@@ -204,6 +232,8 @@ export default function FavoritesScreen() {
     );
   };
 
+  /* ───────── LOADING / EMPTY ───────── */
+
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
@@ -214,10 +244,14 @@ export default function FavoritesScreen() {
 
   if (favorites.length === 0) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        style={[styles.center, { backgroundColor: colors.background }]}
+      >
         <StatusBar style={theme === "dark" ? "light" : "dark"} translucent />
         <Ionicons name="heart-outline" size={64} color={colors.text} />
-        <Text style={[styles.empty, { color: colors.text }]}>No favorites yet.</Text>
+        <Text style={[styles.empty, { color: colors.text }]}>
+          No favorites yet.
+        </Text>
         <TouchableOpacity
           style={[styles.exploreButton, { backgroundColor: "#FF6600" }]}
           onPress={() => navigation.navigate("Explore" as never)}
@@ -228,8 +262,12 @@ export default function FavoritesScreen() {
     );
   }
 
+  /* ───────── UI ───────── */
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       <StatusBar style={theme === "dark" ? "light" : "dark"} translucent />
 
       <View style={styles.headerRow}>
@@ -247,7 +285,8 @@ export default function FavoritesScreen() {
         renderItem={({ item }) => {
           const isHot = item.price < 10;
           const isLive =
-            item.timestamp && Date.now() / 1000 - (item.timestamp.seconds || 0) < 600;
+            item.timestamp &&
+            Date.now() / 1000 - (item.timestamp.seconds || 0) < 600;
           const isRare = item.rare;
 
           return (
@@ -257,47 +296,51 @@ export default function FavoritesScreen() {
                 {
                   backgroundColor: isDarkMode ? "#1E1E1E" : "#fff",
                   borderColor: isDarkMode ? "#333" : "#ddd",
-                  shadowColor: "#000",
-                  shadowOpacity: 0.2,
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowRadius: 2,
-                  elevation: 2,
                 },
               ]}
             >
               <DealCard
-                deal={{ ...item, hot: isHot, live: isLive, rare: isRare }}
-                isSaved={true}
+                deal={{
+                  ...item,
+                  hot: isHot,
+                  live: isLive,
+                  rare: isRare,
+                  isSaved: true,
+                }}
                 onSaveToggle={() => toggleSave(item)}
+                onPress={() => openDeal(item)}
                 darkMode={isDarkMode}
-                onPress={() =>
-  (navigation as any).navigate("DealDetail", { deal: item })
-}
               />
 
-              {/* Tags */}
               <View style={styles.tagRow}>
                 {isLive && <PulseTag text="🟢 Live" color="green" />}
                 {isHot && <PulseTag text="🔥 Hot" color="red" />}
                 {isRare && <PulseTag text="🦄 Rare Find" color="purple" />}
               </View>
 
-              {/* Divider */}
-              <View
-                style={{
-                  height: 1,
-                  backgroundColor: isDarkMode
-                    ? "rgba(255,255,255,0.3)"
-                    : "rgba(0,0,0,0.3)",
-                  marginVertical: 6,
-                  marginHorizontal: 10,
-                }}
-              />
-
-              {/* ✅ Show distance & directions only for local deals */}
-              {(item.source === "local" || (item.latitude && item.longitude)) && (
+              {(item.source === "local" ||
+                (item.latitude && item.longitude)) && (
                 <View style={styles.metaRow}>
-                  {getDistanceBadge(item)}
+                  {userLocation &&
+                    item.latitude &&
+                    item.longitude && (
+                      <Text
+                        style={[
+                          styles.distanceBadge,
+                          {
+                            backgroundColor: isDarkMode ? "#333" : "#eee",
+                            color: isDarkMode ? "#eee" : "#333",
+                          },
+                        ]}
+                      >
+                        {distanceMiles(userLocation, {
+                          latitude: item.latitude,
+                          longitude: item.longitude,
+                        }).toFixed(1)}{" "}
+                        mi
+                      </Text>
+                    )}
+
                   {item.address && (
                     <TouchableOpacity
                       style={styles.directionsButton}
@@ -316,6 +359,8 @@ export default function FavoritesScreen() {
     </SafeAreaView>
   );
 }
+
+/* ───────────────── STYLES ───────────────── */
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

@@ -1,25 +1,43 @@
 // flashradar/components/DealCard.tsx
-import React, { useMemo, useState } from "react";
+
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   Image,
-  TouchableOpacity,
   Pressable,
-  ImageSourcePropType,
+  TouchableOpacity,
+  Alert,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { doc, setDoc, deleteDoc } from "firebase/firestore";
+import { auth, db } from "../firebaseConfig";
 
-type Deal = {
+/* ───────── TYPES ───────── */
+
+export type Deal = {
   id: string;
   title: string;
-  store: string;
-  price: number;
-  discountPercent?: number | null;
+  store?: string;
+
+  price?: number | null;
+  originalPrice?: number | null;
+
   image?: string | null;
+  imageUrl?: string | null;
+
+  url?: string | null;
+  merchantUrl?: string | null;
+  affiliateUrl?: string | null;
+
+  hot?: boolean;
+  rare?: boolean;
+  lightning?: boolean;
+  live?: boolean;
+
   isSaved?: boolean;
-  source?: "local" | "online";
 };
 
 type Props = {
@@ -27,210 +45,247 @@ type Props = {
   onPress?: () => void;
   onSaveToggle?: () => void;
   darkMode?: boolean;
-  showOpenDealButton?: boolean;
-  compact?: boolean;
 };
 
-function normalizeStore(store?: string) {
-  return (store || "").trim().toLowerCase();
-}
-
-const STORE_FALLBACKS: Record<string, ImageSourcePropType> = {
-  walmart: require("../assets/store_fallbacks/walmart.png"),
-  target: require("../assets/store_fallbacks/target.png"),
-  "home depot": require("../assets/store_fallbacks/homedepot.png"),
-  homedepot: require("../assets/store_fallbacks/homedepot.png"),
-  amazon: require("../assets/store_fallbacks/amazon.png"),
-};
-
-function getFallbackImage(store: string): ImageSourcePropType | null {
-  const key = normalizeStore(store);
-  if (STORE_FALLBACKS[key]) return STORE_FALLBACKS[key];
-
-  if (key.includes("walmart")) return STORE_FALLBACKS.walmart;
-  if (key.includes("target")) return STORE_FALLBACKS.target;
-  if (key.includes("home depot") || key.includes("homedepot"))
-    return STORE_FALLBACKS["home depot"];
-  if (key.includes("amazon")) return STORE_FALLBACKS.amazon;
-
-  return null;
-}
+/* ───────── COMPONENT ───────── */
 
 export default function DealCard({
   deal,
   onPress,
   onSaveToggle,
   darkMode = true,
-  showOpenDealButton = true,
-  compact = false,
 }: Props) {
-  const [imgFailed, setImgFailed] = useState(false);
-
   const text = darkMode ? "#fff" : "#111";
-  const subText = darkMode ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.65)";
+  const subText = darkMode
+    ? "rgba(255,255,255,0.6)"
+    : "rgba(0,0,0,0.6)";
 
-  // Accept different doc field names if they exist
-  const rawImage =
-    (deal as any)?.image ??
-    (deal as any)?.Image ??
-    (deal as any)?.imageUrl ??
-    (deal as any)?.ImageUrl ??
+  const [saving, setSaving] = useState(false);
+  const [localSaved, setLocalSaved] = useState<boolean>(!!deal.isSaved);
+
+  useEffect(() => {
+    setLocalSaved(!!deal.isSaved);
+  }, [deal.isSaved]);
+
+  /* ✅ SAFE IMAGE HANDLING */
+
+ const rawImage =
+  deal.image && deal.image.length > 0
+    ? deal.image
+    : deal.imageUrl && deal.imageUrl.length > 0
+    ? deal.imageUrl
+    : null;
+
+// Force Amazon images to use m.media format properly
+const imageUri =
+  rawImage && rawImage.includes("amazon")
+    ? rawImage.replace("images-na.ssl-images-amazon.com", "m.media-amazon.com")
+    : rawImage;
+
+
+  const dealUrl =
+    deal.affiliateUrl ||
+    deal.merchantUrl ||
+    deal.url ||
     null;
 
-  const imageUri =
-    typeof rawImage === "string" && rawImage.trim().length > 0
-      ? rawImage.trim()
-      : null;
+  const toggleFavorite = useCallback(async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert("Sign in required", "Please sign in to save favorites.");
+      return;
+    }
 
-  const fallbackImg = useMemo(() => getFallbackImage(deal.store), [deal.store]);
+    const ref = doc(db, "users", user.uid, "favorites", deal.id);
 
-  const showRemote = !!imageUri && !imgFailed;
+    try {
+      setSaving(true);
+      const next = !localSaved;
+      setLocalSaved(next);
+
+      if (!next) {
+        await deleteDoc(ref);
+      } else {
+        await setDoc(ref, { ...deal, isSaved: true }, { merge: true });
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [deal, localSaved]);
 
   return (
     <Pressable
       onPress={onPress}
-      disabled={!onPress}
-      style={[styles.card, { padding: compact ? 10 : 12 }]}
+      style={[
+        styles.card,
+        { backgroundColor: darkMode ? "#111" : "#fff" },
+      ]}
     >
       <View style={styles.row}>
-        {showRemote ? (
-          <Image
-            source={{ uri: imageUri! }}
-            style={[
-              styles.image,
-              { width: compact ? 58 : 66, height: compact ? 58 : 66 },
-            ]}
-            onError={() => setImgFailed(true)} // ✅ if remote fails, fall back to store logo
-          />
-        ) : fallbackImg ? (
-          <Image
-            source={fallbackImg}
-            style={[
-              styles.image,
-              { width: compact ? 58 : 66, height: compact ? 58 : 66 },
-            ]}
-            resizeMode="cover"
-          />
-        ) : (
-          <View
-            style={[
-              styles.imageFallback,
-              { width: compact ? 58 : 66, height: compact ? 58 : 66 },
-            ]}
-          >
-            <Ionicons name="pricetag" size={22} color={subText} />
-          </View>
-        )}
+        {/* IMAGE */}
+        <View style={styles.imageContainer}>
+          {imageUri ? (
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.image}
+              resizeMode="contain"
+              fadeDuration={0}
+              onError={() => console.log("Image failed:", imageUri)}
+            />
+          ) : (
+            <View style={styles.placeholder}>
+              <Ionicons
+                name="image-outline"
+                size={28}
+                color={darkMode ? "#555" : "#999"}
+              />
+            </View>
+          )}
+        </View>
 
-        <View style={styles.main}>
+        {/* RIGHT SIDE */}
+        <View style={styles.content}>
           <Text
             style={[styles.title, { color: text }]}
-            numberOfLines={compact ? 2 : 3}
+            numberOfLines={2}
           >
             {deal.title}
           </Text>
 
-          <Text style={[styles.store, { color: subText }]} numberOfLines={1}>
-            {deal.store}
-            {deal.source ? ` • ${deal.source}` : ""}
-          </Text>
+          {deal.store && (
+            <Text style={[styles.store, { color: subText }]}>
+              {deal.store}
+            </Text>
+          )}
 
-          <Text style={[styles.price, { color: "#FF7A00" }]}>
-            ${Number(deal.price || 0).toFixed(2)}
-            {typeof deal.discountPercent === "number"
-              ? `  •  ${Math.round(deal.discountPercent)}% off`
-              : ""}
-          </Text>
+          <View style={styles.priceRow}>
+            {deal.price != null ? (
+              <>
+                <Text style={styles.price}>
+                  ${deal.price.toFixed(2)}
+                </Text>
+
+                {deal.originalPrice &&
+                  deal.originalPrice > deal.price && (
+                    <Text style={styles.originalPrice}>
+                      ${deal.originalPrice.toFixed(2)}
+                    </Text>
+                  )}
+              </>
+            ) : (
+              <Text style={styles.priceUnavailable}>
+                See deal
+              </Text>
+            )}
+          </View>
+
+          {dealUrl && (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(dealUrl)}
+              style={styles.openBtn}
+            >
+              <Text style={styles.openText}>Buy Now</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
+        {/* HEART */}
         <TouchableOpacity
-          onPress={(e) => {
-            e.stopPropagation();
-            onSaveToggle?.();
-          }}
-          style={styles.saveBtn}
-          hitSlop={10}
+          onPress={onSaveToggle ?? toggleFavorite}
+          disabled={saving}
+          style={styles.heart}
         >
           <Ionicons
-            name={deal.isSaved ? "heart" : "heart-outline"}
+            name={localSaved ? "heart" : "heart-outline"}
             size={22}
-            color={deal.isSaved ? "#FF3B30" : subText}
+            color={
+              localSaved
+                ? "#FF3B30"
+                : darkMode
+                ? "#888"
+                : "#444"
+            }
           />
         </TouchableOpacity>
       </View>
-
-      {showOpenDealButton && (
-        <TouchableOpacity
-          onPress={onPress}
-          style={styles.openBtn}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.openText}>Open Deal</Text>
-          <Ionicons name="chevron-forward" size={16} color="#fff" />
-        </TouchableOpacity>
-      )}
     </Pressable>
   );
 }
 
+/* ───────── STYLES ───────── */
+
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 12,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
   },
   row: {
     flexDirection: "row",
-    alignItems: "flex-start",
+  },
+  imageContainer: {
+    width: 95,
+    height: 95,
+    marginRight: 12,
   },
   image: {
-    borderRadius: 10,
-    marginRight: 10,
-    backgroundColor: "rgba(0,0,0,0.08)",
+    width: "100%",
+    height: "100%",
+    borderRadius: 12,
+    backgroundColor: "#000",
   },
-  imageFallback: {
-    borderRadius: 10,
-    marginRight: 10,
-    alignItems: "center",
+  placeholder: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 12,
+    backgroundColor: "#1c1c1c",
     justifyContent: "center",
-    opacity: 0.9,
-    backgroundColor: "rgba(0,0,0,0.08)",
+    alignItems: "center",
   },
-  main: {
+  content: {
     flex: 1,
-    paddingRight: 6,
   },
   title: {
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 18,
+    fontSize: 15,
+    fontWeight: "600",
+    marginBottom: 4,
   },
   store: {
-    marginTop: 4,
-    marginBottom: 6,
     fontSize: 12,
-    fontWeight: "600",
+    marginBottom: 6,
   },
-  price: {
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  saveBtn: {
-    paddingLeft: 6,
-    paddingTop: 2,
-  },
-  openBtn: {
-    marginTop: 10,
-    backgroundColor: "#FF6600",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+  priceRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
+    marginBottom: 8,
+  },
+  price: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FF8C00",
+    marginRight: 8,
+  },
+  originalPrice: {
+    fontSize: 13,
+    textDecorationLine: "line-through",
+    color: "#777",
+  },
+  priceUnavailable: {
+    color: "#777",
+  },
+  openBtn: {
+    backgroundColor: "#FF8C00",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    alignSelf: "flex-start",
   },
   openText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "800",
+    color: "#000",
+    fontWeight: "700",
+  },
+  heart: {
+    marginLeft: 8,
+    alignSelf: "flex-start",
   },
 });

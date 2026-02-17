@@ -1,19 +1,32 @@
-// ~/Desktop/FlashRadar/FlashRadarProject/FlashRadar/app/firebaseConfig.ts
-
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
 import "firebase/compat/firestore";
 import { Platform } from "react-native";
 
-// ✅ Polyfills for Expo / RN environment
+/* ───────── Polyfills for Expo / RN ───────── */
+
 declare const global: any;
-if (!global.btoa) global.btoa = encode;
-if (!global.atob) global.atob = decode;
+
+// ✅ Correct base64 polyfills (encode/decode DO NOT EXIST)
+if (!global.btoa) {
+  global.btoa = (input: string) =>
+    Buffer.from(input, "binary").toString("base64");
+}
+
+if (!global.atob) {
+  global.atob = (input: string) =>
+    Buffer.from(input, "base64").toString("binary");
+}
 
 if (Platform.OS !== "web") {
   require("react-native-get-random-values");
+
+  // Fix XMLHttpRequest for Firebase
   // @ts-ignore
-  global.XMLHttpRequest = global.originalXMLHttpRequest || global.XMLHttpRequest;
+  global.XMLHttpRequest =
+    global.originalXMLHttpRequest || global.XMLHttpRequest;
+
+  // Ensure fetch exists
   // @ts-ignore
   global.fetch = global.fetch || fetch;
 }

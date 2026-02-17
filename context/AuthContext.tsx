@@ -1,18 +1,12 @@
 // flashradar/context/AuthContext.tsx
+
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { auth, db } from "../firebaseConfig";
+import { View, Text } from "react-native";
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  getDocs,
-  query,
-  where,
-  collection,
-  serverTimestamp,
-} from "firebase/firestore";
+import "firebase/compat/firestore";
+
+import { auth, db } from "../firebaseConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type AuthContextType = {
@@ -28,74 +22,37 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // ─────────────────────────── REFERRAL HELPER ───────────────────────────
 async function ensureReferralCode(uid: string) {
   try {
-    const userRef = doc(db, "users", uid);
+    const userRef = db.collection("users").doc(uid);
+    const snap = await userRef.get();
 
-    // ✅ Wait until Firestore is connected before calling getDoc()
-    const waitForConnection = new Promise((resolve) => setTimeout(resolve, 500));
-    await waitForConnection;
+    if (!snap.exists) return;
 
-    const snap = await getDoc(userRef);
-
-    if (!snap.exists()) return;
     const data = snap.data();
-
-    if (!data.referralCode) {
-      const newCode =
+    if (!data?.referralCode) {
+      const code =
         Math.random().toString(36).substring(2, 5).toUpperCase() +
         Math.floor(Math.random() * 90 + 10);
 
-      await setDoc(
-        userRef,
-        { referralCode: newCode, referralsCount: 0 },
-        { merge: true }
-      );
-
-      console.log("✅ Referral code created for user:", newCode);
-    }
-  } catch (error: any) {
-    if (error.code === "unavailable" || error.message?.includes("offline")) {
-      console.warn("⚠️ Firestore offline, will retry referral setup later");
-      return;
-    }
-    console.error("Referral setup error:", error);
-  }
-}
-
-// ─────────────────────────── REWARD CHECK ───────────────────────────
-async function checkReferralReward(referrerId: string) {
-  try {
-    const referrerRef = doc(db, "users", referrerId);
-    const snap = await getDoc(referrerRef);
-    if (!snap.exists()) return;
-
-    const data = snap.data();
-    const count = data.referralsCount || 0;
-
-    if (count >= 10 && !data.rewardGranted) {
-      // 🔐 This field is updated by Cloud Function, not client
-      await setDoc(
-        referrerRef,
+      await userRef.set(
         {
-          rewardGranted: true,
-          rewardPending: true,
-          rewardCheckedAt: serverTimestamp(),
+          referralCode: code,
+          referralsCount: 0,
         },
         { merge: true }
       );
-      console.log(`🏆 Referral milestone reached for ${referrerId}.`);
     }
-  } catch (error) {
-    console.error("Reward check failed:", error);
+  } catch (e) {
+    console.warn("Referral setup skipped:", e);
   }
 }
 
-// ─────────────────────────── MAIN CONTEXT ───────────────────────────
+// ─────────────────────────── AUTH PROVIDER ───────────────────────────
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<firebase.User | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged(async (firebaseUser) => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       setUser(firebaseUser);
       setReady(true);
 
@@ -103,53 +60,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await ensureReferralCode(firebaseUser.uid);
       }
     });
-    return unsub;
+
+    return unsubscribe;
   }, []);
 
-  // ──────────── Sign In ────────────
   const signIn = async (email: string, password: string) => {
     await auth.signInWithEmailAndPassword(email, password);
   };
 
-  // ──────────── Sign Up + Referral Handling ────────────
   const signUp = async (email: string, password: string) => {
-    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-    const newUser = userCredential.user;
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    const newUser = cred.user;
     if (!newUser) return;
 
     const storedCode = await AsyncStorage.getItem("pendingReferral");
+
     if (storedCode) {
-      console.log("🎁 Applying referral:", storedCode);
-      const refQuery = query(
-        collection(db, "users"),
-        where("referralCode", "==", storedCode)
-      );
-      const refSnap = await getDocs(refQuery);
+      const refSnap = await db
+        .collection("users")
+        .where("referralCode", "==", storedCode)
+        .limit(1)
+        .get();
 
       if (!refSnap.empty) {
         const refDoc = refSnap.docs[0];
-        const refId = refDoc.id;
-        const refData = refDoc.data();
 
-        await setDoc(
-          doc(db, "users", refId),
-          { referralsCount: (refData.referralsCount || 0) + 1, updatedAt: serverTimestamp() },
-          { merge: true }
-        );
-
-        await checkReferralReward(refId);
-
-        await setDoc(
-          doc(db, "users", newUser.uid),
+        await refDoc.ref.set(
           {
-            referredBy: refId,
-            referralCodeUsed: storedCode,
-            createdAt: serverTimestamp(),
+            referralsCount: (refDoc.data().referralsCount || 0) + 1,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           },
           { merge: true }
         );
 
-        console.log("✅ Referral applied for new user:", newUser.uid);
+        await db
+          .collection("users")
+          .doc(newUser.uid)
+          .set(
+            {
+              referredBy: refDoc.id,
+              referralCodeUsed: storedCode,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
       }
 
       await AsyncStorage.removeItem("pendingReferral");
@@ -158,10 +112,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await ensureReferralCode(newUser.uid);
   };
 
-  // ──────────── Sign Out ────────────
   const signOut = async () => {
     await auth.signOut();
   };
+
+  // ✅ SAFE LOADING UI (NO MORE BLACK SCREEN)
+  if (!ready) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#000",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text style={{ color: "#fff", fontSize: 18 }}>
+          Loading FlashRadar…
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{ user, ready, signIn, signUp, signOut }}>
@@ -172,7 +143,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 // ─────────────────────────── HOOK ───────────────────────────
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within AuthProvider");
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+  return ctx;
 }

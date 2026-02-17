@@ -1,3 +1,5 @@
+// flashradar/screens/LoginScreen.tsx
+
 import React, { useState } from "react";
 import {
   View,
@@ -12,39 +14,29 @@ import {
   ScrollView,
   Image,
 } from "react-native";
-import { useAuth } from "../context/AuthContext";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../navigation/RootNavigator";
 import SafeAreaWrapper from "../components/SafeAreaWrapper";
+import { useAuth } from "../context/AuthContext";
 
 export default function LoginScreen() {
   const { signIn, signUp } = useAuth();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState<"login" | "signup" | null>(null);
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert("Missing fields", "Please enter email and password.");
+      Alert.alert("Missing info", "Enter email and password");
       return;
     }
+
     try {
       setLoading("login");
       await signIn(email.trim(), password);
-      Alert.alert("Welcome back!", "You're now logged in.");
-    } catch (error: any) {
-      console.error("Login Error:", error);
-
-      if (error.code === "auth/network-request-failed") {
-        Alert.alert(
-          "Network Error",
-          "We couldn’t reach Firebase. Please check your internet connection and try again."
-        );
-      } else {
-        Alert.alert("Login Error", error.message || "Something went wrong.");
-      }
+      // ✅ DO NOT navigate manually
+      // RootNavigator auto-switches when user is set
+    } catch (e: any) {
+      Alert.alert("Login failed", e.message);
     } finally {
       setLoading(null);
     }
@@ -52,16 +44,15 @@ export default function LoginScreen() {
 
   const handleSignUp = async () => {
     if (!email || !password) {
-      Alert.alert("Missing fields", "Please enter email and password.");
+      Alert.alert("Missing info", "Enter email and password");
       return;
     }
+
     try {
       setLoading("signup");
       await signUp(email.trim(), password);
-      Alert.alert("Account Created", "Welcome to FlashRadar!");
-    } catch (error: any) {
-      console.error("Signup Error:", error);
-      Alert.alert("Signup Error", error.message || "Something went wrong.");
+    } catch (e: any) {
+      Alert.alert("Signup failed", e.message);
     } finally {
       setLoading(null);
     }
@@ -135,22 +126,34 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fff" },
+  safe: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
-  logoWrapper: { marginBottom: 12 },
-  logo: { width: 120, height: 120 },
+  logoWrapper: {
+    marginBottom: 12,
+  },
+  logo: {
+    width: 120,
+    height: 120,
+  },
   title: {
     fontSize: 28,
     fontWeight: "800",
     marginBottom: 4,
     color: "#FF6600",
   },
-  subtitle: { fontSize: 14, opacity: 0.7, marginBottom: 18 },
+  subtitle: {
+    fontSize: 14,
+    opacity: 0.7,
+    marginBottom: 18,
+  },
   input: {
     width: "100%",
     height: 50,
@@ -169,6 +172,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#FF6600",
     marginTop: 8,
   },
-  signupBtn: { backgroundColor: "#333" },
-  btnText: { fontSize: 16, fontWeight: "600", color: "#fff" },
+  signupBtn: {
+    backgroundColor: "#333",
+  },
+  btnText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#fff",
+  },
 });
