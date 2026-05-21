@@ -1,59 +1,68 @@
+// flashradar/context/UserContext.tsx
+
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { useAuth } from "./AuthContext";
 
 type UserContextType = {
   isPremium: boolean;
+  subscriptionStatus: string;
   loading: boolean;
 };
 
 const UserContext = createContext<UserContextType>({
   isPremium: false,
+  subscriptionStatus: "none",
   loading: true,
 });
 
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState("none");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) {
       setIsPremium(false);
+      setSubscriptionStatus("none");
       setLoading(false);
       return;
     }
 
-    const ref = doc(db, "users", user.uid);
+    const unsub = db
+      .collection("users")
+      .doc(user.uid)
+      .onSnapshot(
+        (snap) => {
+          const data = snap.data();
 
-    const unsub = onSnapshot(ref, (snap) => {
-      const data = snap.data();
+          const status: string = data?.subscriptionStatus ?? "none";
+          const premiumActive =
+            status === "active" ||
+            data?.premium === true ||
+            data?.isPremium === true;
 
-      setIsPremium(
-        data?.premium === true ||
-        data?.isPremium === true ||
-        data?.subscriptionStatus === "active"
+          setSubscriptionStatus(status);
+          setIsPremium(premiumActive);
+          setLoading(false);
+        },
+        (error) => {
+          console.error("[UserContext] Firestore listener error:", error);
+          setIsPremium(false);
+          setSubscriptionStatus("error");
+          setLoading(false);
+        }
       );
-
-      setLoading(false);
-    });
 
     return () => unsub();
   }, [user]);
 
   return (
-    <UserContext.Provider value={{ isPremium, loading }}>
+    <UserContext.Provider value={{ isPremium, subscriptionStatus, loading }}>
       {children}
     </UserContext.Provider>
   );
 };
 
 export const useUser = () => useContext(UserContext);
-//
-//  UserContext.tsx
-//  
-//
-//  Created by Miguel Cz on 12/20/25.
-//
-
