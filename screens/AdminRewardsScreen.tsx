@@ -1,15 +1,11 @@
 // flashradar/screens/AdminRewardsScreen.tsx
+
 import React, { useState, useEffect } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  Alert,
+  View, Text, StyleSheet, FlatList,
+  ActivityIndicator, Alert,
 } from "react-native";
 import { db } from "../firebaseConfig";
-import { collection, getDocs } from "firebase/firestore";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type RewardEntry = {
@@ -26,12 +22,13 @@ export default function AdminRewardsScreen() {
   useEffect(() => {
     const fetchRewards = async () => {
       try {
-        const snapshot = await getDocs(collection(db, "users"));
+        // ── Compat SDK ──────────────────────────────────────────────────────
+        const snapshot = await db.collection("users").get();
         const data: RewardEntry[] = snapshot.docs.map((doc) => ({
           id: doc.id,
           email: doc.data().email ?? "Unknown",
           referrals: doc.data().referrals ?? 0,
-          premiumActive: doc.data().premium ?? false,
+          premiumActive: doc.data().isPremium ?? false,
         }));
         setRewards(data);
       } catch (err: any) {
@@ -80,22 +77,11 @@ export default function AdminRewardsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", padding: 20 },
-  header: {
-    fontSize: 22,
-    fontWeight: "800",
-    marginBottom: 16,
-    color: "#FF6600",
-    textAlign: "center",
-  },
+  header: { fontSize: 22, fontWeight: "800", marginBottom: 16, color: "#FF6600", textAlign: "center" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 10, fontSize: 16, color: "#555" },
   empty: { textAlign: "center", marginTop: 20, fontSize: 16, color: "#555" },
-  card: {
-    backgroundColor: "#f5f5f5",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
+  card: { backgroundColor: "#f5f5f5", padding: 12, borderRadius: 8, marginBottom: 10 },
   email: { fontSize: 16, fontWeight: "600" },
   info: { fontSize: 14, color: "#333", marginTop: 4 },
 });

@@ -1,19 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  Image,
-  Animated,
-  Easing,
-  Linking,
+  View, Text, StyleSheet, TouchableOpacity,
+  ActivityIndicator, Image, Animated, Easing, Linking,
 } from "react-native";
 import {
-  CameraView,
-  useCameraPermissions,
-  BarcodeScanningResult,
+  CameraView, useCameraPermissions, BarcodeScanningResult,
 } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
@@ -22,49 +13,25 @@ import SafeAreaWrapper from "../components/SafeAreaWrapper";
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
 import { db } from "../firebaseConfig";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  serverTimestamp,
-} from "firebase/firestore";
 import { ScannedItem } from "../types/ScannedItem";
 
-/* ───────── Helpers ───────── */
+// ── Correct affiliate tag ──────────────────────────────────────────────────
+// Previously "flashradar20e-20" (typo) — every scanner search was untracked.
+const AMAZON_TAG = "flashradar20-20";
 
 const triggerHaptic = async (style: Haptics.ImpactFeedbackStyle) => {
-  try {
-    await Haptics.impactAsync(style);
-  } catch {}
+  try { await Haptics.impactAsync(style); } catch {}
 };
 
 const buildAmazonSearchQuery = (product: ScannedItem): string => {
-  const safeTitle =
-    typeof product.title === "string" && product.title.trim().length > 4
-      ? product.title.trim()
-      : "";
-
-  const safeBarcode =
-    typeof product.barcode === "string" && product.barcode.length > 0
-      ? product.barcode
-      : "";
-
-  if (safeTitle) {
-    return encodeURIComponent(safeTitle);
-  }
-
-  if (safeBarcode) {
-    return encodeURIComponent(safeBarcode);
-  }
-
-  // absolute fallback — never undefined
+  const safeTitle = typeof product.title === "string" && product.title.trim().length > 4
+    ? product.title.trim() : "";
+  const safeBarcode = typeof product.barcode === "string" && product.barcode.length > 0
+    ? product.barcode : "";
+  if (safeTitle) return encodeURIComponent(safeTitle);
+  if (safeBarcode) return encodeURIComponent(safeBarcode);
   return encodeURIComponent("product");
 };
-
-
-/* ───────── Screen ───────── */
 
 export default function FlipScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -78,67 +45,42 @@ export default function FlipScannerScreen() {
   const slideAnim = useRef(new Animated.Value(40)).current;
   const successAnim = useRef(new Animated.Value(0)).current;
 
-  /* ───────── Toast ───────── */
-
   const showToast = (msg: string) => {
     setToastMessage(msg);
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 300, easing: Easing.out(Easing.ease), useNativeDriver: true }),
     ]).start();
-
     setTimeout(() => {
       Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 40,
-          duration: 300,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
-        }),
+        Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: 40, duration: 300, easing: Easing.in(Easing.ease), useNativeDriver: true }),
       ]).start(() => setToastMessage(null));
     }, 1800);
   };
 
-  /* ───────── Permissions ───────── */
-
   useEffect(() => {
-    if (!permission?.granted) {
-      requestPermission();
-    }
+    if (!permission?.granted) requestPermission();
   }, [permission]);
-
-  /* ───────── Save Scan (ONLY on user action) ───────── */
 
   const saveScanToUser = async (item: ScannedItem) => {
     const user = firebase.auth().currentUser;
     if (!user) return;
 
-    await addDoc(collection(db, "users", user.uid, "scans"), {
-      ...item,
-      uid: user.uid,
-      timestamp: serverTimestamp(),
-    });
+    // ── Compat SDK ──────────────────────────────────────────────────────────
+    await db
+      .collection("users")
+      .doc(user.uid)
+      .collection("scans")
+      .add({
+        ...item,
+        uid: user.uid,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      });
   };
-
-  /* ───────── Barcode Handler ───────── */
 
   const handleBarcodeScanned = async ({ data }: BarcodeScanningResult) => {
     if (scanned) return;
-
     setScanned(true);
     setLoading(true);
 
@@ -152,14 +94,10 @@ export default function FlipScannerScreen() {
       }
 
       let title = "Unknown Product";
-      let image =
-        "https://via.placeholder.com/300x300.png?text=No+Image";
+      let image = "https://via.placeholder.com/300x300.png?text=No+Image";
 
-      // 🔍 OpenFoodFacts lookup
       try {
-        const res = await axios.get(
-          `https://world.openfoodfacts.org/api/v0/product/${data}.json`
-        );
+        const res = await axios.get(`https://world.openfoodfacts.org/api/v0/product/${data}.json`);
         const p = res.data?.product;
         if (p?.product_name) title = p.product_name;
         if (p?.image_url) image = p.image_url;
@@ -178,12 +116,7 @@ export default function FlipScannerScreen() {
 
       setProduct(foundProduct);
       await triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
-
-      Animated.timing(successAnim, {
-        toValue: 1,
-        duration: 350,
-        useNativeDriver: true,
-      }).start();
+      Animated.timing(successAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
     } catch (err) {
       console.error("❌ Scan error:", err);
       showToast("Scan failed");
@@ -193,14 +126,8 @@ export default function FlipScannerScreen() {
     setLoading(false);
   };
 
-  /* ───────── Permission UI ───────── */
-
   if (!permission) {
-    return (
-      <SafeAreaWrapper style={styles.center}>
-        <ActivityIndicator size="large" color="#FF6600" />
-      </SafeAreaWrapper>
-    );
+    return <SafeAreaWrapper style={styles.center}><ActivityIndicator size="large" color="#FF6600" /></SafeAreaWrapper>;
   }
 
   if (!permission.granted) {
@@ -214,8 +141,6 @@ export default function FlipScannerScreen() {
     );
   }
 
-  /* ───────── UI ───────── */
-
   return (
     <SafeAreaWrapper style={styles.container}>
       {!scanned && (
@@ -224,9 +149,7 @@ export default function FlipScannerScreen() {
           facing="back"
           flash={flash ? "on" : "off"}
           onBarcodeScanned={handleBarcodeScanned}
-          barcodeScannerSettings={{
-            barcodeTypes: ["ean13", "upc_a", "upc_e", "code128"],
-          }}
+          barcodeScannerSettings={{ barcodeTypes: ["ean13", "upc_a", "upc_e", "code128"] }}
         />
       )}
 
@@ -238,12 +161,7 @@ export default function FlipScannerScreen() {
       </TouchableOpacity>
 
       {toastMessage && (
-        <Animated.View
-          style={[
-            styles.toast,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-          ]}
-        >
+        <Animated.View style={[styles.toast, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <Text style={styles.toastText}>{toastMessage}</Text>
         </Animated.View>
       )}
@@ -254,9 +172,7 @@ export default function FlipScannerScreen() {
 
       <View style={styles.overlay}>
         <Text style={styles.title}>📦 Scan a product barcode</Text>
-
         {loading && <ActivityIndicator size="large" color="#FF6600" />}
-
         {product && (
           <View style={styles.card}>
             <Image source={{ uri: product.image }} style={styles.image} />
@@ -266,10 +182,9 @@ export default function FlipScannerScreen() {
               style={styles.primaryBtn}
               onPress={async () => {
                 await saveScanToUser(product);
-                const query = buildAmazonSearchQuery(product);
-                Linking.openURL(
-                  `https://www.amazon.com/s?k=${query}&tag=flashradar20e-20`
-                );
+                const q = buildAmazonSearchQuery(product);
+                // ── Correct affiliate tag ────────────────────────────────────
+                Linking.openURL(`https://www.amazon.com/s?k=${q}&tag=${AMAZON_TAG}`);
               }}
             >
               <Ionicons name="cart-outline" size={18} color="#000" />
@@ -278,11 +193,7 @@ export default function FlipScannerScreen() {
 
             <TouchableOpacity
               style={styles.scanAgain}
-              onPress={() => {
-                setScanned(false);
-                setProduct(null);
-                successAnim.setValue(0);
-              }}
+              onPress={() => { setScanned(false); setProduct(null); successAnim.setValue(0); }}
             >
               <Ionicons name="scan-outline" size={20} color="#fff" />
               <Text style={styles.scanText}>Scan Again</Text>
@@ -294,94 +205,21 @@ export default function FlipScannerScreen() {
   );
 }
 
-/* ───────── Styles ───────── */
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#000",
-  },
-  flashButton: {
-    position: "absolute",
-    top: 70,
-    right: 25,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    borderRadius: 50,
-    padding: 10,
-    zIndex: 20,
-  },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
+  flashButton: { position: "absolute", top: 70, right: 25, backgroundColor: "rgba(0,0,0,0.4)", borderRadius: 50, padding: 10, zIndex: 20 },
   flashButtonActive: { backgroundColor: "#FF6600" },
-  toast: {
-    position: "absolute",
-    bottom: 100,
-    alignSelf: "center",
-    backgroundColor: "#FF6600",
-    paddingVertical: 10,
-    paddingHorizontal: 22,
-    borderRadius: 20,
-    zIndex: 30,
-  },
+  toast: { position: "absolute", bottom: 100, alignSelf: "center", backgroundColor: "#FF6600", paddingVertical: 10, paddingHorizontal: 22, borderRadius: 20, zIndex: 30 },
   toastText: { color: "#fff", fontWeight: "700" },
-  successPopup: {
-    position: "absolute",
-    top: "35%",
-    alignSelf: "center",
-    zIndex: 40,
-  },
-  overlay: {
-    position: "absolute",
-    bottom: 40,
-    width: "90%",
-    alignSelf: "center",
-    backgroundColor: "rgba(20,20,20,0.9)",
-    borderRadius: 20,
-    padding: 16,
-    alignItems: "center",
-  },
-  title: {
-    color: "#FF6600",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
+  successPopup: { position: "absolute", top: "35%", alignSelf: "center", zIndex: 40 },
+  overlay: { position: "absolute", bottom: 40, width: "90%", alignSelf: "center", backgroundColor: "rgba(20,20,20,0.9)", borderRadius: 20, padding: 16, alignItems: "center" },
+  title: { color: "#FF6600", fontSize: 18, fontWeight: "bold", marginBottom: 10 },
   card: { alignItems: "center", marginTop: 10 },
-  image: {
-    width: 160,
-    height: 160,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  productTitle: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-    textAlign: "center",
-  },
-  primaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FF6600",
-    borderRadius: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    marginTop: 12,
-  },
-  primaryText: {
-    color: "#000",
-    fontWeight: "800",
-    marginLeft: 6,
-  },
-  scanAgain: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#333",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginTop: 10,
-  },
+  image: { width: 160, height: 160, borderRadius: 12, marginBottom: 8 },
+  productTitle: { color: "#fff", fontSize: 16, fontWeight: "bold", textAlign: "center" },
+  primaryBtn: { flexDirection: "row", alignItems: "center", backgroundColor: "#FF6600", borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10, marginTop: 12 },
+  primaryText: { color: "#000", fontWeight: "800", marginLeft: 6 },
+  scanAgain: { flexDirection: "row", alignItems: "center", backgroundColor: "#333", borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, marginTop: 10 },
   scanText: { color: "#fff", fontWeight: "bold", marginLeft: 6 },
 });
