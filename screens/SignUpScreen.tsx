@@ -1,22 +1,16 @@
 // flashradar/screens/SignUpScreen.tsx
+
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
+  View, Text, TextInput, TouchableOpacity,
+  StyleSheet, ActivityIndicator, Alert,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import SafeAreaWrapper from "../components/SafeAreaWrapper";
-import { db } from "../firebaseConfig";
-import { doc, setDoc } from "firebase/firestore";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { auth, db } from "../firebaseConfig";
+import firebase from "firebase/compat/app";
 
 export default function SignUpScreen() {
-  const auth = getAuth();
   const { signUp } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,17 +26,24 @@ export default function SignUpScreen() {
     try {
       setLoading(true);
 
-      // ✅ Create Firebase Auth account
-      const userCred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      // ── Compat SDK — matches auth instance from firebaseConfig.ts ────────
+      // Previously used modular getAuth/createUserWithEmailAndPassword which
+      // creates a second Firebase Auth instance, conflicting with compat auth.
+      const userCred = await auth.createUserWithEmailAndPassword(
+        email.trim(),
+        password
+      );
       const user = userCred.user;
+      if (!user) return;
 
-      // ✅ Save referral info to Firestore
-      await setDoc(doc(db, "users", user.uid), {
+      // ── Save user doc ─────────────────────────────────────────────────────
+      await db.collection("users").doc(user.uid).set({
         email: user.email,
-        referralCode: user.uid.slice(0, 8).toUpperCase(), // shorter code for sharing
+        referralCode: user.uid.slice(0, 8).toUpperCase(),
         referredBy: referralInput.trim() || null,
         isPremium: false,
-        createdAt: new Date(),
+        subscriptionStatus: "none",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
 
       Alert.alert("Success", "Account created successfully!");
@@ -76,7 +77,6 @@ export default function SignUpScreen() {
           secureTextEntry
         />
 
-        {/* 🧩 Optional referral code */}
         <TextInput
           placeholder="Referral Code (optional)"
           value={referralInput}
@@ -104,27 +104,9 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#fff", justifyContent: "center" },
   container: { padding: 20 },
-  header: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 20,
-    textAlign: "center",
-    color: "#FF6600",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: "#FF6600",
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
+  header: { fontSize: 24, fontWeight: "700", marginBottom: 20, textAlign: "center", color: "#FF6600" },
+  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 12, marginBottom: 12, fontSize: 16 },
+  button: { backgroundColor: "#FF6600", paddingVertical: 12, borderRadius: 8, alignItems: "center" },
   buttonDisabled: { opacity: 0.7 },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
 });

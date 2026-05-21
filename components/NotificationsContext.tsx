@@ -1,6 +1,6 @@
 // flashradar/context/NotificationsContext.tsx
+
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db, auth } from "../firebaseConfig";
 
 type NotificationsContextType = {
@@ -16,18 +16,17 @@ export const NotificationsProvider = ({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (!user) return;
 
-    const q = query(
-      collection(db, "notifications"),
-      where("uid", "==", user.uid),
-      where("read", "==", false)
-    );
-
-    const unsub = onSnapshot(q, (snapshot) => {
-      setUnreadCount(snapshot.size);
-    });
+    const unsub = db
+      .collection("notifications")
+      .where("uid", "==", user.uid)
+      .where("read", "==", false)
+      .onSnapshot(
+        (snapshot) => setUnreadCount(snapshot.docs.length),
+        (err) => console.error("[NotificationsContext] listener error:", err)
+      );
 
     return () => unsub();
-  }, [user]);
+  }, [user?.uid]);
 
   return (
     <NotificationsContext.Provider value={{ unreadCount }}>
