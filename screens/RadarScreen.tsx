@@ -1,32 +1,16 @@
 // flashradar/screens/RadarScreen.tsx
-// FINAL — DEAL GATE + UNLOCK CTA (FULL FILE)
 
 import React, { useEffect, useState, useMemo } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  TouchableOpacity,
-  Linking,
-  Animated,
+  View, Text, StyleSheet, FlatList, ActivityIndicator,
+  TouchableOpacity, Linking, Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  collection,
-  onSnapshot,
-  query,
-  orderBy,
-  where,
-  doc,
-  setDoc,
-  deleteDoc,
-} from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import DealCard from "../components/DealCard";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
+import { useUser } from "../context/UserContext";
 import { useNavigation } from "@react-navigation/native";
 import { usePulseAnimation } from "../FlashRadar/hooks/usePulseAnimation";
 
@@ -37,14 +21,11 @@ type Deal = {
   title: string;
   store: string;
   price: number;
-
   image?: string | null;
   imageUrl?: string | null;
-
   merchantUrl?: string;
   affiliateUrl?: string;
   url?: string;
-
   live?: boolean;
   hot?: boolean;
   rare?: boolean;
@@ -56,48 +37,45 @@ type Deal = {
 
 function minutesLeft(updatedAt?: any) {
   if (!updatedAt?.toDate) return null;
-
   const start = updatedAt.toDate().getTime();
   const expires = start + 24 * 60 * 60 * 1000;
   const diff = Math.floor((expires - Date.now()) / 60000);
-
   return diff > 0 ? diff : null;
 }
 
 /* ───────────────── COMPONENT ───────────────── */
 
+// Max deals fetched per query — prevents runaway Firestore reads.
+// Premium users see all VISIBLE_LIMIT deals; free users see first 3.
+const VISIBLE_LIMIT = 50;
+
 export default function RadarScreen() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isPremium, setIsPremium] = useState(false);
 
   const navigation = useNavigation();
   const { theme, colors } = useTheme();
   const isDark = theme === "dark";
   const { triggerPulse, ringStyle } = usePulseAnimation(300, 1.3);
 
-  /* ───────── PREMIUM STATUS ───────── */
-
-  useEffect(() => {
-    if (!auth.currentUser) return;
-
-    return onSnapshot(
-      doc(db, "users", auth.currentUser.uid),
-      (snap) => setIsPremium(!!snap.data()?.isPremium)
-    );
-  }, []);
+  // ── Premium status from context — no extra Firestore listener needed ────────
+  // Previously RadarScreen opened its own onSnapshot for premium status.
+  // That's now handled by UserContext (wired in App.tsx) and shared globally.
+  const { isPremium } = useUser();
 
   /* ───────── LIVE DEAL QUERY ───────── */
 
   useEffect(() => {
-    const q = query(
-      collection(db, "deals_online"),
-      where("live", "==", true),
-      orderBy("updatedAt", "desc")
-    );
+    // ── Compat SDK — matches the db instance from firebaseConfig.ts ───────────
+    // Previously used modular SDK (collection/query/onSnapshot from
+    // "firebase/firestore") which silently fails with a compat db instance.
+    const q = db
+      .collection("deals_live")
+      .where("live", "==", true)
+      .orderBy("updatedAt", "desc")
+      .limit(VISIBLE_LIMIT); // Hard cap — prevents full collection scans
 
-    const unsub = onSnapshot(
-      q,
+    const unsub = q.onSnapshot(
       (snap) => {
         const rows: Deal[] = snap.docs.map((d) => {
           const data = d.data() as any;
@@ -141,11 +119,19 @@ export default function RadarScreen() {
     const user = auth.currentUser;
     if (!user) return;
 
-    const ref = doc(db, "users", user.uid, "favorites", deal.id);
     triggerPulse();
 
-    if (deal.isSaved) await deleteDoc(ref);
-    else await setDoc(ref, deal, { merge: true });
+    const ref = db
+      .collection("users")
+      .doc(user.uid)
+      .collection("favorites")
+      .doc(deal.id);
+
+    if (deal.isSaved) {
+      await ref.delete();
+    } else {
+      await ref.set(deal, { merge: true });
+    }
 
     setDeals((prev) =>
       prev.map((d) =>
@@ -155,7 +141,10 @@ export default function RadarScreen() {
   };
 
   const openDeal = async (deal: Deal) => {
-    const url = deal.merchantUrl || deal.affiliateUrl || deal.url;
+    // ── Affiliate URL first — always send tracked links ───────────────────────
+    // Previously merchantUrl was checked first, bypassing affiliate tracking.
+    // affiliateUrl contains the flashradar20-20 tag — this is how we get paid.
+    const url = deal.affiliateUrl || deal.merchantUrl || deal.url;
     if (!url) return;
 
     try {
@@ -258,7 +247,6 @@ export default function RadarScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-
   liveStrip: {
     flexDirection: "row",
     alignItems: "center",
@@ -267,18 +255,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  liveText: {
-    fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: 0.4,
-  },
-
+  liveDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
+  liveText: { fontSize: 13, fontWeight: "800", letterSpacing: 0.4 },
   card: {
     borderWidth: 1,
     borderRadius: 12,
@@ -286,7 +264,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     position: "relative",
   },
-
   liveBadge: {
     position: "absolute",
     top: 8,
@@ -297,20 +274,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     zIndex: 10,
   },
-  liveBadgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "900",
-  },
-
-  timer: {
-    marginTop: 4,
-    marginLeft: 6,
-    fontSize: 11,
-    color: "#FF3B30",
-    fontWeight: "700",
-  },
-
+  liveBadgeText: { color: "#fff", fontSize: 10, fontWeight: "900" },
+  timer: { marginTop: 4, marginLeft: 6, fontSize: 11, color: "#FF3B30", fontWeight: "700" },
   openBtn: {
     marginTop: 8,
     backgroundColor: "#FF6600",
@@ -321,31 +286,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
   },
-  openText: {
-    color: "#fff",
-    fontWeight: "900",
-  },
-
-  unlockBox: {
-    margin: 16,
-    padding: 16,
-    borderRadius: 14,
-    alignItems: "center",
-  },
-  unlockTitle: {
-    color: "#fff",
-    fontWeight: "900",
-    fontSize: 16,
-  },
-  unlockSub: {
-    color: "#fff",
-    opacity: 0.9,
-    marginTop: 4,
-  },
-
-  empty: {
-    textAlign: "center",
-    marginTop: 30,
-    fontSize: 16,
-  },
+  openText: { color: "#fff", fontWeight: "900" },
+  unlockBox: { margin: 16, padding: 16, borderRadius: 14, alignItems: "center" },
+  unlockTitle: { color: "#fff", fontWeight: "900", fontSize: 16 },
+  unlockSub: { color: "#fff", opacity: 0.9, marginTop: 4 },
+  empty: { textAlign: "center", marginTop: 30, fontSize: 16 },
 });

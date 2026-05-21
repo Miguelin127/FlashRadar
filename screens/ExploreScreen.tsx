@@ -2,31 +2,17 @@
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  TouchableOpacity,
-  TextInput,
-  RefreshControl,
+  View, Text, StyleSheet, FlatList, ActivityIndicator,
+  TouchableOpacity, TextInput, RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  collection,
-  query,
-  orderBy,
-  where,
-  onSnapshot,
-  doc,
-} from "firebase/firestore";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { db } from "../firebaseConfig";
 import DealCard from "../components/DealCard";
 import { useTheme } from "../context/ThemeContext";
-import { useAuth } from "../context/AuthContext";
+import { useUser } from "../context/UserContext";
 
 /* ───────────────────── TYPES ───────────────────── */
 
@@ -35,62 +21,46 @@ export type Deal = {
   title: string;
   store: string;
   price: number;
-
-  // optional price history inputs
   originalPrice?: number | null;
   avg30?: number | null;
   avg60?: number | null;
   avg90?: number | null;
-
-  // optional precomputed discount (if you add it later in merge/ingest)
   discountPercent?: number | null;
-
   url?: string | null;
   merchantUrl?: string | null;
   affiliateUrl?: string | null;
-
   image?: string | null;
   hot?: boolean;
   rare?: boolean;
   lightning?: boolean;
   live?: boolean;
-
   createdAt?: any;
 };
 
 /* ───────────────────── CONSTANTS ───────────────────── */
 
-const FREE_STORES = ["walmart", "target", "homedepot"];
 const FILTERS = ["all", "hot", "rare", "lightning"] as const;
 type FilterType = (typeof FILTERS)[number];
 
-const normalizeStore = (s: string) =>
-  s.toLowerCase().replace(".com", "").replace(/\s+/g, "");
+// Max deals fetched — prevents full collection scans
+const QUERY_LIMIT = 100;
+
+// Free tier: show first N deals, gate the rest
+const FREE_DEAL_LIMIT = 5;
 
 /* ───────────────────── HELPERS ───────────────────── */
 
-/**
- * Returns:
- * - number (0..100) if we can compute (or if discountPercent exists)
- * - null if we cannot compute yet (no history/old price data)
- */
 function computeDiscountPercent(d: Deal): number | null {
-  // If your backend starts writing discountPercent, use it.
   if (typeof d.discountPercent === "number" && isFinite(d.discountPercent)) {
     return Math.max(0, Math.round(d.discountPercent));
   }
-
   if (typeof d.price !== "number" || d.price <= 0) return null;
-
   const candidates = [d.originalPrice, d.avg30, d.avg60, d.avg90].filter(
     (p): p is number => typeof p === "number" && p > d.price
   );
-
   if (!candidates.length) return null;
-
   const oldPrice = Math.max(...candidates);
-  const pct = ((oldPrice - d.price) / oldPrice) * 100;
-  return Math.max(0, Math.round(pct));
+  return Math.max(0, Math.round(((oldPrice - d.price) / oldPrice) * 100));
 }
 
 /* ───────────────────── SCREEN ───────────────────── */
@@ -98,108 +68,94 @@ function computeDiscountPercent(d: Deal): number | null {
 export default function ExploreScreen() {
   const [rawDeals, setRawDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isPremium, setIsPremium] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
 
   const listRef = useRef<FlatList>(null);
-
-  const { user } = useAuth();
   const { theme, colors } = useTheme();
   const isDark = theme === "dark";
-
   const navigation = useNavigation<any>();
 
-  /* ───────── LOAD PREMIUM FLAG ───────── */
-
-  useEffect(() => {
-    if (!user?.uid) return;
-
-    const unsub = onSnapshot(doc(db, "users", user.uid), (snap) =>
-      setIsPremium(!!snap.data()?.isPremium)
-    );
-
-    return unsub;
-  }, [user?.uid]);
+  // ── Premium from context — no extra listener needed ──────────────────────
+  const { isPremium } = useUser();
 
   /* ───────── LOAD DEALS ───────── */
-useEffect(() => {
-  const q = query(
-    collection(db, "deals_online"),
-    orderBy("createdAt", "desc")
-  );
 
-  const unsub = onSnapshot(q, (snap) => {
-    const rows: Deal[] = snap.docs.map((d) => {
-      const data = d.data() as any;
+  useEffect(() => {
+    // ── Compat SDK — matches db instance from firebaseConfig.ts ──────────────
+    const unsub = db
+      .collection("deals_online")
+      .orderBy("createdAt", "desc")
+      .limit(QUERY_LIMIT)
+      .onSnapshot(
+        (snap) => {
+          const rows: Deal[] = snap.docs.map((d) => {
+            const data = d.data() as any;
+            return {
+              id: d.id,
+              title: data.title ?? "Deal",
+              store: data.store ?? "online",
+              price: Number(data.price ?? 0),
+              originalPrice: data.originalPrice ?? null,
+              avg30: data.avg30 ?? null,
+              avg60: data.avg60 ?? null,
+              avg90: data.avg90 ?? null,
+              discountPercent: data.discountPercent ?? null,
+              url: data.url ?? null,
+              merchantUrl: data.merchantUrl ?? null,
+              affiliateUrl: data.affiliateUrl ?? null,
+              image: data.imageUrl ?? data.image ?? data.Image ?? null,
+              hot: !!data.hot,
+              rare: !!data.rare,
+              lightning: !!data.lightning,
+              live: data.live ?? null,
+              createdAt: data.createdAt,
+            };
+          });
+          setRawDeals(rows);
+          setLoading(false);
+        },
+        () => setLoading(false)
+      );
 
-      return {
-        id: d.id,
-        title: data.title ?? "Deal",
-        store: data.store ?? "online",
-        price: Number(data.price ?? 0),
+    return () => unsub();
+  }, []);
 
-        originalPrice: data.originalPrice ?? null,
-        avg30: data.avg30 ?? null,
-        avg60: data.avg60 ?? null,
-        avg90: data.avg90 ?? null,
-        discountPercent: data.discountPercent ?? null,
-
-        url: data.url ?? null,
-        merchantUrl: data.merchantUrl ?? null,
-        affiliateUrl: data.affiliateUrl ?? null,
-
-        image: 
-          data.imageUrl ?? 
-          data.image ??
-          data.Image ??
-          null,
-        hot: !!data.hot,
-        rare: !!data.rare,
-        lightning: !!data.lightning,
-        live: data.live ?? null,
-        createdAt: data.createdAt,
-      };
-    });
-
-    setRawDeals(rows);
-    setLoading(false);
-  });
-
-  return unsub;
-}, []);
-
-  /* ───────── FILTER + SEARCH + QUALITY ───────── */
+  /* ───────── FILTER + SEARCH ───────── */
 
   const visibleDeals = useMemo(() => {
     let list = rawDeals;
 
-    // 🔒 Membership gate
-    if (!isPremium) {
-      list = list.filter((d) => FREE_STORES.includes(normalizeStore(d.store)));
-    }
-
-    // 🔍 Search
+    // Search
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
-        (d) => d.title.toLowerCase().includes(q) || d.store.toLowerCase().includes(q)
+        (d) =>
+          d.title.toLowerCase().includes(q) ||
+          d.store.toLowerCase().includes(q)
       );
     }
 
-    // ✅ Good deals filter (ONLY when we can compute a discount)
-    // If we can't compute yet, we keep it (so your list doesn't go empty).
+    // Quality filter — keep items where discount is unknown until data exists
     list = list.filter((d) => {
       const pct = computeDiscountPercent(d);
-      if (pct === null) return true; // keep unknown discount until history exists
-      return pct >= 20;
+      return pct === null || pct >= 20;
     });
 
-    // ⚡ Filter chips
+    // Filter chips
     if (filter !== "all") {
       list = list.filter((d: any) => d[filter] === true);
+    }
+
+    // ── Premium gate ─────────────────────────────────────────────────────────
+    // Free users see first FREE_DEAL_LIMIT deals regardless of store.
+    // Premium users see everything up to QUERY_LIMIT.
+    // Previously gated by store name (FREE_STORES) which was inconsistent —
+    // Amazon deals were blocked for free users even though the store list
+    // wasn't intentional product design.
+    if (!isPremium) {
+      list = list.slice(0, FREE_DEAL_LIMIT);
     }
 
     return list;
@@ -275,7 +231,9 @@ useEffect(() => {
           />
         }
         ListEmptyComponent={
-          <Text style={[styles.empty, { color: colors.text }]}>No deals found.</Text>
+          <Text style={[styles.empty, { color: colors.text }]}>
+            No deals found.
+          </Text>
         }
         renderItem={({ item }) => (
           <DealCard
@@ -285,6 +243,19 @@ useEffect(() => {
           />
         )}
       />
+
+      {/* UPGRADE CTA for free users */}
+      {!isPremium && rawDeals.length > FREE_DEAL_LIMIT && (
+        <TouchableOpacity
+          style={[styles.unlockBox, { backgroundColor: colors.accent }]}
+          onPress={() => navigation.navigate("Upgrade")}
+        >
+          <Text style={styles.unlockTitle}>🔓 Unlock All Deals</Text>
+          <Text style={styles.unlockSub}>
+            {rawDeals.length - FREE_DEAL_LIMIT} more deals available
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* BACK TO TOP */}
       <TouchableOpacity
@@ -302,10 +273,8 @@ useEffect(() => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-
   headerWrap: { padding: 16 },
   title: { fontSize: 26, fontWeight: "900", marginBottom: 8 },
-
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -316,7 +285,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   searchInput: { flex: 1, fontSize: 14 },
-
   filterRow: { flexDirection: "row", gap: 8 },
   filterChip: {
     paddingHorizontal: 12,
@@ -325,9 +293,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#333",
   },
   filterText: { fontSize: 11, fontWeight: "800", color: "#ccc" },
-
   list: { paddingHorizontal: 12, paddingBottom: 140 },
-
   backToTop: {
     position: "absolute",
     right: 16,
@@ -336,6 +302,13 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 999,
   },
-
+  unlockBox: {
+    margin: 16,
+    padding: 16,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  unlockTitle: { color: "#fff", fontWeight: "900", fontSize: 16 },
+  unlockSub: { color: "#fff", opacity: 0.9, marginTop: 4 },
   empty: { textAlign: "center", marginTop: 40, fontSize: 16 },
 });
