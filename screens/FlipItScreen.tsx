@@ -18,17 +18,8 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
-import { auth, db } from "../firebaseConfig";
-
-import {
-  doc,
-  onSnapshot,
-  collection,
-  query,
-  orderBy,
-  addDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import { useUser } from "../context/UserContext";
+import { firebase, db } from "../firebaseConfig";
 
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
@@ -40,6 +31,7 @@ const PARSE_ENDPOINT =
 export default function FlipItScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { isPremium } = useUser();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
@@ -57,51 +49,36 @@ export default function FlipItScreen() {
   const inputBg = isDark ? "#0f0f0f" : "#f2f2f2";
   const inputBorder = isDark ? "#333" : "#ddd";
 
-  const [isPremium, setIsPremium] = useState<boolean | null>(null);
   const [dealUrl, setDealUrl] = useState("");
-
-  /* 🔥 LIVE PERFORMANCE */
   const [totalFlips, setTotalFlips] = useState(0);
   const [totalProfit, setTotalProfit] = useState(0);
 
-  /* ───────── Premium status ───────── */
-  useEffect(() => {
-    const currentUser = auth.currentUser || user;
-    if (!currentUser) {
-      setIsPremium(false);
-      return;
-    }
-
-    return onSnapshot(doc(db, "users", currentUser.uid), (snap) => {
-      const data = snap.data();
-      setIsPremium(!!data?.premium || !!data?.trialActive);
-    });
-  }, [user]);
-
-  /* ───────── LIVE FLIP PERFORMANCE (SAFE) ───────── */
+  /* ───────── LIVE FLIP PERFORMANCE ───────── */
   useEffect(() => {
     if (!user) return;
 
-    const q = query(
-      collection(db, "users", user.uid, "flips"),
-      orderBy("timestamp", "desc")
-    );
-
-    return onSnapshot(q, (snap) => {
-      let profit = 0;
-
-      snap.forEach((d) => {
-        const data = d.data();
-        const buy = Number(data.buyPrice);
-        const sell = Number(data.sellPrice);
-
-        if (!Number.isFinite(buy) || !Number.isFinite(sell)) return;
-        profit += sell - buy;
+    // ── Compat SDK — matches db instance from firebaseConfig.ts ─────────────
+    // Previously used modular SDK (query/collection/onSnapshot from
+    // "firebase/firestore") which silently fails with a compat db instance.
+    const unsub = db
+      .collection("users")
+      .doc(user.uid)
+      .collection("flips")
+      .orderBy("timestamp", "desc")
+      .onSnapshot((snap) => {
+        let profit = 0;
+        snap.forEach((d) => {
+          const data = d.data();
+          const buy = Number(data.buyPrice);
+          const sell = Number(data.sellPrice);
+          if (!Number.isFinite(buy) || !Number.isFinite(sell)) return;
+          profit += sell - buy;
+        });
+        setTotalFlips(snap.size);
+        setTotalProfit(profit);
       });
 
-      setTotalFlips(snap.size);
-      setTotalProfit(profit);
-    });
+    return () => unsub();
   }, [user]);
 
   /* ───────── Helpers ───────── */
@@ -123,7 +100,7 @@ export default function FlipItScreen() {
     action();
   };
 
-  /* ───────── EVALUATE DEAL (SANITIZED) ───────── */
+  /* ───────── EVALUATE DEAL ───────── */
   const evaluateDeal = async () => {
     if (!dealUrl.trim()) {
       Alert.alert("Missing link", "Paste a product link first.");
@@ -147,15 +124,12 @@ export default function FlipItScreen() {
       if (!res.ok || data?.error) {
         Alert.alert(
           "Limited data",
-          "We couldn’t auto-detect the price. Please enter it manually."
+          "We couldn't auto-detect the price. Please enter it manually."
         );
         return;
       }
 
-      // 🔒 HARD PRICE SANITIZATION
-      const price = Number(
-        String(data.price ?? "").replace(/[^0-9.]/g, "")
-      );
+      const price = Number(String(data.price ?? "").replace(/[^0-9.]/g, ""));
 
       if (!Number.isFinite(price) || price <= 0) {
         Alert.alert(
@@ -167,21 +141,24 @@ export default function FlipItScreen() {
 
       const title = String(data.title || "Product").slice(0, 200);
 
-      await addDoc(collection(db, "users", user!.uid, "flips"), {
-        title,
-        buyPrice: price,
-        sellPrice: 0,
-        profit: 0,
-        source: "link",
-        createdFrom: "flipit",
-        timestamp: serverTimestamp(),
-      });
+      // ── Compat SDK ─────────────────────────────────────────────────────────
+      await db
+        .collection("users")
+        .doc(user!.uid)
+        .collection("flips")
+        .add({
+          title,
+          buyPrice: price,
+          sellPrice: 0,
+          profit: 0,
+          source: "link",
+          createdFrom: "flipit",
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        });
 
       Alert.alert(
         "Deal Evaluated",
-        `${title}\n\nBuy Price: $${price.toFixed(
-          2
-        )}\n\nSaved to My Flips`
+        `${title}\n\nBuy Price: $${price.toFixed(2)}\n\nSaved to My Flips`
       );
 
       setDealUrl("");
@@ -191,7 +168,8 @@ export default function FlipItScreen() {
     }
   };
 
-  if (isPremium === null) return null;
+  // ── isPremium from context is boolean, never null — no loading gate needed
+  if (isPremium === undefined) return null;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
@@ -210,12 +188,10 @@ export default function FlipItScreen() {
           />
         </View>
 
-        {/* ───── ACTION CARDS (RESTORED) ───── */}
+        {/* ───── ACTION CARDS ───── */}
         <View style={styles.row}>
           <Pressable
-            onPress={() =>
-              requirePremium(() => navigation.navigate("FlipScanner"))
-            }
+            onPress={() => requirePremium(() => navigation.navigate("FlipScanner"))}
             style={[
               styles.card,
               {
@@ -235,9 +211,7 @@ export default function FlipItScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() =>
-              requirePremium(() => navigation.navigate("MyFlips"))
-            }
+            onPress={() => requirePremium(() => navigation.navigate("MyFlips"))}
             style={[
               styles.card,
               {
