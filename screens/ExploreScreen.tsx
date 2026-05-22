@@ -13,6 +13,7 @@ import { db } from "../firebaseConfig";
 import DealCard from "../components/DealCard";
 import { useTheme } from "../context/ThemeContext";
 import { useUser } from "../context/UserContext";
+import { isStoreAccessible } from "../context/UserContext";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
