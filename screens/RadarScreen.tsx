@@ -460,10 +460,14 @@ export default function RadarScreen() {
 
   /* ── Stats ── */
   const stats = useMemo(() => ({
-    hot: deals.filter((d) => d.hot).length,
-    rare: deals.filter((d) => d.rare).length,
-    flip: deals.filter((d) => (d.resaleIntel?.profitPotential ?? 0) > 20).length,
+    hot: deals.filter((d) => d.hot || (d.discountPercent ?? 0) >= 30).length,
+    rare: deals.filter((d) => d.rare || (d.discountPercent ?? 0) >= 50).length,
+    flip: deals.filter((d) =>
+      (d.resaleIntel?.profitPotential ?? 0) > 20 ||
+      (d.discountPercent ?? 0) >= 40
+   ).length, 
   }), [deals]);
+  
 
   /* ── Filtered deals by tab ── */
   const tabDeals = useMemo(() => {
