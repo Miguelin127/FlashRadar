@@ -13,32 +13,28 @@ import PremiumIntroScreen from "../screens/PremiumIntroScreen";
 import ReferralScreen from "../screens/ReferralScreen";
 import LoginScreen from "../screens/LoginScreen";
 import MyFlipsScreen from "../screens/MyFlipsScreen";
+import UpgradeScreen from "../screens/UpgradeScreen";
 
 import type { RootTabParamList } from "./BottomTabsNavigator";
 
-// ─────────────────────────── TYPES ───────────────────────────
+/* ─── Types ──────────────────────────────────────────────────── */
+
 export type RootStackParamList = {
-  // Auth
   Login: undefined;
-
-  // Main
   MainTabs?: { screen?: keyof RootTabParamList };
-  DealDetail?: { deal: any };
-
-  // Flip flow
+  DealDetail: { deal: any };
   FlipScanner: undefined;
   FlipHistory: undefined;
   FlipItResult: { flip: any };
-
-  // My Flips (STACK ONLY)
   MyFlips: undefined;
-
-  // Premium / Referral
   PremiumIntro: undefined;
   Referral: undefined;
+  Upgrade: undefined;
+  CreatorDashboard: undefined;
 };
 
-// ─────────────────────────── STACK ───────────────────────────
+/* ─── Navigator ──────────────────────────────────────────────── */
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
@@ -50,22 +46,18 @@ export default function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {user ? (
         <>
-          {/* Main App */}
           <Stack.Screen name="MainTabs" component={BottomTabsNavigator} />
-          <Stack.Screen name="DealDetail" component={DealDetailScreen} />
-
-          {/* Flip Flow */}
+          <Stack.Screen name="DealDetail" component={DealDetailScreen as any} />
           <Stack.Screen name="FlipScanner" component={FlipScannerScreen} />
           <Stack.Screen name="FlipHistory" component={FlipHistoryScreen} />
-          <Stack.Screen name="FlipItResult" component={FlipItResultScreen} />
-
-          {/* My Flips (NOT A TAB) */}
+          <Stack.Screen name="FlipItResult" component={FlipItResultScreen as any} />
           <Stack.Screen name="MyFlips" component={MyFlipsScreen} />
-          
-
-          {/* Premium / Referral */}
           <Stack.Screen name="PremiumIntro" component={PremiumIntroScreen} />
           <Stack.Screen name="Referral" component={ReferralScreen} />
+          <Stack.Screen name="Upgrade" component={UpgradeScreen} />
+          <Stack.Screen name="CreatorDashboard" component={
+            require("../screens/CreatorDashboard").default
+          } />
         </>
       ) : (
         <Stack.Screen name="Login" component={LoginScreen} />
