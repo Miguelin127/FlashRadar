@@ -1,39 +1,54 @@
 // flashradar/screens/RadarScreen.tsx
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import {
-  View, Text, StyleSheet, FlatList, ActivityIndicator,
-  TouchableOpacity, Linking, Animated, TextInput,
+  View, Text, StyleSheet, FlatList, Animated,
+  TouchableOpacity, Linking, Easing, Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { auth, db } from "../firebaseConfig";
-import DealCard from "../components/DealCard";
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import { useNavigation } from "@react-navigation/native";
+import { auth, db } from "../firebaseConfig";
 import { useTheme } from "../context/ThemeContext";
 import { useUser } from "../context/UserContext";
-import { useNavigation } from "@react-navigation/native";
-import { usePulseAnimation } from "../FlashRadar/hooks/usePulseAnimation";
+import DealCard from "../components/DealCard";
 
-/* ─── Types ─────────────────────────────────────────────────── */
+/* ─── Constants ──────────────────────────────────────────────── */
+
+const ACCENT = "#FF7A00";
+const { width: SW } = Dimensions.get("window");
+const FREE_LIMIT = 5;
+const QUERY_LIMIT = 80;
+
+/* ─── Types ──────────────────────────────────────────────────── */
 
 type Deal = {
   id: string;
   title: string;
   store: string;
+  storeKey?: string;
   price: number;
+  originalPrice?: number | null;
+  discountPercent?: number | null;
   image?: string | null;
   imageUrl?: string | null;
-  merchantUrl?: string;
-  affiliateUrl?: string;
-  url?: string;
-  live?: boolean;
+  affiliateUrl?: string | null;
+  merchantUrl?: string | null;
+  url?: string | null;
   hot?: boolean;
   rare?: boolean;
+  lightning?: boolean;
+  live?: boolean;
   isSaved?: boolean;
-  discountPercent?: number | null;
-  originalPrice?: number | null;
-  updatedAt?: any;
+  dealScore?: number | null;
+  asin?: string | null;
+  publishedAt?: any;
   createdAt?: any;
+  latitude?: number | null;
+  longitude?: number | null;
+  couponCode?: string | null;
   resaleIntel?: {
     profitPotential: number;
     roiPercent: number;
@@ -41,32 +56,308 @@ type Deal = {
   } | null;
 };
 
-/* ─── Constants ──────────────────────────────────────────────── */
+/* ─── Radar Ring Animation ───────────────────────────────────── */
 
-const ACCENT = "#FF7A00";
-const FREE_LIMIT = 5;
-const QUERY_LIMIT = 100;
+function RadarScanner() {
+  const ring1 = useRef(new Animated.Value(0)).current;
+  const ring2 = useRef(new Animated.Value(0)).current;
+  const ring3 = useRef(new Animated.Value(0)).current;
+  const sweep = useRef(new Animated.Value(0)).current;
 
-/* ─── Stat Card ──────────────────────────────────────────────── */
+  useEffect(() => {
+    const pulse = (anim: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, {
+            toValue: 1, duration: 2400,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ])
+      ).start();
 
-function StatCard({
-  icon, label, value, color, dark,
-}: {
-  icon: keyof typeof import("@expo/vector-icons").Ionicons.glyphMap;
-  label: string; value: string | number; color: string; dark: boolean;
-}) {
+    pulse(ring1, 0);
+    pulse(ring2, 800);
+    pulse(ring3, 1600);
+
+    Animated.loop(
+      Animated.timing(sweep, {
+        toValue: 1, duration: 3000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+
+  const ringStyle = (anim: Animated.Value) => ({
+    opacity: anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.8, 0.4, 0] }),
+    transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) }],
+  });
+
+  const sweepRotate = sweep.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
   return (
-    <View style={[sc.card, { backgroundColor: dark ? "#1a1a1a" : "#f5f5f5" }]}>
-      <Ionicons name={icon} size={18} color={color} />
-      <Text style={[sc.val, { color: dark ? "#fff" : "#111" }]}>{value}</Text>
-      <Text style={sc.lbl}>{label}</Text>
+    <View style={radar.container}>
+      {/* Rings */}
+      {[ring1, ring2, ring3].map((r, i) => (
+        <Animated.View key={i} style={[radar.ring, ringStyle(r)]} />
+      ))}
+
+      {/* Grid lines */}
+      <View style={[radar.crosshair, { transform: [{ rotate: "0deg" }] }]} />
+      <View style={[radar.crosshair, { transform: [{ rotate: "90deg" }] }]} />
+      <View style={[radar.crosshair, { transform: [{ rotate: "45deg" }] }]} />
+      <View style={[radar.crosshair, { transform: [{ rotate: "135deg" }] }]} />
+
+      {/* Sweep arm */}
+      <Animated.View
+        style={[radar.sweep, { transform: [{ rotate: sweepRotate }] }]}
+      />
+
+      {/* Center dot */}
+      <View style={radar.center}>
+        <View style={radar.centerDot} />
+      </View>
+
+      {/* Random deal pings */}
+      {PING_POSITIONS.map((p, i) => (
+        <PingDot key={i} x={p.x} y={p.y} delay={p.delay} color={p.color} />
+      ))}
     </View>
   );
 }
-const sc = StyleSheet.create({
-  card: { flex: 1, borderRadius: 12, padding: 12, alignItems: "center", margin: 4 },
-  val: { fontSize: 18, fontWeight: "900", marginTop: 4 },
-  lbl: { fontSize: 10, color: "#888", marginTop: 2, textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5 },
+
+const PING_POSITIONS = [
+  { x: 30, y: 40, delay: 400, color: ACCENT },
+  { x: 65, y: 25, delay: 1200, color: "#ef4444" },
+  { x: 75, y: 60, delay: 2000, color: "#a855f7" },
+  { x: 20, y: 65, delay: 700, color: ACCENT },
+  { x: 50, y: 75, delay: 1800, color: "#22c55e" },
+  { x: 80, y: 80, delay: 300, color: "#ef4444" },
+];
+
+function PingDot({ x, y, delay, color }: { x: number; y: number; delay: number; color: string }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(anim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.delay(2000),
+        Animated.timing(anim, { toValue: 0, duration: 400, useNativeDriver: true }),
+        Animated.delay(1000),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <Animated.View style={[
+      radar.ping,
+      {
+        left: `${x}%`, top: `${y}%`,
+        backgroundColor: color,
+        opacity: anim,
+        transform: [{ scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 1.4, 1] }) }],
+      },
+    ]} />
+  );
+}
+
+const RADAR_SIZE = SW * 0.72;
+
+const radar = StyleSheet.create({
+  container: {
+    width: RADAR_SIZE, height: RADAR_SIZE,
+    borderRadius: RADAR_SIZE / 2,
+    borderWidth: 1.5, borderColor: ACCENT + "44",
+    alignSelf: "center",
+    position: "relative",
+    overflow: "hidden",
+    backgroundColor: "rgba(255,122,0,0.03)",
+    justifyContent: "center", alignItems: "center",
+    marginVertical: 16,
+  },
+  ring: {
+    position: "absolute",
+    width: RADAR_SIZE, height: RADAR_SIZE,
+    borderRadius: RADAR_SIZE / 2,
+    borderWidth: 1.5, borderColor: ACCENT + "66",
+  },
+  crosshair: {
+    position: "absolute",
+    width: RADAR_SIZE, height: 1,
+    backgroundColor: ACCENT + "22",
+  },
+  sweep: {
+    position: "absolute",
+    width: RADAR_SIZE / 2, height: 2,
+    left: "50%", top: "50%",
+    backgroundColor: "transparent",
+    transformOrigin: "left center",
+    borderTopWidth: 1,
+    borderTopColor: ACCENT,
+    shadowColor: ACCENT,
+    shadowRadius: 6,
+    shadowOpacity: 0.8,
+  },
+  center: {
+    position: "absolute",
+    width: 14, height: 14,
+    borderRadius: 7,
+    backgroundColor: ACCENT + "33",
+    justifyContent: "center", alignItems: "center",
+  },
+  centerDot: {
+    width: 6, height: 6, borderRadius: 3, backgroundColor: ACCENT,
+  },
+  ping: {
+    position: "absolute",
+    width: 8, height: 8, borderRadius: 4,
+    shadowRadius: 6, shadowOpacity: 0.9,
+  },
+});
+
+/* ─── Stat Pills ─────────────────────────────────────────────── */
+
+function StatPill({ icon, label, value, color }: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string; value: number | string; color: string;
+}) {
+  return (
+    <View style={[pill.wrap, { borderColor: color + "44", backgroundColor: color + "11" }]}>
+      <Ionicons name={icon} size={14} color={color} />
+      <Text style={[pill.value, { color }]}>{value}</Text>
+      <Text style={pill.label}>{label}</Text>
+    </View>
+  );
+}
+
+const pill = StyleSheet.create({
+  wrap: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+    borderWidth: 1, marginRight: 8,
+  },
+  value: { fontWeight: "900", fontSize: 13 },
+  label: { fontSize: 11, color: "#888", fontWeight: "600" },
+});
+
+/* ─── Deal Ping Card (compact urgent card) ───────────────────── */
+
+function PingCard({ deal, onPress, onOpen, dark }: {
+  deal: Deal; onPress: () => void; onOpen: () => void; dark: boolean;
+}) {
+  const isJustIn = (() => {
+    const ms = deal.publishedAt?.seconds
+      ? deal.publishedAt.seconds * 1000
+      : deal.createdAt?.seconds ? deal.createdAt.seconds * 1000 : 0;
+    return ms > 0 && Date.now() - ms < 1_800_000;
+  })();
+
+  const flipProfit = deal.resaleIntel?.profitPotential ?? 0;
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        ping.card,
+        deal.rare && { borderColor: "#a855f7" },
+        deal.hot && { borderColor: "#ef4444" },
+        { backgroundColor: dark ? "#0f0f0f" : "#fff" },
+      ]}
+      activeOpacity={0.85}
+    >
+      {/* Left: store + title + price */}
+      <View style={ping.left}>
+        <View style={ping.topRow}>
+          {isJustIn && (
+            <View style={[ping.badge, { backgroundColor: "#2563eb" }]}>
+              <Ionicons name="flash" size={8} color="#fff" />
+              <Text style={ping.badgeTxt}>JUST IN</Text>
+            </View>
+          )}
+          {deal.rare && (
+            <View style={[ping.badge, { backgroundColor: "#9333ea" }]}>
+              <Text style={ping.badgeTxt}>💎 RARE</Text>
+            </View>
+          )}
+          {deal.hot && !deal.rare && (
+            <View style={[ping.badge, { backgroundColor: "#ea580c" }]}>
+              <Text style={ping.badgeTxt}>🔥 HOT</Text>
+            </View>
+          )}
+          <Text style={[ping.store, { color: dark ? "#888" : "#999" }]}>
+            {(deal.store || "").toUpperCase()}
+          </Text>
+        </View>
+
+        <Text style={[ping.title, { color: dark ? "#f4f4f5" : "#111" }]} numberOfLines={2}>
+          {deal.title}
+        </Text>
+
+        <View style={ping.priceRow}>
+          <Text style={ping.price}>
+            {deal.price != null ? `$${Number(deal.price).toFixed(2)}` : "—"}
+          </Text>
+          {(deal.discountPercent ?? 0) > 0 && (
+            <View style={ping.discBadge}>
+              <Text style={ping.discText}>-{deal.discountPercent}%</Text>
+            </View>
+          )}
+          {deal.originalPrice != null && deal.price != null && deal.originalPrice > deal.price && (
+            <Text style={ping.original}>${Number(deal.originalPrice).toFixed(2)}</Text>
+          )}
+        </View>
+
+        {/* Flip Intel */}
+        {flipProfit > 0 && (
+          <View style={ping.flipRow}>
+            <Ionicons name="trending-up-outline" size={11} color="#22c55e" />
+            <Text style={ping.flipTxt}>
+              Flip +${flipProfit} · {deal.resaleIntel!.roiPercent}% ROI
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Right: Grab Deal */}
+      <TouchableOpacity style={ping.grabBtn} onPress={onOpen}>
+        <Text style={ping.grabTxt}>GRAB</Text>
+        <Ionicons name="arrow-forward" size={12} color="#000" />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
+
+const ping = StyleSheet.create({
+  card: {
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
+    padding: 12, marginBottom: 8, gap: 10,
+  },
+  left: { flex: 1 },
+  topRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4, flexWrap: "wrap" },
+  badge: { flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3 },
+  badgeTxt: { color: "#fff", fontSize: 7, fontWeight: "900", letterSpacing: 0.3 },
+  store: { fontSize: 8, fontWeight: "800", letterSpacing: 0.8 },
+  title: { fontSize: 13, fontWeight: "700", lineHeight: 18, marginBottom: 5 },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  price: { fontSize: 17, fontWeight: "900", color: ACCENT },
+  discBadge: { backgroundColor: "rgba(34,197,94,0.15)", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
+  discText: { fontSize: 9, fontWeight: "900", color: "#22c55e" },
+  original: { fontSize: 10, color: "#666", textDecorationLine: "line-through" },
+  flipRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 },
+  flipTxt: { fontSize: 10, color: "#22c55e", fontWeight: "700" },
+  grabBtn: {
+    backgroundColor: ACCENT, paddingHorizontal: 10, paddingVertical: 8,
+    borderRadius: 8, alignItems: "center", gap: 2,
+  },
+  grabTxt: { color: "#000", fontWeight: "900", fontSize: 10 },
 });
 
 /* ─── Main Screen ────────────────────────────────────────────── */
@@ -74,149 +365,141 @@ const sc = StyleSheet.create({
 export default function RadarScreen() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [filterMode, setFilterMode] = useState<"all" | "hot" | "rare">("all");
+  const [scanning, setScanning] = useState(true);
+  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [activeTab, setActiveTab] = useState<"hot" | "rare" | "flip" | "all">("hot");
 
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { theme, colors } = useTheme();
   const dark = theme === "dark";
   const { isPremium } = useUser();
-  const { triggerPulse } = usePulseAnimation(300, 1.3);
+  const listRef = useRef<FlatList>(null);
 
-  /* ── Pulse animation for live dot ── */
-  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  // Scanning pulse for header
+  const scanPulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.4, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(scanPulse, { toValue: 1.15, duration: 600, useNativeDriver: true }),
+        Animated.timing(scanPulse, { toValue: 1, duration: 600, useNativeDriver: true }),
       ])
     ).start();
   }, []);
 
-  /* ── Load deals — queries all active collections ── */
+  /* ── Location ── */
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const loc = await Location.getCurrentPositionAsync({});
+        setLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      }
+    })();
+  }, []);
+
+  /* ── Load deals from all collections ── */
   useEffect(() => {
     const results: Record<string, Deal> = {};
     let resolved = 0;
-    const COLLECTIONS = ["deals_online", "deals_live", "best_buy_deals", "target_deals"];
+    const COLS = ["deals_online", "deals_live", "best_buy_deals", "target_deals"];
 
-    const unsubscribers = COLLECTIONS.map((col) => {
-      return db
-        .collection(col)
+    // Simulate radar scanning delay for UX effect
+    setTimeout(() => setScanning(false), 2200);
+
+    const unsubs = COLS.map((col) =>
+      db.collection(col)
         .orderBy("createdAt", "desc")
         .limit(QUERY_LIMIT)
         .onSnapshot(
           (snap) => {
             snap.docs.forEach((d) => {
-              const data = d.data() as any;
               if (!results[d.id]) {
+                const data = d.data() as any;
                 results[d.id] = {
                   id: d.id,
                   title: data.title ?? "Deal",
                   store: data.store ?? data.storeKey ?? "Retailer",
+                  storeKey: data.storeKey ?? null,
                   price: Number(data.price ?? 0),
+                  originalPrice: data.originalPrice ?? null,
+                  discountPercent: data.discountPercent ?? null,
                   image: data.imageUrl ?? data.image ?? null,
                   imageUrl: data.imageUrl ?? data.image ?? null,
-                  merchantUrl: data.merchantUrl ?? null,
                   affiliateUrl: data.affiliateUrl ?? null,
+                  merchantUrl: data.merchantUrl ?? null,
                   url: data.url ?? null,
-                  live: data.live ?? true,
                   hot: !!data.hot,
                   rare: !!data.rare,
-                  discountPercent: data.discountPercent ?? null,
-                  originalPrice: data.originalPrice ?? null,
-                  updatedAt: data.updatedAt ?? data.createdAt,
-                  createdAt: data.createdAt,
+                  lightning: !!data.lightning,
+                  live: data.live ?? true,
+                  dealScore: data.dealScore ?? null,
+                  asin: data.asin ?? null,
+                  publishedAt: data.publishedAt ?? null,
+                  createdAt: data.createdAt ?? null,
+                  latitude: data.latitude ?? null,
+                  longitude: data.longitude ?? null,
+                  couponCode: data.couponCode ?? null,
                   resaleIntel: data.resaleIntel ?? null,
                 };
               }
             });
             resolved++;
-            if (resolved >= COLLECTIONS.length) {
-              const sorted = Object.values(results).sort((a, b) => {
-                const ta = a.createdAt?.seconds ?? 0;
-                const tb = b.createdAt?.seconds ?? 0;
-                return tb - ta;
-              });
-              setDeals(sorted);
+            if (resolved >= COLS.length) {
+              setDeals(Object.values(results).sort((a, b) =>
+                (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0)
+              ));
               setLoading(false);
             }
           },
-          () => {
-            resolved++;
-            if (resolved >= COLLECTIONS.length) setLoading(false);
-          }
-        );
-    });
+          () => { resolved++; if (resolved >= COLS.length) setLoading(false); }
+        )
+    );
 
-    return () => unsubscribers.forEach((u) => u());
+    return () => unsubs.forEach((u) => u());
   }, []);
 
   /* ── Stats ── */
   const stats = useMemo(() => ({
     hot: deals.filter((d) => d.hot).length,
     rare: deals.filter((d) => d.rare).length,
-    stores: new Set(deals.map((d) => d.store?.toLowerCase())).size,
+    flip: deals.filter((d) => (d.resaleIntel?.profitPotential ?? 0) > 20).length,
   }), [deals]);
 
-  /* ── Filter + Search + Gate ── */
-  const visibleDeals = useMemo(() => {
+  /* ── Filtered deals by tab ── */
+  const tabDeals = useMemo(() => {
     let list = deals;
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((d) =>
-        d.title.toLowerCase().includes(q) || d.store.toLowerCase().includes(q)
-      );
-    }
-
-    if (filterMode === "hot") list = list.filter((d) => d.hot);
-    if (filterMode === "rare") list = list.filter((d) => d.rare);
-
+    if (activeTab === "hot") list = deals.filter((d) => d.hot || (d.discountPercent ?? 0) > 30);
+    else if (activeTab === "rare") list = deals.filter((d) => d.rare);
+    else if (activeTab === "flip") list = deals.filter((d) => (d.resaleIntel?.profitPotential ?? 0) > 0);
     if (!isPremium) list = list.slice(0, FREE_LIMIT);
-
     return list;
-  }, [deals, search, filterMode, isPremium]);
+  }, [deals, activeTab, isPremium]);
 
-  /* ── Open deal ── */
-  const openDeal = async (deal: Deal) => {
+  const openDeal = (deal: Deal) => {
     const url = deal.affiliateUrl || deal.merchantUrl || deal.url;
-    if (!url) return;
-    try { await Linking.openURL(url); } catch (e) { console.warn(e); }
+    if (url) Linking.openURL(url);
   };
 
-  /* ── Toggle save ── */
-  const toggleSave = async (deal: Deal) => {
-    const user = auth.currentUser;
-    if (!user) return;
-    triggerPulse();
-    const ref = db.collection("users").doc(user.uid).collection("favorites").doc(deal.id);
-    if (deal.isSaved) {
-      await ref.delete();
-    } else {
-      await ref.set(deal, { merge: true });
-    }
-    setDeals((prev) =>
-      prev.map((d) => d.id === deal.id ? { ...d, isSaved: !d.isSaved } : d)
-    );
-  };
-
-  /* ── Loading skeleton ── */
-  if (loading) {
+  /* ── Scanning state ── */
+  if (scanning || loading) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingHeader}>
-          <Ionicons name="radio-outline" size={20} color={ACCENT} />
-          <Text style={styles.loadingTitle}>SCANNING RADAR...</Text>
-        </View>
-        <View style={styles.skeletonGrid}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <View key={i} style={[styles.skeletonCard, { backgroundColor: dark ? "#1a1a1a" : "#f0f0f0" }]}>
-              <View style={[styles.skeletonImg, { backgroundColor: dark ? "#2a2a2a" : "#e0e0e0" }]} />
-              <View style={[styles.skeletonLine, { backgroundColor: dark ? "#2a2a2a" : "#e0e0e0", width: "80%" }]} />
-              <View style={[styles.skeletonLine, { backgroundColor: dark ? "#2a2a2a" : "#e0e0e0", width: "50%" }]} />
-            </View>
-          ))}
+        <View style={styles.scanningWrap}>
+          <View style={styles.scanningHeader}>
+            <Animated.View style={{ transform: [{ scale: scanPulse }] }}>
+              <Ionicons name="radio-outline" size={24} color={ACCENT} />
+            </Animated.View>
+            <Text style={styles.scanningText}>SCANNING RADAR...</Text>
+          </View>
+          <RadarScanner />
+          <Text style={styles.scanningSubtext}>
+            Detecting live deals near you
+          </Text>
+          {location && (
+            <Text style={styles.locationText}>
+              📍 Location locked
+            </Text>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -225,112 +508,116 @@ export default function RadarScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       <FlatList
-        data={visibleDeals}
+        ref={listRef}
+        data={tabDeals}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <>
-            {/* ── Header ── */}
+            {/* ── Radar Header ── */}
             <View style={styles.headerRow}>
               <View style={styles.headerLeft}>
-                <View style={styles.radarIconWrap}>
-                  <Ionicons name="radio-outline" size={22} color={ACCENT} />
-                  <Animated.View style={[styles.liveDot, { transform: [{ scale: pulseAnim }] }]} />
+                <View style={styles.radarIcon}>
+                  <Ionicons name="radio-outline" size={20} color={ACCENT} />
+                  <Animated.View style={[styles.liveDot, { transform: [{ scale: scanPulse }] }]} />
                 </View>
                 <View>
                   <Text style={[styles.headerTitle, { color: dark ? "#fff" : "#111" }]}>
                     DEAL RADAR
                   </Text>
                   <Text style={styles.headerSub}>
-                    {isPremium ? "⚡ Premium Feed" : "Standard Access"} · {deals.length} Live Hits
+                    {isPremium ? "⚡ Premium · " : ""}{deals.length} live hits detected
                   </Text>
                 </View>
               </View>
+              {location && (
+                <View style={styles.locationBadge}>
+                  <Ionicons name="location-outline" size={11} color={ACCENT} />
+                  <Text style={styles.locationBadgeText}>Location ON</Text>
+                </View>
+              )}
             </View>
 
-            {/* ── Stat Cards ── */}
-            <View style={styles.statsRow}>
-              <StatCard icon="flame-outline" label="Hot Deals" value={stats.hot} color="#FF4500" dark={dark} />
-              <StatCard icon="diamond-outline" label="Rare Finds" value={stats.rare} color="#3b82f6" dark={dark} />
-              <StatCard icon="storefront-outline" label="Stores" value={stats.stores} color={ACCENT} dark={dark} />
-            </View>
+            {/* ── Radar Scanner ── */}
+            <RadarScanner />
 
-            {/* ── Search ── */}
-            <View style={[styles.searchBox, { backgroundColor: dark ? "#1a1a1a" : "#f0f0f0" }]}>
-              <Ionicons name="search-outline" size={16} color="#888" />
-              <TextInput
-                placeholder="Search deals or stores..."
-                placeholderTextColor="#888"
-                value={search}
-                onChangeText={setSearch}
-                style={[styles.searchInput, { color: dark ? "#fff" : "#111" }]}
-              />
-            </View>
+            {/* ── Stat Pills ── */}
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={[
+                { icon: "flame-outline" as const, label: "Hot", value: stats.hot, color: "#ef4444" },
+                { icon: "diamond-outline" as const, label: "Rare", value: stats.rare, color: "#a855f7" },
+                { icon: "trending-up-outline" as const, label: "Flippable", value: stats.flip, color: "#22c55e" },
+                { icon: "storefront-outline" as const, label: "Stores", value: new Set(deals.map(d => d.store)).size, color: ACCENT },
+              ]}
+              keyExtractor={(s) => s.label}
+              contentContainerStyle={styles.pillRow}
+              renderItem={({ item: s }) => (
+                <StatPill icon={s.icon} label={s.label} value={s.value} color={s.color} />
+              )}
+            />
 
-            {/* ── Filter Chips ── */}
-            <View style={styles.filterRow}>
-              {(["all", "hot", "rare"] as const).map((f) => (
+            {/* ── Tab Selector ── */}
+            <View style={styles.tabRow}>
+              {(["hot", "rare", "flip", "all"] as const).map((tab) => (
                 <TouchableOpacity
-                  key={f}
-                  onPress={() => setFilterMode(f)}
-                  style={[styles.chip, filterMode === f && { backgroundColor: ACCENT }]}
+                  key={tab}
+                  onPress={() => setActiveTab(tab)}
+                  style={[
+                    styles.tab,
+                    activeTab === tab && { backgroundColor: ACCENT, borderColor: ACCENT },
+                  ]}
                 >
-                  <Text style={[styles.chipText, filterMode === f && { color: "#fff" }]}>
-                    {f === "all" ? "ALL" : f === "hot" ? "🔥 HOT" : "💎 RARE"}
+                  <Text style={[
+                    styles.tabText,
+                    { color: activeTab === tab ? "#000" : dark ? "#888" : "#666" },
+                  ]}>
+                    {tab === "hot" ? "🔥 HOT" : tab === "rare" ? "💎 RARE" : tab === "flip" ? "📈 FLIP" : "ALL"}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
+
+            {tabDeals.length > 0 && (
+              <Text style={styles.resultsLabel}>
+                {tabDeals.length} signal{tabDeals.length !== 1 ? "s" : ""} detected
+              </Text>
+            )}
           </>
         }
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="wifi-outline" size={40} color="#444" />
             <Text style={styles.emptyTitle}>RADAR SILENCE</Text>
-            <Text style={styles.emptySub}>No matching deals on this frequency.</Text>
+            <Text style={styles.emptySub}>No signals on this frequency right now.</Text>
           </View>
         }
         ListFooterComponent={
           !isPremium && deals.length > FREE_LIMIT ? (
             <TouchableOpacity
               style={styles.unlockBox}
-              onPress={() => (navigation as any).navigate("Upgrade")}
+              onPress={() => navigation.navigate("Upgrade")}
             >
-              <Ionicons name="lock-closed-outline" size={20} color="#fff" />
-              <View>
-                <Text style={styles.unlockTitle}>Elite Frequencies Locked</Text>
+              <Ionicons name="lock-closed-outline" size={18} color="#fff" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.unlockTitle}>🔒 Elite Frequencies Locked</Text>
                 <Text style={styles.unlockSub}>
-                  {deals.length - FREE_LIMIT} more deals · Upgrade to Premium
+                  Upgrade to unlock {deals.length - FREE_LIMIT}+ more signals
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="#fff" />
+              <Ionicons name="chevron-forward" size={16} color="#888" />
             </TouchableOpacity>
-          ) : null
+          ) : <View style={{ height: 80 }} />
         }
         renderItem={({ item }) => (
-          <View style={[styles.cardWrap, { backgroundColor: dark ? "#111" : "#fff" }]}>
-            {item.hot && (
-              <View style={styles.hotBadge}>
-                <Text style={styles.hotBadgeText}>🔥 HOT</Text>
-              </View>
-            )}
-            {item.rare && (
-              <View style={[styles.hotBadge, { backgroundColor: "#3b82f6" }]}>
-                <Text style={styles.hotBadgeText}>💎 RARE</Text>
-              </View>
-            )}
-            <DealCard
-              deal={item}
-              onPress={() => (navigation as any).navigate("DealDetail", { deal: item })}
-              onSaveToggle={() => toggleSave(item)}
-              darkMode={dark}
-            />
-            <TouchableOpacity style={styles.openBtn} onPress={() => openDeal(item)}>
-              <Text style={styles.openText}>Open Deal</Text>
-              <Ionicons name="chevron-forward" size={16} color="#000" />
-            </TouchableOpacity>
-          </View>
+          <PingCard
+            deal={item}
+            dark={dark}
+            onPress={() => navigation.navigate("DealDetail", { deal: item })}
+            onOpen={() => openDeal(item)}
+          />
         )}
       />
     </SafeAreaView>
@@ -341,52 +628,61 @@ export default function RadarScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  list: { padding: 12, paddingBottom: 100 },
+  list: { paddingHorizontal: 12, paddingBottom: 40 },
 
-  // Loading
-  loadingHeader: { flexDirection: "row", alignItems: "center", gap: 8, padding: 16 },
-  loadingTitle: { color: ACCENT, fontWeight: "900", fontSize: 16, letterSpacing: 1 },
-  skeletonGrid: { flexDirection: "row", flexWrap: "wrap", padding: 8 },
-  skeletonCard: { width: "47%", margin: "1.5%", borderRadius: 12, padding: 12 },
-  skeletonImg: { width: "100%", height: 120, borderRadius: 8, marginBottom: 8 },
-  skeletonLine: { height: 10, borderRadius: 5, marginBottom: 6 },
+  // Scanning
+  scanningWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
+  scanningHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
+  scanningText: { color: ACCENT, fontWeight: "900", fontSize: 16, letterSpacing: 1.5 },
+  scanningSubtext: { color: "#666", fontSize: 13, marginTop: 8, fontWeight: "600" },
+  locationText: { color: "#22c55e", fontSize: 12, marginTop: 6, fontWeight: "700" },
 
   // Header
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  headerRow: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 4, paddingTop: 4,
+  },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  radarIconWrap: { position: "relative", width: 44, height: 44, borderRadius: 12, backgroundColor: "#FF7A0022", justifyContent: "center", alignItems: "center" },
-  liveDot: { position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: ACCENT },
+  radarIcon: {
+    width: 42, height: 42, borderRadius: 12,
+    backgroundColor: ACCENT + "18",
+    justifyContent: "center", alignItems: "center", position: "relative",
+  },
+  liveDot: {
+    position: "absolute", top: 7, right: 7,
+    width: 7, height: 7, borderRadius: 4, backgroundColor: ACCENT,
+  },
   headerTitle: { fontSize: 20, fontWeight: "900", letterSpacing: 1 },
-  headerSub: { fontSize: 11, color: "#888", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 },
+  headerSub: { fontSize: 11, color: "#888", marginTop: 1, fontWeight: "600" },
+  locationBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: ACCENT + "18", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
+  },
+  locationBadgeText: { fontSize: 10, color: ACCENT, fontWeight: "800" },
 
-  // Stats
-  statsRow: { flexDirection: "row", marginBottom: 12 },
+  // Pills
+  pillRow: { paddingBottom: 12 },
 
-  // Search
-  searchBox: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, height: 44, borderRadius: 12, marginBottom: 10 },
-  searchInput: { flex: 1, fontSize: 14 },
-
-  // Filters
-  filterRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
-  chip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: "#222" },
-  chipText: { fontSize: 11, fontWeight: "800", color: "#888" },
-
-  // Cards
-  cardWrap: { borderRadius: 14, padding: 8, marginBottom: 10, position: "relative" },
-  hotBadge: { position: "absolute", top: 8, right: 8, backgroundColor: "#FF4500", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, zIndex: 10 },
-  hotBadgeText: { color: "#fff", fontSize: 9, fontWeight: "900" },
-
-  // Open btn
-  openBtn: { backgroundColor: ACCENT, paddingVertical: 10, borderRadius: 10, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 4, marginTop: 6 },
-  openText: { color: "#000", fontWeight: "900", fontSize: 14 },
-
-  // Unlock CTA
-  unlockBox: { backgroundColor: "#1a1a1a", borderWidth: 1, borderColor: ACCENT + "44", margin: 8, padding: 16, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 12 },
-  unlockTitle: { color: "#fff", fontWeight: "900", fontSize: 15 },
-  unlockSub: { color: "#888", fontSize: 12, marginTop: 2 },
+  // Tabs
+  tabRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  tab: {
+    paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: 999, borderWidth: 1, borderColor: "#333",
+  },
+  tabText: { fontSize: 11, fontWeight: "900" },
+  resultsLabel: { fontSize: 11, color: "#666", fontWeight: "700", marginBottom: 8 },
 
   // Empty
-  empty: { alignItems: "center", paddingVertical: 60, gap: 8 },
+  empty: { alignItems: "center", paddingVertical: 40, gap: 8 },
   emptyTitle: { color: "#555", fontWeight: "900", fontSize: 16, letterSpacing: 1 },
   emptySub: { color: "#666", fontSize: 13 },
+
+  // Unlock
+  unlockBox: {
+    backgroundColor: "#111", borderWidth: 1, borderColor: ACCENT + "33",
+    padding: 16, borderRadius: 14,
+    flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8,
+  },
+  unlockTitle: { color: "#fff", fontWeight: "900", fontSize: 14 },
+  unlockSub: { color: "#888", fontSize: 12, marginTop: 2 },
 });
