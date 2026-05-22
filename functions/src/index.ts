@@ -61,8 +61,15 @@ export { scheduledDealIngest } from "./scheduledIngest";
 export { refreshBrokenImages } from "./refreshBrokenImages";
 export { watchDealUrlChanges } from "./watchDealUrlChanges";
 export { getPrintfulProducts } from "./getPrintfulProducts";
+export { enrichDealV3 } from "./enrichDealV3";
+export { autoEnrichDeal } from "./autoEnrichDeal";
+export { fetchSlickdealsFreeStores } from "./fetchSlickdealsFreeStores";
 
-
+export const slickdealsCron = onSchedule("every 10 minutes", async () => {
+  await fetch(
+    "https://us-central1-flashradar-71c93.cloudfunctions.net/fetchSlickdealsFreeStores"
+  );
+});
 // ─────────────────────────────────────────────
 // WALMART AUTO-RUN CRON (GEN-2)
 // ─────────────────────────────────────────────

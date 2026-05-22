@@ -4,7 +4,7 @@ import axios from "axios";
 import { db } from "./firebaseAdmin";
 
 // 🔐 Firebase Secret
-const KEEPA_KEY = defineSecret("KEEPA_KEY");
+const KEEPA_KEY = defineSecret("KEEPA_API_KEY");
 
 export const fetchAmazonDealsKeepa = onSchedule(
   {
@@ -100,7 +100,7 @@ export const fetchAmazonDealsKeepa = onSchedule(
           image: p.imagesCSV
             ? `https://m.media-amazon.com/images/I/${p.imagesCSV.split(",")[0]}`
             : null,
-          url: `https://www.amazon.com/dp/${p.asin}?tag=flashradar20e-20`,
+          url: `https://www.amazon.com/dp/${p.asin}?tag=flashradar20-20`,
           source: "amazon",
           timestamp: Date.now(),
         },
