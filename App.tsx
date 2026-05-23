@@ -1,4 +1,5 @@
 // flashradar/App.tsx
+import * as Notifications from 'expo-notifications';
 
 import React from "react";
 import { NavigationContainer, DarkTheme, DefaultTheme } from "@react-navigation/native";
@@ -17,6 +18,17 @@ function AppWithTheme() {
     </NavigationContainer>
   );
 }
+
+
+// ── Notification handler ──────────────────────────────────────────────────────
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
 
 export default function App() {
   return (

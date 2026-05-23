@@ -16,7 +16,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.miguelin1.flashradarapp",
-      "buildNumber": "5"
+      "buildNumber": "5",
+      "infoPlist": {
+        "NSUserNotificationsUsageDescription": "FlashRadar sends you instant alerts when rare deals and lightning offers drop near you."
+      }
     },
     "android": {
       "package": "com.miguelin1.flashradarapp",
@@ -24,13 +27,28 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ]
     },
     "extra": {
       "eas": {
         "projectId": "10e28c1b-9e8d-4608-b9e1-9b3a263a1aea"
       }
     },
-    "owner": "miguelin1"
+    "owner": "miguelin1",
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FF7A00",
+          "sounds": []
+        }
+      ]
+    ]
   }
 }

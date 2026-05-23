@@ -10,7 +10,7 @@ const db = admin.firestore();
 const DISCORD_DEALS_WEBHOOK = process.env.DISCORD_DEALS_WEBHOOK;
 
 export const sendDealAlerts = functions.firestore
-  .document("deals/{dealId}")
+  .document("deals_live/{dealId}")
   .onCreate(async (snap, context) => {
     const deal = snap.data();
     if (!deal) {
