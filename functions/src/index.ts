@@ -140,6 +140,22 @@ export const dailyQualityPurge = onSchedule(
       console.log(`[purge] Nike removed: ${nikeBad.length}`);
     }
 
+    // Purge deals with no image
+    const noImageSnap = await db.collection("deals_live")
+      .where("storeKey", "in", ["walmart", "target", "bestbuy", "homedepot"])
+      .limit(500).get();
+  const noImageBad = noImageSnap.docs.filter(d => {
+    const data = d.data();
+    return !data.imageUrl && !data.image;
+});
+if (noImageBad.length > 0) {
+  const batch = db.batch();
+  noImageBad.forEach(d => batch.delete(d.ref));
+  await batch.commit();
+  totalPurged += noImageBad.length;
+  console.log(`[purge] No-image retail deals removed: ${noImageBad.length}`);
+}
+
     // Unknown store — always remove
     const unknownSnap = await db.collection("deals_live")
       .where("storeKey", "==", "unknown")
