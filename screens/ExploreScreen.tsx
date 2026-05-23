@@ -50,7 +50,7 @@ export type Deal = {
 /* ─── Constants ──────────────────────────────────────────────── */
 
 const ACCENT = "#FF7A00";
-const QUERY_LIMIT = 100;
+const QUERY_LIMIT = 200;
 const FREE_DEAL_LIMIT = 5;
 
 const FILTERS = ["all", "hot", "rare", "lightning", "code"] as const;
@@ -87,7 +87,7 @@ export default function ExploreScreen() {
   useEffect(() => {
     const unsub = db
       .collection("deals_live")
-      .orderBy("createdAt", "desc")
+      .orderBy("discountPercent", "desc")
       .limit(QUERY_LIMIT)
       .onSnapshot(
         (snap) => {
