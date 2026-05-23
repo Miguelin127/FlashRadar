@@ -50,7 +50,7 @@ export type Deal = {
 /* ─── Constants ──────────────────────────────────────────────── */
 
 const ACCENT = "#FF7A00";
-const QUERY_LIMIT = 200;
+const QUERY_LIMIT = 500;
 const FREE_DEAL_LIMIT = 5;
 
 const FILTERS = ["all", "hot", "rare", "lightning", "code"] as const;
