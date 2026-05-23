@@ -97,7 +97,8 @@ export default function DealCard({
 
   const displayScore = deal.dealScore ?? 70;
   const scoreColor = getScoreColor(displayScore);
-  const dealUrl = deal.affiliateUrl || deal.merchantUrl || deal.url || null;
+  function isValidDealUrl(url) { if (!url) return false; try { const u = new URL(url); if (u.pathname.includes("/c//")) return false; if (u.hostname.includes("slickdeals.net")) return false; return true; } catch { return false; } }
+  const dealUrl = [deal.affiliateUrl, deal.merchantUrl, deal.url].find(isValidDealUrl) || null;
   const couponCode = deal.couponCode || deal.promoCode || null;
   const hasFlipIntel = deal.resaleIntel && (deal.resaleIntel.profitPotential ?? 0) > 0;
 
