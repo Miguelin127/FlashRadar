@@ -4,7 +4,6 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onRequest } from "firebase-functions/v2/https";
 import fetch from "node-fetch";
 
-// 👇 FORCE LOAD HTTP PROXY (GEN-2 REQUIREMENT)
 import "./imageProxy";
 
 // ─────────────────────────────────────────────
@@ -34,7 +33,7 @@ export { onUserUpdate } from "./onUserUpdate";
 export { sendDealAlerts } from "./sendDealAlerts";
 
 // ─────────────────────────────────────────────
-// DEAL INGESTION
+// DEAL INGESTION — PROPRIETARY SOURCES
 // ─────────────────────────────────────────────
 export { fetchWalmartDealsSlick } from "./fetchWalmartDealsSlick";
 export { fetchTargetDeals } from "./fetchTargetDeals";
@@ -50,34 +49,56 @@ export { seedKeepaAsinPool } from "./seedKeepaAsinPool";
 export { seedKeepaDealFinder } from "./seedKeepaDealFinder";
 export { seedKeepaCategory } from "./seedKeepaCategory";
 export { ingestAmazonAsins } from "./ingestAmazonAsins";
+export { walmartRunNow } from "./walmartRunNow";
+export { refreshBrokenImages } from "./refreshBrokenImages";
+export { watchDealUrlChanges } from "./watchDealUrlChanges";
+export { enrichDealV3 } from "./enrichDealV3";
+export { autoEnrichDeal } from "./autoEnrichDeal";
+
+// ─────────────────────────────────────────────
+// DEAL LIFECYCLE
+// ─────────────────────────────────────────────
 export { expireAmazonDeals } from "./expireAmazonDeals";
 export { expireLightningDeals } from "./expireLightningDeals";
 export { notifyLightningEndingSoon } from "./notifyLightningEndingSoon";
 export { purgeExpiredDeals } from "./purgeExpiredDeals";
 export { purgeDeadAsins } from "./purgeDeadAsins";
 export { bridgeDealsOnlineToDeals } from "./bridgeDealsOnlineToDeals";
-export { walmartRunNow } from "./walmartRunNow";
-export { scheduledDealIngest } from "./scheduledIngest";
-export { refreshBrokenImages } from "./refreshBrokenImages";
-export { watchDealUrlChanges } from "./watchDealUrlChanges";
-export { getPrintfulProducts } from "./getPrintfulProducts";
-export { enrichDealV3 } from "./enrichDealV3";
-export { autoEnrichDeal } from "./autoEnrichDeal";
-export { fetchSlickdealsFreeStores } from "./fetchSlickdealsFreeStores";
 
-export const slickdealsCron = onSchedule("every 10 minutes", async () => {
-  await fetch(
-    "https://us-central1-flashradar-71c93.cloudfunctions.net/fetchSlickdealsFreeStores"
-  );
-});
 // ─────────────────────────────────────────────
-// WALMART AUTO-RUN CRON (GEN-2)
+// SCHEDULED CRONS — PROPRIETARY ONLY
 // ─────────────────────────────────────────────
-export const walmartCron = onSchedule("every 30 minutes", async () => {
-  await fetch(
-    "https://us-central1-flashradar-71c93.cloudfunctions.net/walmartRunNow"
-  );
-});
+
+// Walmart — every 30 min
+export const walmartCron = onSchedule(
+  { schedule: "every 30 minutes", timeZone: "America/Chicago" },
+  async () => {
+    await fetch("https://us-central1-flashradar-71c93.cloudfunctions.net/walmartRunNow");
+  }
+);
+
+// Amazon Lightning — every 15 min (time-sensitive)
+export const lightningCron = onSchedule(
+  { schedule: "every 15 minutes", timeZone: "America/Chicago" },
+  async () => {
+    await fetch("https://us-central1-flashradar-71c93.cloudfunctions.net/fetchAmazonLightningDealsNow");
+  }
+);
+
+// Nike + Puma + Sephora — every 4 hours (brand sales don't change fast)
+export const brandDealsCron = onSchedule(
+  { schedule: "every 4 hours", timeZone: "America/Chicago" },
+  async () => {
+    await Promise.all([
+      fetch("https://us-central1-flashradar-71c93.cloudfunctions.net/fetchNikeDeals"),
+      fetch("https://us-central1-flashradar-71c93.cloudfunctions.net/fetchPumaDeals"),
+      fetch("https://us-central1-flashradar-71c93.cloudfunctions.net/fetchSephoraDeals"),
+    ]);
+  }
+);
+
+// Enrichment worker — every 5 min (processes pending deals)
+export { enrichDealsWorker } from "./enrichDealsWorker";
 
 // ─────────────────────────────────────────────
 // FLIP / PRICE ALERTS
@@ -91,28 +112,5 @@ export { amazonLookup } from "./amazonLookup";
 export { parseProduct } from "./parseProduct";
 export { resolveTitle } from "./resolveTitle";
 export { detectSoldPrice } from "./detectSoldPrice";
-
-// ─────────────────────────────────────────────
-// LINK PREVIEW
-// ─────────────────────────────────────────────
 export { previewDealV2 } from "./previewDeal";
-
-// ─────────────────────────────────────────────
-// PRINTFUL CONNECTION TEST (OAuth 2.0)
-// ─────────────────────────────────────────────
-export const testPrintfulConnection = onRequest(async (req, res) => {
-  try {
-    const response = await fetch("https://api.printful.com/product-templates", {
-      headers: {
-        Authorization: `Bearer ${process.env.PRINTFUL_API_KEY}`,
-      },
-    });
-
-    const data = await response.json();
-
-    res.status(200).json(data);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
+export { getPrintfulProducts } from "./getPrintfulProducts";
