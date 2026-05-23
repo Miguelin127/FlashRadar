@@ -401,7 +401,7 @@ export default function RadarScreen() {
   useEffect(() => {
     const results: Record<string, Deal> = {};
     let resolved = 0;
-    const COLS = ["deals_online", "deals_live", "best_buy_deals", "target_deals"];
+    const COLS = ["deals_live"];
 
     // Simulate radar scanning delay for UX effect
     setTimeout(() => setScanning(false), 2200);

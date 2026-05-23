@@ -86,7 +86,7 @@ export default function ExploreScreen() {
   /* ── Load deals ── */
   useEffect(() => {
     const unsub = db
-      .collection("deals_online")
+      .collection("deals_live")
       .orderBy("createdAt", "desc")
       .limit(QUERY_LIMIT)
       .onSnapshot(
