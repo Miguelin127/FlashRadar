@@ -2,9 +2,13 @@
 
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onRequest } from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
 import fetch from "node-fetch";
 
 import "./imageProxy";
+
+if (!admin.apps.length) admin.initializeApp();
+const db = admin.firestore();
 
 // ─────────────────────────────────────────────
 // CORE / BILLING
@@ -85,7 +89,7 @@ export const lightningCron = onSchedule(
   }
 );
 
-// Nike + Puma + Sephora — every 4 hours (brand sales don't change fast)
+// Nike + Puma + Sephora — every 4 hours
 export const brandDealsCron = onSchedule(
   { schedule: "every 4 hours", timeZone: "America/Chicago" },
   async () => {
@@ -97,8 +101,60 @@ export const brandDealsCron = onSchedule(
   }
 );
 
-// Enrichment worker — every 5 min (processes pending deals)
+// Enrichment worker — every 5 min
 export { enrichDealsWorker } from "./enrichDealsWorker";
+
+// ─────────────────────────────────────────────
+// DAILY QUALITY PURGE
+// Removes low-quality deals that slip through ingestion filters.
+// Runs once per day automatically — no manual purging needed.
+// ─────────────────────────────────────────────
+export const dailyQualityPurge = onSchedule(
+  { schedule: "every 24 hours", region: "us-central1", timeZone: "America/Chicago" },
+  async () => {
+    let totalPurged = 0;
+
+    // eBay — only keep 50%+ off
+    const ebaySnap = await db.collection("deals_live")
+      .where("storeKey", "==", "ebay")
+      .limit(500).get();
+    const ebayBad = ebaySnap.docs.filter(d => (d.data().discountPercent ?? 0) < 50);
+    if (ebayBad.length > 0) {
+      const batch = db.batch();
+      ebayBad.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      totalPurged += ebayBad.length;
+      console.log(`[purge] eBay removed: ${ebayBad.length}`);
+    }
+
+    // Nike — only keep 35%+ off
+    const nikeSnap = await db.collection("deals_live")
+      .where("storeKey", "==", "nike")
+      .limit(500).get();
+    const nikeBad = nikeSnap.docs.filter(d => (d.data().discountPercent ?? 0) < 35);
+    if (nikeBad.length > 0) {
+      const batch = db.batch();
+      nikeBad.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      totalPurged += nikeBad.length;
+      console.log(`[purge] Nike removed: ${nikeBad.length}`);
+    }
+
+    // Unknown store — always remove
+    const unknownSnap = await db.collection("deals_live")
+      .where("storeKey", "==", "unknown")
+      .limit(500).get();
+    if (unknownSnap.size > 0) {
+      const batch = db.batch();
+      unknownSnap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      totalPurged += unknownSnap.size;
+      console.log(`[purge] Unknown removed: ${unknownSnap.size}`);
+    }
+
+    console.log(`[dailyQualityPurge] Total purged: ${totalPurged}`);
+  }
+);
 
 // ─────────────────────────────────────────────
 // FLIP / PRICE ALERTS
