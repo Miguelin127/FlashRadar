@@ -87,7 +87,7 @@ export default function ExploreScreen() {
   useEffect(() => {
     const unsub = db
       .collection("deals_live")
-      .orderBy("discountPercent", "desc")
+      .orderBy("createdAt", "desc")
       .limit(QUERY_LIMIT)
       .onSnapshot(
         (snap) => {
