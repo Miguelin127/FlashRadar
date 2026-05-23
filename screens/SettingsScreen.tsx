@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
+import { useNavigation } from "@react-navigation/native";
 import { useUser } from "../context/UserContext";
 import { registerForPushToken } from "../utils";
 
@@ -26,7 +27,8 @@ interface NotificationItem {
 
 export default function SettingsScreen() {
   const { colors, toggleTheme, darkMode } = useTheme();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const navigation = useNavigation<any>();
 
   // ── Premium from context — no extra Firestore listener needed ────────────
   const { isPremium, subscriptionStatus } = useUser();
@@ -209,6 +211,14 @@ export default function SettingsScreen() {
           <Text style={styles.buttonText}>Invite Friends</Text>
         </TouchableOpacity>
 
+        {isAdmin && (
+          <TouchableOpacity
+            onPress={() => navigation.navigate("AdminPostDeal")}
+            style={{ backgroundColor: "#FF7A00", padding: 14, borderRadius: 12, alignItems: "center", marginBottom: 10 }}
+          >
+            <Text style={{ color: "#000", fontWeight: "900", fontSize: 15 }}>⚡ Post a Deal (Admin)</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity style={styles.logout} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log out</Text>
         </TouchableOpacity>

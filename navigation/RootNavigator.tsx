@@ -14,6 +14,7 @@ import ReferralScreen from "../screens/ReferralScreen";
 import LoginScreen from "../screens/LoginScreen";
 import MyFlipsScreen from "../screens/MyFlipsScreen";
 import UpgradeScreen from "../screens/UpgradeScreen";
+import AdminPostDealScreen from "../screens/AdminPostDealScreen";
 
 import type { RootTabParamList } from "./BottomTabsNavigator";
 
@@ -31,6 +32,7 @@ export type RootStackParamList = {
   Referral: undefined;
   Upgrade: undefined;
   CreatorDashboard: undefined;
+  AdminPostDeal: undefined;
 };
 
 /* ─── Navigator ──────────────────────────────────────────────── */
@@ -55,6 +57,7 @@ export default function RootNavigator() {
           <Stack.Screen name="PremiumIntro" component={PremiumIntroScreen} />
           <Stack.Screen name="Referral" component={ReferralScreen} />
           <Stack.Screen name="Upgrade" component={UpgradeScreen} />
+          <Stack.Screen name="AdminPostDeal" component={AdminPostDealScreen} />
           <Stack.Screen name="CreatorDashboard" component={
             require("../screens/CreatorDashboard").default
           } />
