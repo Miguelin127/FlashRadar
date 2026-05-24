@@ -7,15 +7,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import * as WebBrowser from "expo-web-browser";
 import { useAuth } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
+import { initializePurchases, getProducts, purchaseSubscription, restorePurchases } from "../utils/purchases";
 
 const { width: SW } = Dimensions.get("window");
 const ACCENT = "#FF7A00";
-
-const CHECKOUT_URL =
-  "https://us-central1-flashradar-71c93.cloudfunctions.net/createCheckoutSession";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -163,16 +160,35 @@ export default function UpgradeScreen() {
     }
     try {
       setLoading(true);
-      const res = await fetch(CHECKOUT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: user.uid, plan }),
-      });
-      const data = await res.json();
-      if (!data.url) throw new Error("No checkout URL returned");
-      await WebBrowser.openBrowserAsync(data.url);
-    } catch {
-      Alert.alert("Error", "Could not start checkout. Please try again.");
+      await initializePurchases();
+      const productId = plan === "monthly"
+        ? "com.miguelin1.flashradarapp.premium.monthly"
+        : "com.miguelin1.flashradarapp.premium.yearly";
+      const success = await purchaseSubscription(productId);
+      if (success) {
+        Alert.alert("Welcome to Premium!", "You now have full access to FlashRadar.");
+        navigation.goBack();
+      }
+    } catch (e: any) {
+      Alert.alert("Purchase failed", e.message || "Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    try {
+      setLoading(true);
+      await initializePurchases();
+      const restored = await restorePurchases();
+      if (restored) {
+        Alert.alert("Restored!", "Your premium subscription has been restored.");
+        navigation.goBack();
+      } else {
+        Alert.alert("Nothing to restore", "No previous purchases found.");
+      }
+    } catch (e: any) {
+      Alert.alert("Error", e.message);
     } finally {
       setLoading(false);
     }
@@ -251,7 +267,12 @@ export default function UpgradeScreen() {
             </>
           )}
         </TouchableOpacity>
-        <Text style={styles.ctaSub}>Cancel anytime · Secure checkout via Stripe</Text>
+        <Text style={styles.ctaSub}>Cancel anytime · Billed through Apple</Text>
+        <TouchableOpacity onPress={handleRestore} style={{ marginTop: 4 }}>
+          <Text style={{ color: "#666", fontSize: 12, textAlign: "center", textDecorationLine: "underline" }}>
+            Restore Purchases
+          </Text>
+        </TouchableOpacity>
 
         {/* ── Features ── */}
         <Text style={styles.sectionTitle}>What you unlock</Text>
