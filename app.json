@@ -11,15 +11,23 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.miguelin1.flashradarapp",
       "buildNumber": "5",
       "infoPlist": {
-        "NSUserNotificationsUsageDescription": "FlashRadar sends you instant alerts when rare deals and lightning offers drop near you."
-      }
+        "NSUserNotificationsUsageDescription": "FlashRadar sends you instant alerts when rare deals and lightning offers drop near you.",
+        "NSLocationWhenInUseUsageDescription": "FlashRadar uses your location to show nearby deals, clearance sales, and store-specific offers within your area. For example, we'll alert you when a Target 2 miles away has a clearance sale on electronics.",
+        "NSLocationAlwaysUsageDescription": "FlashRadar uses your location to detect nearby deals and send you alerts when rare finds appear at stores close to you."
+      },
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#000000"
+      },
+      "requireFullScreen": true
     },
     "android": {
       "package": "com.miguelin1.flashradarapp",
@@ -32,7 +40,12 @@
         "RECEIVE_BOOT_COMPLETED",
         "POST_NOTIFICATIONS",
         "VIBRATE"
-      ]
+      ],
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#000000"
+      }
     },
     "extra": {
       "eas": {
@@ -48,7 +61,10 @@
           "color": "#FF7A00",
           "sounds": []
         }
-      ]
-    ]
+      ],
+      "expo-web-browser",
+      "expo-font"
+    ],
+    "scheme": "flashradar"
   }
 }
