@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   // Google auth session
-  const redirectUri = "https://auth.expo.io/@miguelin1/flashradar-app";
+  const redirectUri = "https://auth.expo.io/@miguelin1/flashradar-app";  // Expo proxy  // Expo proxy  // Expo proxy
   const [_, googleResponse, googlePromptAsync] = Google.useAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     redirectUri,
