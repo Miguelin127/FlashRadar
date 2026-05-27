@@ -10,6 +10,8 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { auth, db } from "../firebaseConfig";
+import * as AuthSession from "expo-auth-session";
+
 
 WebBrowser.maybeCompleteAuthSession();
 

@@ -30,7 +30,6 @@ export default function SettingsScreen() {
   const { user, isAdmin } = useAuth();
   const navigation = useNavigation<any>();
 
-  // ── Premium from context — no extra Firestore listener needed ────────────
   const { isPremium, subscriptionStatus } = useUser();
 
   const [loading, setLoading] = useState(false);
@@ -40,7 +39,6 @@ export default function SettingsScreen() {
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
-  // ── Only fetch trial info and notification prefs — not premium status ─────
   useEffect(() => {
     if (!user) return;
     const unsub = db.collection("users").doc(user.uid).onSnapshot((snap) => {
@@ -52,7 +50,6 @@ export default function SettingsScreen() {
     return () => unsub();
   }, [user]);
 
-  // ── Notifications ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
     const unsub = db
@@ -126,6 +123,70 @@ export default function SettingsScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Log out", style: "destructive", onPress: async () => await auth.signOut() },
     ]);
+  };
+
+  // ✅ NEW: Account deletion — required by Apple guideline 5.1.1(v)
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      "Delete Account",
+      "This will permanently delete your account and all data. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Account",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Are you absolutely sure?",
+              "Your deals, saved items, and premium access will be permanently removed.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Yes, Delete",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      setLoading(true);
+                      const uid = user?.uid;
+                      if (!uid) return;
+
+                      // Delete Firestore user data
+                      await db.collection("users").doc(uid).delete();
+
+                      // Delete saved deals
+                      const savedSnap = await db
+                        .collection("savedDeals")
+                        .where("uid", "==", uid)
+                        .get();
+                      const batch = db.batch();
+                      savedSnap.docs.forEach((d) => batch.delete(d.ref));
+                      await batch.commit();
+
+                      // Delete Firebase Auth account
+                      await auth.currentUser?.delete();
+
+                    } catch (err: any) {
+                      // If re-authentication is needed (Apple/Google users)
+                      if (err.code === "auth/requires-recent-login") {
+                        Alert.alert(
+                          "Re-authentication Required",
+                          "For security, please log out and log back in before deleting your account.",
+                          [{ text: "OK" }]
+                        );
+                      } else {
+                        Alert.alert("Error", "Account deletion failed. Please try again.");
+                      }
+                    } finally {
+                      setLoading(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
   };
 
   const TogglePill = ({ value, onToggle }: { value: boolean; onToggle: (v: boolean) => void }) => {
@@ -219,11 +280,17 @@ export default function SettingsScreen() {
             <Text style={{ color: "#000", fontWeight: "900", fontSize: 15 }}>⚡ Post a Deal (Admin)</Text>
           </TouchableOpacity>
         )}
+
         <TouchableOpacity style={styles.logout} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log out</Text>
         </TouchableOpacity>
 
-        {loading && <ActivityIndicator color={colors.accent} />}
+        {/* ✅ NEW: Delete Account — required by Apple guideline 5.1.1(v) */}
+        <TouchableOpacity style={styles.deleteAccount} onPress={handleDeleteAccount}>
+          <Text style={styles.deleteAccountText}>Delete Account</Text>
+        </TouchableOpacity>
+
+        {loading && <ActivityIndicator color={colors.accent} style={{ marginTop: 16 }} />}
       </ScrollView>
     </SafeAreaView>
   );
@@ -246,4 +313,7 @@ const styles = StyleSheet.create({
   pillLabel: { fontWeight: "900", fontSize: 16, letterSpacing: 0.5 },
   logout: { borderWidth: 2, borderColor: "#FF3B30", padding: 14, borderRadius: 14, alignItems: "center", marginTop: 10 },
   logoutText: { color: "#FF3B30", fontWeight: "900", fontSize: 18 },
+  // ✅ NEW
+  deleteAccount: { padding: 14, borderRadius: 14, alignItems: "center", marginTop: 8 },
+  deleteAccountText: { color: "#888", fontWeight: "600", fontSize: 14, textDecorationLine: "underline" },
 });

@@ -40,6 +40,7 @@ export { sendDealAlerts } from "./sendDealAlerts";
 // DEAL INGESTION — PROPRIETARY SOURCES
 // ─────────────────────────────────────────────
 export { fetchWalmartDealsSlick } from "./fetchWalmartDealsSlick";
+export { fetchHomeDepotDeals } from "./fetchHomeDepotDeals";
 export { fetchTargetDeals } from "./fetchTargetDeals";
 export { fetchNikeDeals } from "./fetchNikeDeals";
 export { fetchPumaDeals } from "./fetchPumaDeals";
