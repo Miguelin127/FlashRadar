@@ -1,5 +1,6 @@
 // flashradar/App.tsx
 import * as Notifications from 'expo-notifications';
+import Purchases from 'react-native-purchases';
 
 import React from "react";
 import { NavigationContainer, DarkTheme, DefaultTheme } from "@react-navigation/native";
@@ -31,6 +32,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
+Purchases.configure({ apiKey: 'appl_UziJXOhRXKINbzrFMAQWFBcPziu' });
 
 export default function App() {
   return (
