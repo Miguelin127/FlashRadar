@@ -3,10 +3,9 @@
 import React, { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  ActivityIndicator, Switch, ScrollView, Share, Platform,
+  ActivityIndicator, Switch, ScrollView, Share, Platform, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as WebBrowser from "expo-web-browser";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
 import { useTheme } from "../context/ThemeContext";
@@ -14,9 +13,6 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import { useUser } from "../context/UserContext";
 import { registerForPushToken } from "../utils";
-
-const CHECKOUT_URL = "https://us-central1-flashradar-71c93.cloudfunctions.net/createCheckoutSession";
-const BILLING_PORTAL_URL = "https://us-central1-flashradar-71c93.cloudfunctions.net/createBillingPortal";
 
 interface NotificationItem {
   id: string;
@@ -29,14 +25,12 @@ export default function SettingsScreen() {
   const { colors, toggleTheme, darkMode } = useTheme();
   const { user, isAdmin } = useAuth();
   const navigation = useNavigation<any>();
-
   const { isPremium, subscriptionStatus } = useUser();
 
   const [loading, setLoading] = useState(false);
   const [trialActive, setTrialActive] = useState(false);
   const [trialEnds, setTrialEnds] = useState<Date | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
@@ -76,39 +70,15 @@ export default function SettingsScreen() {
     setNotificationsEnabled(value);
   };
 
-  const handleUpgrade = async () => {
-    try {
-      if (!user?.uid) return;
-      setLoading(true);
-      const res = await fetch(CHECKOUT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: user.uid, plan: selectedPlan }),
-      });
-      const data = await res.json();
-      await WebBrowser.openBrowserAsync(data.url);
-    } catch {
-      Alert.alert("Error", "Upgrade failed");
-    } finally {
-      setLoading(false);
-    }
+  const handleUpgrade = () => {
+    navigation.navigate("Upgrade");
   };
 
   const handleManageSubscription = async () => {
     try {
-      if (!user?.uid) return;
-      setLoading(true);
-      const res = await fetch(BILLING_PORTAL_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: user.uid }),
-      });
-      const data = await res.json();
-      await WebBrowser.openBrowserAsync(data.url);
+      await Linking.openURL("https://apps.apple.com/account/subscriptions");
     } catch {
-      Alert.alert("Error", "Unable to open billing portal");
-    } finally {
-      setLoading(false);
+      Alert.alert("Error", "Unable to open subscription settings");
     }
   };
 
@@ -125,7 +95,6 @@ export default function SettingsScreen() {
     ]);
   };
 
-  // ✅ NEW: Account deletion — required by Apple guideline 5.1.1(v)
   const handleDeleteAccount = async () => {
     Alert.alert(
       "Delete Account",
@@ -149,30 +118,15 @@ export default function SettingsScreen() {
                       setLoading(true);
                       const uid = user?.uid;
                       if (!uid) return;
-
-                      // Delete Firestore user data
                       await db.collection("users").doc(uid).delete();
-
-                      // Delete saved deals
-                      const savedSnap = await db
-                        .collection("savedDeals")
-                        .where("uid", "==", uid)
-                        .get();
+                      const savedSnap = await db.collection("savedDeals").where("uid", "==", uid).get();
                       const batch = db.batch();
                       savedSnap.docs.forEach((d) => batch.delete(d.ref));
                       await batch.commit();
-
-                      // Delete Firebase Auth account
                       await auth.currentUser?.delete();
-
                     } catch (err: any) {
-                      // If re-authentication is needed (Apple/Google users)
                       if (err.code === "auth/requires-recent-login") {
-                        Alert.alert(
-                          "Re-authentication Required",
-                          "For security, please log out and log back in before deleting your account.",
-                          [{ text: "OK" }]
-                        );
+                        Alert.alert("Re-authentication Required", "For security, please log out and log back in before deleting your account.", [{ text: "OK" }]);
                       } else {
                         Alert.alert("Error", "Account deletion failed. Please try again.");
                       }
@@ -221,14 +175,10 @@ export default function SettingsScreen() {
             {isPremium ? "✅ Premium Active" : "Free Plan"}
           </Text>
           {isPremium && subscriptionStatus && (
-            <Text style={{ color: colors.text, marginTop: 4 }}>
-              Status: {subscriptionStatus}
-            </Text>
+            <Text style={{ color: colors.text, marginTop: 4 }}>Status: {subscriptionStatus}</Text>
           )}
           {trialActive && trialEnds && (
-            <Text style={{ color: colors.text }}>
-              Trial ends {trialEnds.toLocaleDateString()}
-            </Text>
+            <Text style={{ color: colors.text }}>Trial ends {trialEnds.toLocaleDateString()}</Text>
           )}
         </View>
 
@@ -248,11 +198,7 @@ export default function SettingsScreen() {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Alerts</Text>
           {notifications.length === 0 && <Text style={{ color: "#777" }}>No notifications yet.</Text>}
           {notifications.map((n) => (
-            <TouchableOpacity
-              key={n.id}
-              onPress={() => markRead(n.id)}
-              style={[styles.notification, !n.read && styles.unread]}
-            >
+            <TouchableOpacity key={n.id} onPress={() => markRead(n.id)} style={[styles.notification, !n.read && styles.unread]}>
               <Text style={{ color: colors.accent, fontWeight: "700" }}>{n.title}</Text>
               <Text style={{ color: colors.text }}>{n.message}</Text>
             </TouchableOpacity>
@@ -285,7 +231,6 @@ export default function SettingsScreen() {
           <Text style={styles.logoutText}>Log out</Text>
         </TouchableOpacity>
 
-        {/* ✅ NEW: Delete Account — required by Apple guideline 5.1.1(v) */}
         <TouchableOpacity style={styles.deleteAccount} onPress={handleDeleteAccount}>
           <Text style={styles.deleteAccountText}>Delete Account</Text>
         </TouchableOpacity>
@@ -313,7 +258,6 @@ const styles = StyleSheet.create({
   pillLabel: { fontWeight: "900", fontSize: 16, letterSpacing: 0.5 },
   logout: { borderWidth: 2, borderColor: "#FF3B30", padding: 14, borderRadius: 14, alignItems: "center", marginTop: 10 },
   logoutText: { color: "#FF3B30", fontWeight: "900", fontSize: 18 },
-  // ✅ NEW
   deleteAccount: { padding: 14, borderRadius: 14, alignItems: "center", marginTop: 8 },
   deleteAccountText: { color: "#888", fontWeight: "600", fontSize: 14, textDecorationLine: "underline" },
 });
