@@ -17,6 +17,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.miguelin1.flashradarapp",
       "buildNumber": "6",
+      "config": {
+        "googleMapsApiKey": "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc"
+      },
       "infoPlist": {
         "NSUserNotificationsUsageDescription": "FlashRadar sends you instant alerts when rare deals and lightning offers drop near you.",
         "NSLocationWhenInUseUsageDescription": "FlashRadar uses your location to show nearby deals, clearance sales, and store-specific offers within your area. For example, we'll alert you when a Target 2 miles away has a clearance sale on electronics.",

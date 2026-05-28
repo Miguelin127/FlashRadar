@@ -13,6 +13,7 @@ import { db } from "../firebaseConfig";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { useUser } from "../context/UserContext";
+import Constants from "expo-constants";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const ACCENT = "#FF7A00";
@@ -21,8 +22,29 @@ const SHEET_COLLAPSED = SH * 0.15;
 const SHEET_HALF      = SH * 0.45;
 const SHEET_FULL      = SH * 0.82;
 
-// Stores that require premium
-const PREMIUM_STORES = ["amazon", "costco", "bestbuy", "samsclub", "lowes"];
+const GOOGLE_API_KEY = Constants.expoConfig?.ios?.config?.googleMapsApiKey ?? "";
+
+/* ─── Store config ───────────────────────────────────────────── */
+
+const FREE_STORES = ["walmart", "target", "home depot"];
+
+const PREMIUM_STORE_NAMES = [
+  "Best Buy", "Costco", "Sam's Club", "Lowe's",
+  "Apple Store", "Nordstrom", "Bloomingdale's", "Neiman Marcus",
+  "Saks Fifth Avenue", "TJ Maxx", "Marshalls", "Ross",
+  "Burlington", "Nike", "Foot Locker", "GameStop",
+  "Macy's", "Sephora",
+];
+
+const ALL_STORE_SEARCHES = [
+  "Walmart", "Target", "Home Depot",
+  ...PREMIUM_STORE_NAMES,
+];
+
+function isPremiumStore(name: string): boolean {
+  const lower = name.toLowerCase();
+  return !FREE_STORES.some(s => lower.includes(s));
+}
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -43,7 +65,16 @@ type Deal = {
   affiliateUrl?: string | null;
   merchantUrl?: string | null;
   url?: string | null;
-  timestamp?: any;
+};
+
+type NearbyStore = {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  address: string;
+  isPremium: boolean;
+  deals: Deal[];
 };
 
 /* ─── Category filters ───────────────────────────────────────── */
@@ -57,74 +88,155 @@ const CATEGORIES = [
   { key: "Other",       label: "🧩 Other" },
 ];
 
-/* ─── Store icons ────────────────────────────────────────────── */
+/* ─── Store emoji ────────────────────────────────────────────── */
 
-function getStoreEmoji(storeKey?: string): string {
-  switch ((storeKey || "").toLowerCase()) {
-    case "walmart":   return "🛒";
-    case "target":    return "🎯";
-    case "amazon":    return "📦";
-    case "homedepot": return "🔨";
-    case "bestbuy":   return "💻";
-    case "costco":    return "🏪";
-    case "samsclub":  return "🏬";
-    case "lowes":     return "🔧";
-    case "nike":      return "👟";
-    case "sephora":   return "💄";
-    default:          return "🏷️";
-  }
+function getStoreEmoji(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes("walmart"))      return "🛒";
+  if (n.includes("target"))       return "🎯";
+  if (n.includes("home depot"))   return "🔨";
+  if (n.includes("best buy"))     return "💻";
+  if (n.includes("costco"))       return "🏪";
+  if (n.includes("sam's"))        return "🏬";
+  if (n.includes("lowe"))         return "🔧";
+  if (n.includes("apple"))        return "🍎";
+  if (n.includes("nordstrom"))    return "👗";
+  if (n.includes("bloomingdale")) return "🛍️";
+  if (n.includes("neiman"))       return "💎";
+  if (n.includes("saks"))         return "👑";
+  if (n.includes("tj maxx"))      return "🏷️";
+  if (n.includes("marshall"))     return "🏷️";
+  if (n.includes("ross"))         return "🏷️";
+  if (n.includes("burlington"))   return "🧥";
+  if (n.includes("nike"))         return "👟";
+  if (n.includes("foot locker"))  return "👟";
+  if (n.includes("gamestop"))     return "🎮";
+  if (n.includes("macy"))         return "🌟";
+  if (n.includes("sephora"))      return "💄";
+  return "🏬";
 }
 
-/* ─── Radar pulse ────────────────────────────────────────────── */
+/* ─── Fetch nearby stores ────────────────────────────────────── */
 
-function RadarPulse({ coordinate }: { coordinate: { latitude: number; longitude: number } }) {
-  const pulseAnim = useRef(new Animated.Value(0)).current;
+async function fetchNearbyStores(
+  lat: number,
+  lng: number,
+  deals: Deal[]
+): Promise<NearbyStore[]> {
+  if (!GOOGLE_API_KEY) return [];
+
+  const results: NearbyStore[] = [];
+  const seen = new Set<string>();
+
+  await Promise.all(
+    ALL_STORE_SEARCHES.map(async (storeName) => {
+      try {
+        const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=16000&keyword=${encodeURIComponent(storeName)}&type=store&key=${GOOGLE_API_KEY}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.results) {
+          for (const place of data.results.slice(0, 3)) {
+            if (seen.has(place.place_id)) continue;
+            seen.add(place.place_id);
+
+            const storeLower = place.name.toLowerCase();
+            const storeDeals = deals.filter(d =>
+              (d.store || "").toLowerCase().includes(storeLower.split(" ")[0]) ||
+              storeLower.includes((d.store || "").toLowerCase())
+            );
+
+            results.push({
+              id: place.place_id,
+              name: place.name,
+              latitude: place.geometry.location.lat,
+              longitude: place.geometry.location.lng,
+              address: place.vicinity || "",
+              isPremium: isPremiumStore(place.name),
+              deals: storeDeals,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn(`[MapScreen] Places fetch failed for ${storeName}:`, e);
+      }
+    })
+  );
+
+  return results;
+}
+
+/* ─── Store Marker ───────────────────────────────────────────── */
+
+function StoreMarker({ store, selected, onPress, userIsPremium }: {
+  store: NearbyStore; selected: boolean; onPress: () => void; userIsPremium: boolean;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const isLocked = store.isPremium && !userIsPremium;
+  const color = isLocked ? "#444" : store.isPremium ? "#a855f7" : ACCENT;
+  const emoji = getStoreEmoji(store.name);
 
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1, duration: 2000, useNativeDriver: false }),
-        Animated.timing(pulseAnim, { toValue: 0, duration: 0, useNativeDriver: false }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, []);
-
-  const radius = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [50, 600] });
-  const opacity = pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.4, 0.15, 0] });
+    Animated.spring(scaleAnim, { toValue: selected ? 1.3 : 1, useNativeDriver: true }).start();
+  }, [selected]);
 
   return (
-    <>
-      {/* Static circle */}
-      <Circle
-        center={coordinate}
-        radius={300}
-        fillColor="rgba(255,122,0,0.06)"
-        strokeColor="rgba(255,122,0,0.25)"
-        strokeWidth={1}
-      />
-    </>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+      <Animated.View style={[
+        marker.wrap,
+        { borderColor: color, backgroundColor: selected ? color : "#0f0f0f" },
+        { transform: [{ scale: scaleAnim }] },
+      ]}>
+        <Text style={marker.emoji}>{isLocked ? "🔒" : emoji}</Text>
+        <Text style={[marker.name, { color: selected ? "#000" : color }]} numberOfLines={1}>
+          {isLocked ? "PRO" : store.name.split(" ")[0]}
+        </Text>
+        {store.deals.length > 0 && !isLocked && (
+          <View style={[marker.badge, { backgroundColor: color }]}>
+            <Text style={marker.badgeTxt}>{store.deals.length}</Text>
+          </View>
+        )}
+      </Animated.View>
+      <View style={[marker.tail, { borderTopColor: color }]} />
+    </TouchableOpacity>
   );
 }
 
-/* ─── Custom Marker ──────────────────────────────────────────── */
+const marker = StyleSheet.create({
+  wrap: {
+    paddingHorizontal: 8, paddingVertical: 5,
+    borderRadius: 10, borderWidth: 1.5,
+    alignItems: "center", justifyContent: "center",
+    minWidth: 52,
+    shadowColor: "#000", shadowRadius: 4, shadowOpacity: 0.4, elevation: 5,
+  },
+  emoji: { fontSize: 14 },
+  name: { fontSize: 9, fontWeight: "900", marginTop: 1 },
+  badge: {
+    position: "absolute", top: -6, right: -6,
+    width: 16, height: 16, borderRadius: 8,
+    alignItems: "center", justifyContent: "center",
+  },
+  badgeTxt: { color: "#000", fontSize: 8, fontWeight: "900" },
+  tail: {
+    width: 0, height: 0, alignSelf: "center",
+    borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 6,
+    borderLeftColor: "transparent", borderRightColor: "transparent",
+  },
+});
 
-function DealMarker({ deal, selected, onPress, isPremium }: {
-  deal: Deal; selected: boolean; onPress: () => void; isPremium: boolean;
+/* ─── Deal Marker ────────────────────────────────────────────── */
+
+function DealMarker({ deal, selected, onPress }: {
+  deal: Deal; selected: boolean; onPress: () => void;
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const flashAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (selected) {
-      Animated.spring(scaleAnim, { toValue: 1.3, useNativeDriver: true }).start();
-    } else {
-      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start();
-    }
+    Animated.spring(scaleAnim, { toValue: selected ? 1.3 : 1, useNativeDriver: true }).start();
   }, [selected]);
 
-  // Flash animation for lightning deals
   useEffect(() => {
     if (deal.lightning) {
       const loop = Animated.loop(
@@ -138,45 +250,33 @@ function DealMarker({ deal, selected, onPress, isPremium }: {
     }
   }, [deal.lightning]);
 
-  const isLocked = PREMIUM_STORES.includes((deal.storeKey || "").toLowerCase()) && !isPremium;
   const color = deal.lightning ? "#facc15" : deal.rare ? "#a855f7" : deal.hot ? "#ef4444" : ACCENT;
-  const emoji = getStoreEmoji(deal.storeKey || deal.store);
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
       <Animated.View style={[
-        marker.wrap,
-        { borderColor: isLocked ? "#444" : color, backgroundColor: selected ? color : "#0f0f0f" },
+        dealMarker.wrap,
+        { borderColor: color, backgroundColor: selected ? color : "#0f0f0f" },
         { transform: [{ scale: scaleAnim }] },
         deal.lightning && { opacity: flashAnim },
       ]}>
-        {isLocked ? (
-          <Text style={marker.lock}>🔒</Text>
-        ) : (
-          <Text style={[marker.price, { color: selected ? "#000" : color }]}>
-            {emoji} ${Math.round(deal.price)}
-          </Text>
-        )}
-        {deal.lightning && !isLocked && (
-          <Text style={marker.lightning}>⚡</Text>
-        )}
+        <Text style={[dealMarker.price, { color: selected ? "#000" : color }]}>
+          {deal.lightning ? "⚡" : deal.rare ? "💎" : ""}${Math.round(deal.price)}
+        </Text>
       </Animated.View>
-      <View style={[marker.tail, { borderTopColor: isLocked ? "#444" : color }]} />
+      <View style={[dealMarker.tail, { borderTopColor: color }]} />
     </TouchableOpacity>
   );
 }
 
-const marker = StyleSheet.create({
+const dealMarker = StyleSheet.create({
   wrap: {
     paddingHorizontal: 8, paddingVertical: 4,
     borderRadius: 8, borderWidth: 1.5,
     alignItems: "center", justifyContent: "center",
-    flexDirection: "row", gap: 2,
     shadowColor: "#000", shadowRadius: 4, shadowOpacity: 0.3, elevation: 4,
   },
   price: { fontSize: 11, fontWeight: "900" },
-  lock: { fontSize: 11 },
-  lightning: { fontSize: 8, position: "absolute", top: -6, right: -6 },
   tail: {
     width: 0, height: 0, alignSelf: "center",
     borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 6,
@@ -184,14 +284,14 @@ const marker = StyleSheet.create({
   },
 });
 
-/* ─── Deal Row ───────────────────────────────────────────────── */
+/* ─── Store Row ──────────────────────────────────────────────── */
 
-function DealRow({ deal, onPress, onOpen, dark, isPremium }: {
-  deal: Deal; onPress: () => void; onOpen: () => void; dark: boolean; isPremium: boolean;
+function StoreRow({ store, onPress, dark, userIsPremium }: {
+  store: NearbyStore; onPress: () => void; dark: boolean; userIsPremium: boolean;
 }) {
-  const isLocked = PREMIUM_STORES.includes((deal.storeKey || "").toLowerCase()) && !isPremium;
-  const color = deal.lightning ? "#facc15" : deal.rare ? "#a855f7" : deal.hot ? "#ef4444" : ACCENT;
-  const emoji = getStoreEmoji(deal.storeKey || deal.store);
+  const isLocked = store.isPremium && !userIsPremium;
+  const color = isLocked ? "#444" : store.isPremium ? "#a855f7" : ACCENT;
+  const emoji = getStoreEmoji(store.name);
 
   return (
     <TouchableOpacity
@@ -199,41 +299,29 @@ function DealRow({ deal, onPress, onOpen, dark, isPremium }: {
       style={[row.card, { backgroundColor: dark ? "#111" : "#f9f9f9", opacity: isLocked ? 0.6 : 1 }]}
       activeOpacity={0.85}
     >
-      <View style={[row.bar, { backgroundColor: isLocked ? "#444" : color }]} />
+      <View style={[row.bar, { backgroundColor: color }]} />
       <View style={row.content}>
         <View style={row.topRow}>
-          <Text style={[row.store, { color: dark ? "#888" : "#999" }]}>
-            {emoji} {(deal.store || "").toUpperCase()}
+          <Text style={row.emoji}>{isLocked ? "🔒" : emoji}</Text>
+          <Text style={[row.storeName, { color: dark ? "#fff" : "#111" }]} numberOfLines={1}>
+            {store.name}
           </Text>
-          {deal.lightning && <View style={[row.badge, { backgroundColor: "#ca8a04" }]}><Text style={row.badgeTxt}>⚡ LIGHTNING</Text></View>}
-          {deal.rare && !deal.lightning && <View style={[row.badge, { backgroundColor: "#9333ea" }]}><Text style={row.badgeTxt}>💎 RARE</Text></View>}
-          {deal.hot && !deal.rare && !deal.lightning && <View style={[row.badge, { backgroundColor: "#ef4444" }]}><Text style={row.badgeTxt}>🔥 HOT</Text></View>}
-          {isLocked && <View style={[row.badge, { backgroundColor: "#333" }]}><Text style={row.badgeTxt}>🔒 PREMIUM</Text></View>}
+          {store.isPremium && (
+            <View style={[row.badge, { backgroundColor: isLocked ? "#333" : "#7c3aed" }]}>
+              <Text style={row.badgeTxt}>{isLocked ? "🔒 PRO" : "⭐ PRO"}</Text>
+            </View>
+          )}
         </View>
-        <Text style={[row.title, { color: isLocked ? "#555" : dark ? "#f4f4f5" : "#111" }]} numberOfLines={1}>
-          {isLocked ? "Upgrade to unlock this deal" : deal.title}
+        <Text style={[row.address, { color: dark ? "#888" : "#999" }]} numberOfLines={1}>
+          📍 {isLocked ? "Upgrade to unlock" : store.address}
         </Text>
-        <View style={row.bottomRow}>
-          {!isLocked && <Text style={row.price}>${Number(deal.price).toFixed(2)}</Text>}
-          {!isLocked && (deal.discountPercent ?? 0) > 0 && (
-            <Text style={row.disc}>-{deal.discountPercent}%</Text>
-          )}
-          {deal.address && !isLocked && (
-            <Text style={row.addr} numberOfLines={1}>📍 {deal.address}</Text>
-          )}
-        </View>
+        {!isLocked && store.deals.length > 0 && (
+          <Text style={row.dealCount}>🔥 {store.deals.length} deals available</Text>
+        )}
       </View>
-
-      {isLocked ? (
-        <View style={[row.btn, { backgroundColor: "#333" }]}>
-          <Text style={row.btnTxt}>PRO</Text>
-        </View>
-      ) : (
-        <TouchableOpacity style={row.btn} onPress={onOpen}>
-          <Text style={row.btnTxt}>GO</Text>
-          <Ionicons name="arrow-forward" size={12} color="#000" />
-        </TouchableOpacity>
-      )}
+      <View style={[row.btn, { backgroundColor: isLocked ? "#333" : color }]}>
+        <Text style={row.btnTxt}>{isLocked ? "PRO" : "VIEW"}</Text>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -246,41 +334,40 @@ const row = StyleSheet.create({
   },
   bar: { width: 4, alignSelf: "stretch" },
   content: { flex: 1, padding: 10 },
-  topRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2, flexWrap: "wrap" },
-  store: { fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
-  badge: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3 },
-  badgeTxt: { color: "#fff", fontSize: 7, fontWeight: "900" },
-  title: { fontSize: 13, fontWeight: "700", marginBottom: 3 },
-  bottomRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  price: { fontSize: 15, fontWeight: "900", color: ACCENT },
-  disc: { fontSize: 10, fontWeight: "800", color: "#22c55e" },
-  addr: { fontSize: 10, color: "#888", flex: 1 },
+  topRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 3 },
+  emoji: { fontSize: 16 },
+  storeName: { fontSize: 14, fontWeight: "800", flex: 1 },
+  badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  badgeTxt: { color: "#fff", fontSize: 8, fontWeight: "900" },
+  address: { fontSize: 11, marginBottom: 2 },
+  dealCount: { fontSize: 11, color: ACCENT, fontWeight: "700" },
   btn: {
-    backgroundColor: ACCENT, margin: 10,
-    paddingHorizontal: 10, paddingVertical: 8,
-    borderRadius: 8, alignItems: "center", gap: 2,
+    margin: 10, paddingHorizontal: 10, paddingVertical: 8,
+    borderRadius: 8, alignItems: "center",
   },
-  btnTxt: { color: "#000", fontWeight: "900", fontSize: 10 },
+  btnTxt: { color: "#fff", fontWeight: "900", fontSize: 10 },
 });
 
 /* ─── Main Screen ────────────────────────────────────────────── */
 
 export default function MapScreen() {
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [nearbyStores, setNearbyStores] = useState<NearbyStore[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingStores, setLoadingStores] = useState(false);
   const [region, setRegion] = useState<Region | null>(null);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [searchArea, setSearchArea] = useState(false);
   const [currentRegion, setCurrentRegion] = useState<Region | null>(null);
+  const [searchArea, setSearchArea] = useState(false);
+  const [viewMode, setViewMode] = useState<"stores" | "deals">("stores");
 
   const mapRef = useRef<MapView>(null);
   const { theme, colors } = useTheme();
   const { isPremium } = useUser();
   const dark = theme === "dark";
 
-  // Bottom sheet animation
   const sheetY = useRef(new Animated.Value(SHEET_COLLAPSED)).current;
   const lastSheetY = useRef(SHEET_COLLAPSED);
   const sheetPanResponder = useRef(
@@ -289,8 +376,7 @@ export default function MapScreen() {
       onPanResponderGrant: () => { sheetY.stopAnimation(); },
       onPanResponderMove: (_, g) => {
         const newY = lastSheetY.current - g.dy;
-        const clamped = Math.max(SHEET_COLLAPSED, Math.min(SHEET_FULL, newY));
-        sheetY.setValue(clamped);
+        sheetY.setValue(Math.max(SHEET_COLLAPSED, Math.min(SHEET_FULL, newY)));
       },
       onPanResponderRelease: (_, g) => {
         const newY = lastSheetY.current - g.dy;
@@ -308,96 +394,72 @@ export default function MapScreen() {
     lastSheetY.current = to;
   };
 
-  /* ── Real-time listener + location ── */
   useEffect(() => {
-    // Real-time Firestore listener
     const unsubscribe = db.collection("deals_live")
       .onSnapshot((snap) => {
         const items: Deal[] = snap.docs
           .map((d) => ({ id: d.id, ...(d.data() as Omit<Deal, "id">) }))
           .filter((d) => typeof d.latitude === "number" && typeof d.longitude === "number");
         setDeals(items);
-        setLoading(false);
-      }, (err) => {
-        console.error("[MapScreen] listener error:", err);
-        setLoading(false);
       });
 
     const loadLocation = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
+      if (status !== "granted") { setLoading(false); return; }
       const loc = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = loc.coords;
       setUserLocation({ latitude, longitude });
       const r = { latitude, longitude, latitudeDelta: 0.08, longitudeDelta: 0.08 };
       setRegion(r);
       setCurrentRegion(r);
+      setLoading(false);
+      setLoadingStores(true);
+      const stores = await fetchNearbyStores(latitude, longitude, []);
+      setNearbyStores(stores);
+      setLoadingStores(false);
     };
 
     loadLocation();
     return () => unsubscribe();
   }, []);
 
-  /* ── Filtered deals ── */
+  const searchThisArea = async () => {
+    if (!currentRegion) return;
+    setSearchArea(false);
+    setLoadingStores(true);
+    const stores = await fetchNearbyStores(currentRegion.latitude, currentRegion.longitude, deals);
+    setNearbyStores(stores);
+    setLoadingStores(false);
+  };
+
   const filteredDeals = useMemo(() => {
-    let list = deals;
-    if (selectedCategory !== "All") {
-      list = list.filter((d) => d.category === selectedCategory);
-    }
-    return list;
+    if (selectedCategory === "All") return deals;
+    return deals.filter((d) => d.category === selectedCategory);
   }, [deals, selectedCategory]);
 
-  /* ── Counts ── */
-  const premiumCount = filteredDeals.filter(d =>
-    PREMIUM_STORES.includes((d.storeKey || "").toLowerCase())
-  ).length;
+  const premiumStoreCount = nearbyStores.filter(s => s.isPremium).length;
 
-  /* ── Marker press ── */
-  const handleMarkerPress = (deal: Deal) => {
-    setSelectedId(deal.id);
+  const handleStorePress = (store: NearbyStore) => {
+    if (store.isPremium && !isPremium) return;
+    setSelectedId(store.id);
     mapRef.current?.animateToRegion({
-      latitude: deal.latitude - 0.003,
-      longitude: deal.longitude,
+      latitude: store.latitude - 0.003,
+      longitude: store.longitude,
       latitudeDelta: 0.04,
       longitudeDelta: 0.04,
     }, 400);
     snapSheet(SHEET_HALF);
   };
 
-  /* ── Open deal URL ── */
+  const recenter = () => {
+    if (!userLocation) return;
+    mapRef.current?.animateToRegion({ ...userLocation, latitudeDelta: 0.08, longitudeDelta: 0.08 }, 500);
+  };
+
   const openDeal = (deal: Deal) => {
     const url = deal.affiliateUrl || deal.merchantUrl || deal.url;
     if (url) Linking.openURL(url);
-    else if (deal.address) {
-      const q = encodeURIComponent(deal.address);
-      const mapsUrl = Platform.select({
-        ios: `maps://?q=${q}`,
-        android: `geo:0,0?q=${q}`,
-      });
-      if (mapsUrl) Linking.openURL(mapsUrl);
-    }
   };
-
-  /* ── Search this area ── */
-  const searchThisArea = async () => {
-    if (!currentRegion) return;
-    setSearchArea(false);
-  };
-
-  /* ── Recenter ── */
-  const recenter = () => {
-    if (!userLocation) return;
-    mapRef.current?.animateToRegion({
-      ...userLocation,
-      latitudeDelta: 0.08,
-      longitudeDelta: 0.08,
-    }, 500);
-  };
-
-  const selectedDeal = filteredDeals.find((d) => d.id === selectedId);
-  const sheetDeals = selectedDeal
-    ? [selectedDeal, ...filteredDeals.filter((d) => d.id !== selectedId)]
-    : filteredDeals;
 
   if (loading) {
     return (
@@ -423,28 +485,31 @@ export default function MapScreen() {
     );
   }
 
+  const selectedStore = nearbyStores.find(s => s.id === selectedId);
+  const sheetStores = selectedStore
+    ? [selectedStore, ...nearbyStores.filter(s => s.id !== selectedId)]
+    : nearbyStores;
+
   return (
     <View style={styles.safe}>
-      {/* ── MAP ── */}
       <MapView
         ref={mapRef}
         style={styles.map}
         initialRegion={region}
         customMapStyle={dark ? darkMapStyle : []}
         showsUserLocation={false}
-        onRegionChange={(r) => {
-          setCurrentRegion(r);
-          setSearchArea(true);
-        }}
-        onPress={() => {
-          setSelectedId(null);
-          snapSheet(SHEET_COLLAPSED);
-        }}
+        onRegionChange={(r) => { setCurrentRegion(r); setSearchArea(true); }}
+        onPress={() => { setSelectedId(null); snapSheet(SHEET_COLLAPSED); }}
       >
-        {/* User location with radar pulse */}
         {userLocation && (
           <>
-            <RadarPulse coordinate={userLocation} />
+            <Circle
+              center={userLocation}
+              radius={300}
+              fillColor="rgba(255,122,0,0.06)"
+              strokeColor="rgba(255,122,0,0.25)"
+              strokeWidth={1}
+            />
             <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }}>
               <View style={styles.userDot}>
                 <View style={styles.userDotInner} />
@@ -453,86 +518,107 @@ export default function MapScreen() {
           </>
         )}
 
-        {/* Deal markers */}
-        {filteredDeals.map((deal) => (
+        {viewMode === "stores" && nearbyStores.map((store) => (
+          <Marker
+            key={store.id}
+            coordinate={{ latitude: store.latitude, longitude: store.longitude }}
+            anchor={{ x: 0.5, y: 1 }}
+            onPress={() => handleStorePress(store)}
+          >
+            <StoreMarker
+              store={store}
+              selected={selectedId === store.id}
+              onPress={() => handleStorePress(store)}
+              userIsPremium={isPremium}
+            />
+          </Marker>
+        ))}
+
+        {viewMode === "deals" && filteredDeals.map((deal) => (
           <Marker
             key={deal.id}
             coordinate={{ latitude: deal.latitude, longitude: deal.longitude }}
             anchor={{ x: 0.5, y: 1 }}
-            onPress={() => handleMarkerPress(deal)}
           >
             <DealMarker
               deal={deal}
               selected={selectedId === deal.id}
-              onPress={() => handleMarkerPress(deal)}
-              isPremium={isPremium}
+              onPress={() => { setSelectedId(deal.id); snapSheet(SHEET_HALF); }}
             />
           </Marker>
         ))}
       </MapView>
 
-      {/* ── CATEGORY FILTER CHIPS ── */}
       <SafeAreaView style={styles.topOverlay} pointerEvents="box-none">
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-        >
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat.key}
-              onPress={() => setSelectedCategory(cat.key)}
-              style={[
-                styles.chip,
-                { backgroundColor: selectedCategory === cat.key ? ACCENT : "rgba(0,0,0,0.75)" },
-              ]}
-            >
-              <Text style={[
-                styles.chipText,
-                { color: selectedCategory === cat.key ? "#000" : "#fff" },
-              ]}>
-                {cat.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <View style={styles.modeToggle}>
+          <TouchableOpacity
+            style={[styles.modeBtn, viewMode === "stores" && styles.modeBtnActive]}
+            onPress={() => setViewMode("stores")}
+          >
+            <Text style={[styles.modeBtnText, viewMode === "stores" && { color: "#000" }]}>🏬 Stores</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeBtn, viewMode === "deals" && styles.modeBtnActive]}
+            onPress={() => setViewMode("deals")}
+          >
+            <Text style={[styles.modeBtnText, viewMode === "deals" && { color: "#000" }]}>🔥 Deals</Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* Premium locked banner */}
-        {!isPremium && premiumCount > 0 && (
+        {viewMode === "deals" && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {CATEGORIES.map((cat) => (
+              <TouchableOpacity
+                key={cat.key}
+                onPress={() => setSelectedCategory(cat.key)}
+                style={[styles.chip, { backgroundColor: selectedCategory === cat.key ? ACCENT : "rgba(0,0,0,0.75)" }]}
+              >
+                <Text style={[styles.chipText, { color: selectedCategory === cat.key ? "#000" : "#fff" }]}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        {!isPremium && premiumStoreCount > 0 && (
           <View style={styles.premiumBanner}>
             <Text style={styles.premiumBannerText}>
-              🔒 {premiumCount} premium deals hidden — Upgrade to unlock
+              🔒 {premiumStoreCount} premium stores locked — Upgrade to unlock
             </Text>
           </View>
         )}
       </SafeAreaView>
 
-      {/* ── SEARCH THIS AREA ── */}
       {searchArea && (
         <TouchableOpacity style={styles.searchAreaBtn} onPress={searchThisArea}>
-          <Ionicons name="search-outline" size={14} color="#fff" />
-          <Text style={styles.searchAreaText}>Search this area</Text>
+          {loadingStores
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Ionicons name="search-outline" size={14} color="#fff" />
+          }
+          <Text style={styles.searchAreaText}>
+            {loadingStores ? "Searching..." : "Search this area"}
+          </Text>
         </TouchableOpacity>
       )}
 
-      {/* ── RECENTER ── */}
       <TouchableOpacity style={styles.recenterBtn} onPress={recenter}>
         <Ionicons name="locate-outline" size={20} color={ACCENT} />
       </TouchableOpacity>
 
-      {/* ── DEAL COUNT PILL ── */}
       <View style={styles.countPill}>
         <View style={styles.countDot} />
-        <Text style={styles.countText}>{filteredDeals.length} deals nearby</Text>
+        <Text style={styles.countText}>
+          {viewMode === "stores" ? `${nearbyStores.length} stores nearby` : `${filteredDeals.length} deals nearby`}
+        </Text>
       </View>
 
-      {/* ── BOTTOM SHEET ── */}
       <Animated.View style={[styles.sheet, { height: sheetY }]}>
         <View {...sheetPanResponder.panHandlers} style={styles.handleWrap}>
           <View style={styles.handle} />
           <View style={styles.sheetHeader}>
             <Text style={[styles.sheetTitle, { color: dark ? "#fff" : "#111" }]}>
-              {selectedDeal ? selectedDeal.store : `${filteredDeals.length} Deals Near You`}
+              {selectedStore ? selectedStore.name : viewMode === "stores" ? `${nearbyStores.length} Stores Near You` : `${filteredDeals.length} Deals Near You`}
             </Text>
             <View style={styles.sheetSnapBtns}>
               <TouchableOpacity onPress={() => snapSheet(SHEET_HALF)}>
@@ -545,36 +631,66 @@ export default function MapScreen() {
           </View>
         </View>
 
-        <FlatList
-          data={sheetDeals}
-          keyExtractor={(d) => d.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 40 }}
-          ListEmptyComponent={
-            <View style={styles.emptySheet}>
-              <Ionicons name="map-outline" size={36} color="#444" />
-              <Text style={styles.emptySheetText}>No deals in this area</Text>
-              <Text style={styles.emptySheetSub}>Move the map to explore other zones</Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <DealRow
-              deal={item}
-              dark={dark}
-              isPremium={isPremium}
-              onPress={() => {
-                handleMarkerPress(item);
-                mapRef.current?.animateToRegion({
-                  latitude: item.latitude,
-                  longitude: item.longitude,
-                  latitudeDelta: 0.02,
-                  longitudeDelta: 0.02,
-                }, 500);
-              }}
-              onOpen={() => openDeal(item)}
-            />
-          )}
-        />
+        {viewMode === "stores" ? (
+          <FlatList
+            data={sheetStores}
+            keyExtractor={(s) => s.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 40 }}
+            ListEmptyComponent={
+              <View style={styles.emptySheet}>
+                <Ionicons name="storefront-outline" size={36} color="#444" />
+                <Text style={styles.emptySheetText}>No stores found</Text>
+                <Text style={styles.emptySheetSub}>Move the map and tap "Search this area"</Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <StoreRow
+                store={item}
+                dark={dark}
+                userIsPremium={isPremium}
+                onPress={() => {
+                  handleStorePress(item);
+                  mapRef.current?.animateToRegion({
+                    latitude: item.latitude,
+                    longitude: item.longitude,
+                    latitudeDelta: 0.02,
+                    longitudeDelta: 0.02,
+                  }, 500);
+                }}
+              />
+            )}
+          />
+        ) : (
+          <FlatList
+            data={filteredDeals}
+            keyExtractor={(d) => d.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 40 }}
+            ListEmptyComponent={
+              <View style={styles.emptySheet}>
+                <Ionicons name="map-outline" size={36} color="#444" />
+                <Text style={styles.emptySheetText}>No deals in this area</Text>
+                <Text style={styles.emptySheetSub}>Move the map to explore other zones</Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[styles.dealRow, { backgroundColor: dark ? "#111" : "#f9f9f9" }]}
+                onPress={() => openDeal(item)}
+              >
+                <View style={[styles.dealBar, { backgroundColor: item.lightning ? "#facc15" : item.rare ? "#a855f7" : ACCENT }]} />
+                <View style={{ flex: 1, padding: 10 }}>
+                  <Text style={{ color: dark ? "#fff" : "#111", fontWeight: "700", fontSize: 13 }} numberOfLines={1}>{item.title}</Text>
+                  <Text style={{ color: ACCENT, fontWeight: "900", fontSize: 15 }}>${Number(item.price).toFixed(2)}</Text>
+                </View>
+                <View style={styles.dealBtn}>
+                  <Text style={styles.dealBtnTxt}>GO</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        )}
       </Animated.View>
     </View>
   );
@@ -587,80 +703,38 @@ const styles = StyleSheet.create({
   map: { width: SW, height: SH },
   center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
   loadingText: { color: "#888", marginTop: 12, fontWeight: "600", textAlign: "center" },
-
-  userDot: {
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: "rgba(255,122,0,0.3)",
-    justifyContent: "center", alignItems: "center",
-    borderWidth: 1.5, borderColor: ACCENT,
-  },
+  userDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: "rgba(255,122,0,0.3)", justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: ACCENT },
   userDotInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: ACCENT },
-
   topOverlay: { position: "absolute", top: 0, left: 0, right: 0 },
-  chipRow: { paddingHorizontal: 12, paddingTop: 12, gap: 8 },
-  chip: {
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-    shadowColor: "#000", shadowRadius: 4, shadowOpacity: 0.3, elevation: 4,
-  },
+  modeToggle: { flexDirection: "row", alignSelf: "center", marginTop: 12, backgroundColor: "rgba(0,0,0,0.8)", borderRadius: 999, padding: 3, gap: 2, borderWidth: 1, borderColor: "rgba(255,122,0,0.3)" },
+  modeBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 999 },
+  modeBtnActive: { backgroundColor: ACCENT },
+  modeBtnText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+  chipRow: { paddingHorizontal: 12, paddingTop: 8, gap: 8 },
+  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, shadowColor: "#000", shadowRadius: 4, shadowOpacity: 0.3, elevation: 4 },
   chipText: { fontSize: 12, fontWeight: "800" },
-
-  premiumBanner: {
-    marginHorizontal: 12, marginTop: 8,
-    backgroundColor: "rgba(0,0,0,0.85)",
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
-    borderWidth: 1, borderColor: "rgba(255,122,0,0.3)",
-  },
+  premiumBanner: { marginHorizontal: 12, marginTop: 8, backgroundColor: "rgba(0,0,0,0.85)", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: "rgba(255,122,0,0.3)" },
   premiumBannerText: { color: ACCENT, fontSize: 11, fontWeight: "800", textAlign: "center" },
-
-  searchAreaBtn: {
-    position: "absolute", top: SH * 0.18, alignSelf: "center",
-    flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: "#1a1a1a",
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999,
-    borderWidth: 1, borderColor: ACCENT + "55",
-    shadowColor: "#000", shadowRadius: 6, shadowOpacity: 0.4, elevation: 6,
-  },
+  searchAreaBtn: { position: "absolute", top: SH * 0.2, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#1a1a1a", paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: ACCENT + "55", shadowColor: "#000", shadowRadius: 6, shadowOpacity: 0.4, elevation: 6 },
   searchAreaText: { color: "#fff", fontWeight: "800", fontSize: 13 },
-
-  recenterBtn: {
-    position: "absolute", right: 16, bottom: SHEET_COLLAPSED + 20,
-    backgroundColor: "#1a1a1a", padding: 12, borderRadius: 12,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
-    shadowColor: "#000", shadowRadius: 6, shadowOpacity: 0.4, elevation: 6,
-  },
-
-  countPill: {
-    position: "absolute", left: 16, bottom: SHEET_COLLAPSED + 20,
-    flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-    borderWidth: 1, borderColor: "rgba(255,122,0,0.3)",
-  },
+  recenterBtn: { position: "absolute", right: 16, bottom: SHEET_COLLAPSED + 20, backgroundColor: "#1a1a1a", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", shadowColor: "#000", shadowRadius: 6, shadowOpacity: 0.4, elevation: 6 },
+  countPill: { position: "absolute", left: 16, bottom: SHEET_COLLAPSED + 20, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.8)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,122,0,0.3)" },
   countDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: ACCENT },
   countText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-
-  sheet: {
-    position: "absolute", bottom: 0, left: 0, right: 0,
-    backgroundColor: "#0f0f0f",
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    borderTopWidth: 1, borderColor: "rgba(255,122,0,0.2)",
-    shadowColor: "#000", shadowRadius: 20, shadowOpacity: 0.5, elevation: 20,
-  },
+  sheet: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "#0f0f0f", borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: 1, borderColor: "rgba(255,122,0,0.2)", shadowColor: "#000", shadowRadius: 20, shadowOpacity: 0.5, elevation: 20 },
   handleWrap: { paddingTop: 10, paddingHorizontal: 16, paddingBottom: 4 },
-  handle: {
-    width: 36, height: 4, borderRadius: 2,
-    backgroundColor: "#333", alignSelf: "center", marginBottom: 10,
-  },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#333", alignSelf: "center", marginBottom: 10 },
   sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   sheetTitle: { fontSize: 16, fontWeight: "900" },
   sheetSnapBtns: { flexDirection: "row", gap: 8, alignItems: "center" },
-
   emptySheet: { alignItems: "center", paddingVertical: 30, gap: 6 },
   emptySheetText: { color: "#555", fontWeight: "900", fontSize: 15 },
   emptySheetSub: { color: "#444", fontSize: 12 },
+  dealRow: { flexDirection: "row", alignItems: "center", borderRadius: 12, marginHorizontal: 12, marginBottom: 8, overflow: "hidden" },
+  dealBar: { width: 4, alignSelf: "stretch" },
+  dealBtn: { backgroundColor: ACCENT, margin: 10, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, alignItems: "center" },
+  dealBtnTxt: { color: "#000", fontWeight: "900", fontSize: 10 },
 });
-
-/* ─── Dark map style ─────────────────────────────────────────── */
 
 const darkMapStyle = [
   { elementType: "geometry", stylers: [{ color: "#0f0f0f" }] },
