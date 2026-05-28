@@ -82,18 +82,8 @@ export const sendDealAlerts = functions.firestore
 
     for (const userDoc of usersSnapshot.docs) {
       const user = userDoc.data();
-      if (!user.pushToken || !user.location) continue;
+      if (!user.pushToken) continue;
 
-      const userLat = user.location.latitude;
-      const userLng = user.location.longitude;
-
-      const distanceMiles =
-        getDistance(
-          { latitude, longitude },
-          { latitude: userLat, longitude: userLng }
-        ) / 1609.34;
-
-      const withinRadius = distanceMiles <= (user.radius || 5);
       const isPremiumUser =
         user.isPremium === true || user.subscriptionStatus === "premium";
 
@@ -103,6 +93,17 @@ export const sendDealAlerts = functions.firestore
           user.dealCategories.includes(category));
 
       if (!categoryMatch) continue;
+
+      // Location filtering (only if user has location)
+      let withinRadius = true;
+      if (user.location && latitude && longitude) {
+        const distanceMiles =
+          getDistance(
+            { latitude, longitude },
+            { latitude: user.location.latitude, longitude: user.location.longitude }
+          ) / 1609.34;
+        withinRadius = distanceMiles <= (user.radius || 5);
+      }
 
       // ⚡ Lightning logic
       if (lightning === true) {
@@ -117,9 +118,7 @@ export const sendDealAlerts = functions.firestore
       }
 
       // 🔥 Normal deals
-      if (withinRadius) {
-        tokens.push(user.pushToken);
-      }
+      if (withinRadius) tokens.push(user.pushToken);
     }
 
     if (tokens.length === 0) {
