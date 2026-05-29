@@ -13,7 +13,6 @@ import { db } from "../firebaseConfig";
 import DealCard from "../components/DealCard";
 import { useTheme } from "../context/ThemeContext";
 import { useUser } from "../context/UserContext";
-import { isStoreAccessible } from "../context/UserContext";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -40,6 +39,7 @@ export type Deal = {
   asin?: string | null;
   publishedAt?: any;
   createdAt?: any;
+  expired?: boolean;
   resaleIntel?: {
     profitPotential: number;
     roiPercent: number;
@@ -51,7 +51,13 @@ export type Deal = {
 
 const ACCENT = "#FF7A00";
 const QUERY_LIMIT = 500;
-const FREE_DEAL_LIMIT = 5;
+
+const PREMIUM_STORES = [
+  "amazon", "bestbuy", "costco", "samsclub", "lowes",
+  "apple", "nordstrom", "bloomingdales", "neimanmarcus",
+  "saks", "macys", "sephora", "nike", "footlocker",
+  "gamestop", "tjmaxx", "marshalls", "ross", "burlington",
+];
 
 const FILTERS = ["all", "hot", "rare", "lightning", "code"] as const;
 type FilterType = typeof FILTERS[number];
@@ -73,7 +79,7 @@ export default function ExploreScreen() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
   const [sort, setSort] = useState<SortKey>("newest");
-  const [gridMode, setGridMode] = useState(true); // default: 2-column
+  const [gridMode, setGridMode] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   const listRef = useRef<FlatList>(null);
@@ -116,6 +122,7 @@ export default function ExploreScreen() {
               asin: data.asin ?? null,
               publishedAt: data.publishedAt ?? null,
               createdAt: data.createdAt ?? null,
+              expired: data.expired ?? false,
               resaleIntel: data.resaleIntel ?? null,
             };
           });
@@ -128,7 +135,7 @@ export default function ExploreScreen() {
     return () => unsub();
   }, []);
 
-  /* ── Filter + Sort + Gate ── */
+  /* ── Filter + Sort ── */
   const visibleDeals = useMemo(() => {
     let list = rawDeals;
 
@@ -144,22 +151,26 @@ export default function ExploreScreen() {
     else if (filter === "lightning") list = list.filter((d) => d.lightning);
     else if (filter === "code") list = list.filter((d) => !!(d.couponCode || d.promoCode));
 
-    // Sort
     list = [...list].sort((a, b) => {
       if (sort === "discount") return (b.discountPercent ?? 0) - (a.discountPercent ?? 0);
       if (sort === "price-low") return (a.price ?? 0) - (b.price ?? 0);
       if (sort === "price-high") return (b.price ?? 0) - (a.price ?? 0);
-      // newest
       const ta = a.createdAt?.seconds ?? 0;
       const tb = b.createdAt?.seconds ?? 0;
       return tb - ta;
     });
 
-    if (!isPremium) list = list.slice(0, FREE_DEAL_LIMIT);
     return list;
-  }, [rawDeals, search, filter, sort, isPremium]);
+  }, [rawDeals, search, filter, sort]);
 
-  /* ── Back to top visibility ── */
+  const lockedCount = useMemo(() => {
+    if (isPremium) return 0;
+    return rawDeals.filter(d =>
+      PREMIUM_STORES.includes((d.storeKey || "").toLowerCase())
+    ).length;
+  }, [rawDeals, isPremium]);
+
+  /* ── Back to top ── */
   const handleScroll = (e: any) => {
     const y = e.nativeEvent.contentOffset.y;
     const shouldShow = y > 400;
@@ -179,21 +190,29 @@ export default function ExploreScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    // listener will re-fire on next write; force UI refresh
     setTimeout(() => setRefreshing(false), 800);
   };
 
   /* ── Render item ── */
-  const renderItem = ({ item }: { item: Deal }) => (
-    <DealCard
-      deal={item}
-      darkMode={dark}
-      compact={gridMode}
-      onPress={() => navigation.navigate("DealDetail", { deal: item })}
-    />
-  );
+  const renderItem = ({ item }: { item: Deal }) => {
+    const isLocked = !isPremium && PREMIUM_STORES.includes((item.storeKey || "").toLowerCase());
+    return (
+      <DealCard
+        deal={item}
+        darkMode={dark}
+        compact={gridMode}
+        blurred={isLocked}
+        onPress={() => {
+          if (isLocked) {
+            navigation.navigate("Upgrade");
+            return;
+          }
+          navigation.navigate("DealDetail", { deal: item });
+        }}
+      />
+    );
+  };
 
-  /* ── Loading ── */
   if (loading) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
@@ -209,16 +228,11 @@ export default function ExploreScreen() {
       <View style={[styles.header, { backgroundColor: colors.background }]}>
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: dark ? "#fff" : "#111" }]}>Explore Deals</Text>
-          {/* Grid/List toggle */}
           <TouchableOpacity
             onPress={() => setGridMode((v) => !v)}
             style={[styles.layoutBtn, { backgroundColor: dark ? "#1a1a1a" : "#eee" }]}
           >
-            <Ionicons
-              name={gridMode ? "list-outline" : "grid-outline"}
-              size={18}
-              color={ACCENT}
-            />
+            <Ionicons name={gridMode ? "list-outline" : "grid-outline"} size={18} color={ACCENT} />
           </TouchableOpacity>
         </View>
 
@@ -239,6 +253,20 @@ export default function ExploreScreen() {
           )}
         </View>
 
+        {/* Premium banner */}
+        {!isPremium && lockedCount > 0 && (
+          <TouchableOpacity
+            style={styles.premiumBanner}
+            onPress={() => navigation.navigate("Upgrade")}
+          >
+            <Ionicons name="lock-closed-outline" size={13} color={ACCENT} />
+            <Text style={styles.premiumBannerText}>
+              🔒 {lockedCount} premium deals locked — Tap to unlock
+            </Text>
+            <Ionicons name="chevron-forward" size={13} color="#888" />
+          </TouchableOpacity>
+        )}
+
         {/* Filter chips */}
         <FlatList
           horizontal
@@ -251,7 +279,6 @@ export default function ExploreScreen() {
               onPress={() => setFilter(f)}
               style={[
                 styles.chip,
-                filter === f && { backgroundColor: ACCENT },
                 { backgroundColor: filter === f ? ACCENT : dark ? "#1a1a1a" : "#eee" },
               ]}
             >
@@ -276,10 +303,7 @@ export default function ExploreScreen() {
           renderItem={({ item: s }) => (
             <TouchableOpacity
               onPress={() => setSort(s.key)}
-              style={[
-                styles.sortChip,
-                sort === s.key && { borderColor: ACCENT },
-              ]}
+              style={[styles.sortChip, sort === s.key && { borderColor: ACCENT }]}
             >
               <Text style={[styles.sortText, { color: sort === s.key ? ACCENT : dark ? "#888" : "#666" }]}>
                 {s.label}
@@ -290,7 +314,7 @@ export default function ExploreScreen() {
 
         {/* Results count */}
         <Text style={styles.resultsCount}>
-          {visibleDeals.length} deals {!isPremium ? `(free) · Upgrade for ${rawDeals.length}+` : ""}
+          {visibleDeals.length} deals{!isPremium ? " · Upgrade to unlock all stores" : ""}
         </Text>
       </View>
 
@@ -298,13 +322,10 @@ export default function ExploreScreen() {
       <FlatList
         ref={listRef}
         data={visibleDeals}
-        key={gridMode ? "grid" : "list"} // force re-render on layout change
+        key={gridMode ? "grid" : "list"}
         keyExtractor={(item) => item.id}
         numColumns={gridMode ? 2 : 1}
-        contentContainerStyle={[
-          styles.list,
-          gridMode && styles.gridPadding,
-        ]}
+        contentContainerStyle={[styles.list, gridMode && styles.gridPadding]}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         refreshControl={
@@ -318,16 +339,16 @@ export default function ExploreScreen() {
           </View>
         }
         ListFooterComponent={
-          !isPremium && rawDeals.length > FREE_DEAL_LIMIT ? (
+          !isPremium ? (
             <TouchableOpacity
               style={styles.unlockBox}
               onPress={() => navigation.navigate("Upgrade")}
             >
               <Ionicons name="lock-closed-outline" size={18} color="#fff" />
               <View style={{ flex: 1 }}>
-                <Text style={styles.unlockTitle}>Elite Frequencies Locked</Text>
+                <Text style={styles.unlockTitle}>Premium Stores Locked</Text>
                 <Text style={styles.unlockSub}>
-                  {rawDeals.length - FREE_DEAL_LIMIT} more deals · Go Premium
+                  Amazon, Best Buy, Costco, Apple Store + more · Go Premium
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="#888" />
@@ -339,13 +360,7 @@ export default function ExploreScreen() {
 
       {/* ── BACK TO TOP ── */}
       <Animated.View
-        style={[
-          styles.backToTop,
-          {
-            opacity: backToTopAnim,
-            transform: [{ scale: backToTopAnim }],
-          },
-        ]}
+        style={[styles.backToTop, { opacity: backToTopAnim, transform: [{ scale: backToTopAnim }] }]}
         pointerEvents={showBackToTop ? "auto" : "none"}
       >
         <TouchableOpacity onPress={scrollToTop} style={styles.backToTopBtn}>
@@ -362,48 +377,32 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-
   header: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 },
-
-  titleRow: {
-    flexDirection: "row", justifyContent: "space-between",
-    alignItems: "center", marginBottom: 10,
-  },
+  titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   title: { fontSize: 24, fontWeight: "900" },
-  layoutBtn: {
-    padding: 8, borderRadius: 10,
-  },
-
-  searchBox: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 12, height: 40, borderRadius: 10, marginBottom: 10,
-  },
+  layoutBtn: { padding: 8, borderRadius: 10 },
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, height: 40, borderRadius: 10, marginBottom: 10 },
   searchInput: { flex: 1, fontSize: 14 },
-
+  premiumBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "rgba(255,122,0,0.08)",
+    borderWidth: 1, borderColor: "rgba(255,122,0,0.25)",
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+    marginBottom: 10,
+  },
+  premiumBannerText: { flex: 1, color: ACCENT, fontSize: 12, fontWeight: "700" },
   filterList: { marginBottom: 8 },
-  chip: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 999, marginRight: 6,
-  },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, marginRight: 6 },
   chipText: { fontSize: 11, fontWeight: "800" },
-
   sortList: { marginBottom: 6 },
-  sortChip: {
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 6, borderWidth: 1,
-    borderColor: "#333", marginRight: 6,
-  },
+  sortChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: "#333", marginRight: 6 },
   sortText: { fontSize: 11, fontWeight: "700" },
-
   resultsCount: { fontSize: 10, color: "#666", marginBottom: 4, fontWeight: "600" },
-
   list: { paddingHorizontal: 8, paddingBottom: 40 },
   gridPadding: { paddingHorizontal: 4 },
-
   empty: { alignItems: "center", paddingVertical: 60, gap: 8 },
   emptyTitle: { color: "#555", fontWeight: "900", fontSize: 16, letterSpacing: 1 },
   emptySub: { color: "#666", fontSize: 13 },
-
   unlockBox: {
     backgroundColor: "#111", borderWidth: 1, borderColor: ACCENT + "33",
     margin: 12, padding: 16, borderRadius: 14,
@@ -411,16 +410,9 @@ const styles = StyleSheet.create({
   },
   unlockTitle: { color: "#fff", fontWeight: "900", fontSize: 14 },
   unlockSub: { color: "#888", fontSize: 12, marginTop: 2 },
-
-  backToTop: {
-    position: "absolute", right: 16, bottom: 30,
-  },
+  backToTop: { position: "absolute", right: 16, bottom: 30 },
   backToTopBtn: {
-    backgroundColor: ACCENT, padding: 12,
-    borderRadius: 999,
-    shadowColor: ACCENT,
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 8,
+    backgroundColor: ACCENT, padding: 12, borderRadius: 999,
+    shadowColor: ACCENT, shadowOpacity: 0.5, shadowRadius: 10, elevation: 8,
   },
 });
