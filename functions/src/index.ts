@@ -114,8 +114,9 @@ export const dailyQualityPurge = onSchedule(
   { schedule: "every 24 hours", region: "us-central1", timeZone: "America/Chicago" },
   async () => {
     let totalPurged = 0;
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    // eBay — only keep 50%+ off
+    // eBay — only keep 30%+ off
     const ebaySnap = await db.collection("deals_live")
       .where("storeKey", "==", "ebay")
       .limit(500).get();
@@ -145,17 +146,17 @@ export const dailyQualityPurge = onSchedule(
     const noImageSnap = await db.collection("deals_live")
       .where("storeKey", "in", ["walmart", "target", "bestbuy", "homedepot"])
       .limit(500).get();
-  const noImageBad = noImageSnap.docs.filter(d => {
-    const data = d.data();
-    return !data.imageUrl && !data.image;
-});
-if (noImageBad.length > 0) {
-  const batch = db.batch();
-  noImageBad.forEach(d => batch.delete(d.ref));
-  await batch.commit();
-  totalPurged += noImageBad.length;
-  console.log(`[purge] No-image retail deals removed: ${noImageBad.length}`);
-}
+    const noImageBad = noImageSnap.docs.filter(d => {
+      const data = d.data();
+      return !data.imageUrl && !data.image;
+    });
+    if (noImageBad.length > 0) {
+      const batch = db.batch();
+      noImageBad.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      totalPurged += noImageBad.length;
+      console.log(`[purge] No-image retail deals removed: ${noImageBad.length}`);
+    }
 
     // Unknown store — always remove
     const unknownSnap = await db.collection("deals_live")
@@ -167,6 +168,32 @@ if (noImageBad.length > 0) {
       await batch.commit();
       totalPurged += unknownSnap.size;
       console.log(`[purge] Unknown removed: ${unknownSnap.size}`);
+    }
+
+    // Online deals (Amazon, eBay) — delete after 7 days
+    const onlineSnap = await db.collection("deals_live")
+      .where("storeKey", "in", ["amazon", "ebay", "newegg", "lenovo"])
+      .where("createdAt", "<", sevenDaysAgo)
+      .limit(500).get();
+    if (onlineSnap.size > 0) {
+      const batch = db.batch();
+      onlineSnap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      totalPurged += onlineSnap.size;
+      console.log(`[purge] Online deals expired: ${onlineSnap.size}`);
+    }
+
+    // In-store deals (Walmart, Target, Home Depot) — mark expired after 7 days
+    const inStoreSnap = await db.collection("deals_live")
+      .where("storeKey", "in", ["walmart", "target", "homedepot"])
+      .where("createdAt", "<", sevenDaysAgo)
+      .limit(500).get();
+    const staleDocs = inStoreSnap.docs.filter(d => !d.data().expired);
+    if (staleDocs.length > 0) {
+      const batch = db.batch();
+      staleDocs.forEach(d => batch.update(d.ref, { expired: true }));
+      await batch.commit();
+      console.log(`[purge] In-store deals marked expired: ${staleDocs.length}`);
     }
 
     console.log(`[dailyQualityPurge] Total purged: ${totalPurged}`);

@@ -34,6 +34,7 @@ export type Deal = {
   createdAt?: any;
   couponCode?: string | null;
   promoCode?: string | null;
+  expired?: boolean;
   resaleIntel?: {
     profitPotential: number;
     roiPercent: number;
@@ -47,7 +48,7 @@ type Props = {
   onSaveToggle?: () => void;
   darkMode?: boolean;
   blurred?: boolean;
-  compact?: boolean; // ← grid mode
+  compact?: boolean;
 };
 
 /* ─── Helpers ────────────────────────────────────────────────── */
@@ -94,10 +95,21 @@ export default function DealCard({
     : deal.createdAt?.seconds ? deal.createdAt.seconds * 1000 : Date.now();
   const isJustIn = Date.now() - publishedMs < 1_800_000;
   const isMajorSteal = (deal.discountPercent ?? 0) > 40;
+  const isExpired = !!deal.expired;
 
   const displayScore = deal.dealScore ?? 70;
   const scoreColor = getScoreColor(displayScore);
-  function isValidDealUrl(url: string | null | undefined): boolean { if (!url) return false; try { const u = new URL(url); if (u.pathname.includes("/c//")) return false; if (u.hostname.includes("slickdeals.net")) return false; return true; } catch { return false; } }
+
+  function isValidDealUrl(url: string | null | undefined): boolean {
+    if (!url) return false;
+    try {
+      const u = new URL(url);
+      if (u.pathname.includes("/c//")) return false;
+      if (u.hostname.includes("slickdeals.net")) return false;
+      return true;
+    } catch { return false; }
+  }
+
   const dealUrl = [deal.affiliateUrl, deal.merchantUrl, deal.url].find(isValidDealUrl) || null;
   const couponCode = deal.couponCode || deal.promoCode || null;
   const hasFlipIntel = deal.resaleIntel && (deal.resaleIntel.profitPotential ?? 0) > 0;
@@ -127,7 +139,7 @@ export default function DealCard({
   };
 
   const handleOpenDeal = () => {
-    if (blurred || !dealUrl) return;
+    if (blurred || !dealUrl || isExpired) return;
     Linking.openURL(dealUrl);
   };
 
@@ -135,15 +147,16 @@ export default function DealCard({
   if (compact) {
     return (
       <Pressable
-        onPress={blurred ? () => {} : onPress}
+        onPress={blurred || isExpired ? () => {} : onPress}
         style={[
           cs.card,
           deal.rare && cs.rareCard,
+          isExpired && cs.expiredCard,
           { backgroundColor: darkMode ? "#0f0f0f" : "#fff" },
         ]}
       >
         {/* Discount badge */}
-        {(deal.discountPercent ?? 0) > 0 && (
+        {(deal.discountPercent ?? 0) > 0 && !isExpired && (
           <View style={cs.discountTag}>
             <Text style={cs.discountTagText}>-{deal.discountPercent}%</Text>
           </View>
@@ -154,7 +167,7 @@ export default function DealCard({
           {displayImage && !imageError ? (
             <Image
               source={{ uri: displayImage }}
-              style={[cs.image, blurred && cs.blurred]}
+              style={[cs.image, (blurred || isExpired) && cs.blurred]}
               resizeMode="contain"
               onError={() => setImageError(true)}
             />
@@ -178,9 +191,10 @@ export default function DealCard({
 
           {/* Badge strip */}
           <View style={cs.badgeRow}>
-            {isJustIn && <View style={[cs.badge, { backgroundColor: "#2563eb" }]}><Text style={cs.badgeTxt}>JUST IN</Text></View>}
-            {deal.rare && <View style={[cs.badge, { backgroundColor: "#9333ea" }]}><Text style={cs.badgeTxt}>RARE</Text></View>}
-            {isMajorSteal && !isJustIn && !deal.rare && <View style={[cs.badge, { backgroundColor: "#ea580c" }]}><Text style={cs.badgeTxt}>HOT</Text></View>}
+            {isExpired && <View style={[cs.badge, { backgroundColor: "#555" }]}><Text style={cs.badgeTxt}>EXPIRED</Text></View>}
+            {!isExpired && isJustIn && <View style={[cs.badge, { backgroundColor: "#2563eb" }]}><Text style={cs.badgeTxt}>JUST IN</Text></View>}
+            {!isExpired && deal.rare && <View style={[cs.badge, { backgroundColor: "#9333ea" }]}><Text style={cs.badgeTxt}>RARE</Text></View>}
+            {!isExpired && isMajorSteal && !isJustIn && !deal.rare && <View style={[cs.badge, { backgroundColor: "#ea580c" }]}><Text style={cs.badgeTxt}>HOT</Text></View>}
           </View>
         </View>
 
@@ -189,12 +203,12 @@ export default function DealCard({
           <Text style={[cs.store, { color: darkMode ? "#888" : "#999" }]}>
             {(deal.store || "").toUpperCase()}
           </Text>
-          <Text style={[cs.title, { color: darkMode ? "#f4f4f5" : "#111" }]} numberOfLines={2}>
+          <Text style={[cs.title, { color: isExpired ? "#555" : darkMode ? "#f4f4f5" : "#111" }]} numberOfLines={2}>
             {deal.title}
           </Text>
 
           <View style={cs.priceRow}>
-            <Text style={cs.price}>
+            <Text style={[cs.price, isExpired && { color: "#555" }]}>
               {deal.price != null ? `$${Number(deal.price).toFixed(2)}` : "—"}
             </Text>
             {deal.originalPrice != null && deal.price != null && deal.originalPrice > deal.price && (
@@ -202,8 +216,12 @@ export default function DealCard({
             )}
           </View>
 
-          {/* Get Code / Grab Deal */}
-          {couponCode && !blurred ? (
+          {isExpired ? (
+            <View style={cs.expiredBtn}>
+              <Ionicons name="time-outline" size={11} color="#666" />
+              <Text style={cs.expiredBtnText}>DEAL EXPIRED</Text>
+            </View>
+          ) : couponCode && !blurred ? (
             <TouchableOpacity style={cs.codeBtn} onPress={handleCopyCode}>
               <Ionicons name={copied ? "checkmark" : "pricetag-outline"} size={11} color={copied ? "#22c55e" : "#000"} />
               <Text style={cs.codeBtnText}>{copied ? "Copied!" : "Get Code"}</Text>
@@ -227,10 +245,11 @@ export default function DealCard({
   // ── FULL / LIST MODE ─────────────────────────────────────────
   return (
     <Pressable
-      onPress={blurred ? () => {} : onPress}
+      onPress={blurred || isExpired ? () => {} : onPress}
       style={[
         fs.card,
         deal.rare && fs.rareCard,
+        isExpired && fs.expiredCard,
         { backgroundColor: darkMode ? "#09090b" : "#fff" },
       ]}
     >
@@ -239,7 +258,7 @@ export default function DealCard({
         {displayImage && !imageError ? (
           <Image
             source={{ uri: displayImage }}
-            style={[fs.image, blurred && fs.blurred]}
+            style={[fs.image, (blurred || isExpired) && fs.blurred]}
             resizeMode="contain"
             onError={() => setImageError(true)}
           />
@@ -251,18 +270,24 @@ export default function DealCard({
         )}
 
         <View style={fs.badgeStack}>
-          {isJustIn && (
+          {isExpired && (
+            <View style={[fs.badge, { backgroundColor: "#555" }]}>
+              <Ionicons name="time-outline" size={8} color="#fff" />
+              <Text style={fs.badgeText}>EXPIRED</Text>
+            </View>
+          )}
+          {!isExpired && isJustIn && (
             <View style={[fs.badge, { backgroundColor: "#2563eb" }]}>
               <Ionicons name="flash" size={8} color="#fff" />
               <Text style={fs.badgeText}>JUST IN</Text>
             </View>
           )}
-          {isMajorSteal && !isJustIn && (
+          {!isExpired && isMajorSteal && !isJustIn && (
             <View style={[fs.badge, { backgroundColor: "#ea580c" }]}>
               <Text style={fs.badgeText}>HOT DROP</Text>
             </View>
           )}
-          {deal.rare && (
+          {!isExpired && deal.rare && (
             <View style={[fs.badge, { backgroundColor: "#9333ea" }]}>
               <Text style={fs.badgeText}>RARE FIND</Text>
             </View>
@@ -296,11 +321,11 @@ export default function DealCard({
           </View>
         </View>
 
-        <Text style={[fs.title, { color: darkMode ? "#f4f4f5" : "#111" }]} numberOfLines={2}>
+        <Text style={[fs.title, { color: isExpired ? "#555" : darkMode ? "#f4f4f5" : "#111" }]} numberOfLines={2}>
           {(deal.title || "").toUpperCase()}
         </Text>
 
-        {hasFlipIntel && !blurred && (
+        {hasFlipIntel && !blurred && !isExpired && (
           <View style={fs.flipStrip}>
             <Ionicons name="trending-up-outline" size={11} color={ACCENT} />
             <Text style={fs.flipText}>
@@ -312,16 +337,16 @@ export default function DealCard({
         <View style={fs.priceRow}>
           <View>
             <View style={fs.priceInner}>
-              <Text style={[fs.price, { color: darkMode ? "#fff" : "#111" }]}>
+              <Text style={[fs.price, { color: isExpired ? "#555" : darkMode ? "#fff" : "#111" }]}>
                 {deal.price != null ? `$${Number(deal.price).toFixed(2)}` : "See deal"}
               </Text>
-              {(deal.discountPercent ?? 0) > 0 && (
+              {(deal.discountPercent ?? 0) > 0 && !isExpired && (
                 <View style={fs.discountBadge}>
                   <Text style={fs.discountText}>-{deal.discountPercent}%</Text>
                 </View>
               )}
             </View>
-            {deal.originalPrice != null && deal.price != null && deal.originalPrice > deal.price && (
+            {deal.originalPrice != null && deal.price != null && deal.originalPrice > deal.price && !isExpired && (
               <Text style={fs.originalPrice}>
                 EST. VALUE: <Text style={fs.strikethrough}>${Number(deal.originalPrice).toFixed(2)}</Text>
               </Text>
@@ -329,21 +354,30 @@ export default function DealCard({
           </View>
 
           <View style={{ gap: 6, alignItems: "flex-end" }}>
-            {couponCode && !blurred && (
-              <TouchableOpacity style={fs.codeBtn} onPress={handleCopyCode}>
-                <Ionicons name={copied ? "checkmark" : "pricetag-outline"} size={12} color={copied ? "#22c55e" : "#000"} />
-                <Text style={fs.codeBtnText}>{copied ? "Copied!" : "Get Code"}</Text>
-              </TouchableOpacity>
+            {isExpired ? (
+              <View style={fs.expiredBtn}>
+                <Ionicons name="time-outline" size={13} color="#666" />
+                <Text style={fs.expiredBtnText}>DEAL EXPIRED</Text>
+              </View>
+            ) : (
+              <>
+                {couponCode && !blurred && (
+                  <TouchableOpacity style={fs.codeBtn} onPress={handleCopyCode}>
+                    <Ionicons name={copied ? "checkmark" : "pricetag-outline"} size={12} color={copied ? "#22c55e" : "#000"} />
+                    <Text style={fs.codeBtnText}>{copied ? "Copied!" : "Get Code"}</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[fs.grabBtn, blurred && fs.grabBtnLocked]}
+                  onPress={handleOpenDeal}
+                >
+                  {blurred
+                    ? <><Ionicons name="lock-closed-outline" size={13} color="#888" /><Text style={[fs.grabText, { color: "#888" }]}>PREMIUM</Text></>
+                    : <><Text style={fs.grabText}>GRAB DEAL</Text><Ionicons name="arrow-forward" size={13} color="#000" /></>
+                  }
+                </TouchableOpacity>
+              </>
             )}
-            <TouchableOpacity
-              style={[fs.grabBtn, blurred && fs.grabBtnLocked]}
-              onPress={handleOpenDeal}
-            >
-              {blurred
-                ? <><Ionicons name="lock-closed-outline" size={13} color="#888" /><Text style={[fs.grabText, { color: "#888" }]}>PREMIUM</Text></>
-                : <><Text style={fs.grabText}>GRAB DEAL</Text><Ionicons name="arrow-forward" size={13} color="#000" /></>
-              }
-            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -359,6 +393,7 @@ const cs = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.06)", flex: 1, margin: 4,
   },
   rareCard: { borderColor: "rgba(168,85,247,0.4)" },
+  expiredCard: { borderColor: "rgba(255,255,255,0.03)", opacity: 0.7 },
   discountTag: {
     position: "absolute", top: 6, left: 6, zIndex: 10,
     backgroundColor: "#ca8a04", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3,
@@ -390,6 +425,11 @@ const cs = StyleSheet.create({
   priceRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 7 },
   price: { fontSize: 16, fontWeight: "900", color: ACCENT },
   original: { fontSize: 9, color: "#666", textDecorationLine: "line-through" },
+  expiredBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 4, paddingVertical: 7, borderRadius: 6, backgroundColor: "#1a1a1a",
+  },
+  expiredBtnText: { color: "#666", fontWeight: "900", fontSize: 10 },
   codeBtn: {
     backgroundColor: "#06b6d4", flexDirection: "row", alignItems: "center",
     justifyContent: "center", gap: 4, paddingVertical: 7, borderRadius: 6,
@@ -411,6 +451,7 @@ const fs = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.05)",
   },
   rareCard: { borderColor: "rgba(168,85,247,0.4)" },
+  expiredCard: { borderColor: "rgba(255,255,255,0.03)", opacity: 0.7 },
   imageWrap: {
     width: "100%", aspectRatio: 1.4, backgroundColor: "#fff",
     position: "relative", justifyContent: "center", alignItems: "center",
@@ -456,6 +497,12 @@ const fs = StyleSheet.create({
   discountText: { fontSize: 9, fontWeight: "900", color: "#22c55e" },
   originalPrice: { fontSize: 9, color: "#71717a", fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
   strikethrough: { textDecorationLine: "line-through" },
+  expiredBtn: {
+    flexDirection: "row", alignItems: "center",
+    gap: 4, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 8,
+    backgroundColor: "#1a1a1a",
+  },
+  expiredBtnText: { color: "#666", fontWeight: "900", fontSize: 10, letterSpacing: 0.5 },
   codeBtn: {
     backgroundColor: "#06b6d4", flexDirection: "row", alignItems: "center",
     gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 7,
