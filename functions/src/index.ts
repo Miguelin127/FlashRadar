@@ -119,7 +119,7 @@ export const dailyQualityPurge = onSchedule(
     const ebaySnap = await db.collection("deals_live")
       .where("storeKey", "==", "ebay")
       .limit(500).get();
-    const ebayBad = ebaySnap.docs.filter(d => (d.data().discountPercent ?? 0) < 50);
+    const ebayBad = ebaySnap.docs.filter(d => (d.data().discountPercent ?? 0) < 30);
     if (ebayBad.length > 0) {
       const batch = db.batch();
       ebayBad.forEach(d => batch.delete(d.ref));

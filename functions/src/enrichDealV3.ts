@@ -86,8 +86,16 @@ export async function runEnrichment(dealId: string) {
     return;
   }
 
-  /* handle ebay first */
+  /* handle ebay first — block under 30% discount */
   if (domain.includes("ebay.com")) {
+    const discountPercent = deal.discountPercent ?? 0;
+    if (discountPercent < 30) {
+      await dealRef.update({
+        enrichmentStatus: "flagged",
+        blockedReason: "ebay_low_discount"
+      });
+      return;
+    }
     await dealRef.set({
       store: "ebay.com",
       storeKey: "ebay",
