@@ -50,7 +50,7 @@ export type Deal = {
 /* ─── Constants ──────────────────────────────────────────────── */
 
 const ACCENT = "#FF7A00";
-const QUERY_LIMIT = 1000;
+const QUERY_LIMIT = 500;
 
 const PREMIUM_STORES = [
   "amazon", "bestbuy", "costco", "samsclub", "lowes",
@@ -69,6 +69,38 @@ const SORT_OPTIONS = [
   { key: "price-high", label: "Price ↓" },
 ] as const;
 type SortKey = typeof SORT_OPTIONS[number]["key"];
+
+/* ─── Helpers ────────────────────────────────────────────────── */
+
+function mapDoc(d: any): Deal {
+  const data = d.data() as any;
+  return {
+    id: d.id,
+    title: data.title ?? "Deal",
+    store: data.store ?? data.storeKey ?? "Retailer",
+    storeKey: data.storeKey ?? null,
+    price: Number(data.price ?? 0),
+    originalPrice: data.originalPrice ?? null,
+    discountPercent: data.discountPercent ?? null,
+    url: data.url ?? null,
+    merchantUrl: data.merchantUrl ?? null,
+    affiliateUrl: data.affiliateUrl ?? null,
+    image: data.imageUrl ?? data.image ?? null,
+    imageUrl: data.imageUrl ?? data.image ?? null,
+    hot: !!data.hot,
+    rare: !!data.rare,
+    lightning: !!data.lightning,
+    live: data.live ?? true,
+    couponCode: data.couponCode ?? data.promoCode ?? null,
+    promoCode: data.promoCode ?? null,
+    dealScore: data.dealScore ?? null,
+    asin: data.asin ?? null,
+    publishedAt: data.publishedAt ?? null,
+    createdAt: data.createdAt ?? null,
+    expired: data.expired ?? false,
+    resaleIntel: data.resaleIntel ?? null,
+  };
+}
 
 /* ─── Screen ─────────────────────────────────────────────────── */
 
@@ -89,44 +121,27 @@ export default function ExploreScreen() {
   const navigation = useNavigation<any>();
   const { isPremium } = useUser();
 
-  /* ── Load deals ── */
+  /* ── Load deals — force server fetch first, then live updates ── */
   useEffect(() => {
+    // Force server fetch to bypass Firestore cache
+    db.collection("deals_live")
+      .orderBy("createdAt", "desc")
+      .limit(QUERY_LIMIT)
+      .get({ source: "server" })
+      .then((snap) => {
+        setRawDeals(snap.docs.map(mapDoc));
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+
+    // Real-time listener for new deals
     const unsub = db
       .collection("deals_live")
       .orderBy("createdAt", "desc")
       .limit(QUERY_LIMIT)
       .onSnapshot(
         (snap) => {
-          const rows: Deal[] = snap.docs.map((d) => {
-            const data = d.data() as any;
-            return {
-              id: d.id,
-              title: data.title ?? "Deal",
-              store: data.store ?? data.storeKey ?? "Retailer",
-              storeKey: data.storeKey ?? null,
-              price: Number(data.price ?? 0),
-              originalPrice: data.originalPrice ?? null,
-              discountPercent: data.discountPercent ?? null,
-              url: data.url ?? null,
-              merchantUrl: data.merchantUrl ?? null,
-              affiliateUrl: data.affiliateUrl ?? null,
-              image: data.imageUrl ?? data.image ?? null,
-              imageUrl: data.imageUrl ?? data.image ?? null,
-              hot: !!data.hot,
-              rare: !!data.rare,
-              lightning: !!data.lightning,
-              live: data.live ?? true,
-              couponCode: data.couponCode ?? data.promoCode ?? null,
-              promoCode: data.promoCode ?? null,
-              dealScore: data.dealScore ?? null,
-              asin: data.asin ?? null,
-              publishedAt: data.publishedAt ?? null,
-              createdAt: data.createdAt ?? null,
-              expired: data.expired ?? false,
-              resaleIntel: data.resaleIntel ?? null,
-            };
-          });
-          setRawDeals(rows);
+          setRawDeals(snap.docs.map(mapDoc));
           setLoading(false);
           setRefreshing(false);
         },
@@ -190,7 +205,15 @@ export default function ExploreScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 800);
+    db.collection("deals_live")
+      .orderBy("createdAt", "desc")
+      .limit(QUERY_LIMIT)
+      .get({ source: "server" })
+      .then((snap) => {
+        setRawDeals(snap.docs.map(mapDoc));
+        setRefreshing(false);
+      })
+      .catch(() => setRefreshing(false));
   };
 
   /* ── Render item ── */
