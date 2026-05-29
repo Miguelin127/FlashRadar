@@ -152,6 +152,18 @@ export const dailyQualityPurge = onSchedule(
       console.log(`[purge] eBay low discount removed: ${ebayBad.length}`);
     }
 
+    // Walmart — only keep 25%+ off
+    const walmartSnap = await db.collection("deals_live")
+      .where("storeKey", "==", "walmart").get();
+    const walmartBad = walmartSnap.docs.filter(d => (d.data().discountPercent ?? 0) < 25);
+    if (walmartBad.length > 0) {
+      const batch = db.batch();
+      walmartBad.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      totalPurged += walmartBad.length;
+      console.log(`[purge] Walmart low discount removed: ${walmartBad.length}`);
+    }
+    
     // Nike — only keep 35%+ off
     const nikeSnap = await db.collection("deals_live")
       .where("storeKey", "==", "nike").get();

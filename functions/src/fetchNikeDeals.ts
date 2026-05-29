@@ -2,10 +2,6 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import axios from "axios";
 import { db } from "./firebaseAdmin";
 
-/**
- * Nike public product feed (no auth)
- * Pulls sale/discounted items
- */
 export const fetchNikeDeals = onSchedule(
   {
     schedule: "every 6 hours",
@@ -13,48 +9,61 @@ export const fetchNikeDeals = onSchedule(
   },
   async () => {
     const url =
-      "https://api.nike.com/cic/browse/v2?queryid=products&anonymousId=flashradar&country=US&language=en&count=24&filter=marketplace(US)&filter=productInfo.merchPrice.discounted(true)";
+      "https://api.nike.com/cic/browse/v2?queryid=products&anonymousId=flashradar&country=US&language=en&count=48&filter=marketplace(US)&filter=productInfo.merchPrice.discounted(true)";
 
     const res = await axios.get(url, {
-      headers: {
-        "User-Agent": "FlashRadar/1.0",
-      },
+      headers: { "User-Agent": "FlashRader/1.0" },
     });
 
-    const products = res.data?.data?.products || [];
-    const batch = db.batch();
+    const products = res.data?.data?.products?.products ?? [];
+    let added = 0;
+    let skipped = 0;
 
-    products.forEach((p: any) => {
-      const price = p.price?.currentPrice;
-      if (!price) return;
+    for (const p of products) {
+      const currentPrice = p.price?.currentPrice;
+      const fullPrice = p.price?.fullPrice;
+      if (!currentPrice || !fullPrice) continue;
 
-      const id = `NIKE_${p.id}`;
-      const ref = db.collection("deals_online").doc(id);
+      const discountPercent = Math.round(((fullPrice - currentPrice) / fullPrice) * 100);
+      if (discountPercent < 35) { skipped++; continue; }
 
-      batch.set(
-        ref,
-        {
-          id,
-          title: p.title || "Nike Item",
-          price,
-          store: "Nike",
-          image: p.images?.portraitURL || null,
-          url: `https://www.nike.com/t/${p.slug}`,
-          source: "nike",
-          timestamp: Date.now(),
-        },
-        { merge: true }
-      );
-    });
+      const imageUrl = p.images?.portraitURL || p.images?.squarishURL || null;
+      if (!imageUrl) { skipped++; continue; }
 
-    await batch.commit();
-    console.log("👟 Nike deals saved:", products.length);
+      // Use product ID as key — prevents duplicates on re-ingest
+      const id = `nike_${p.id}`;
+      const ref = db.collection("deals_live").doc(id);
+      const existing = await ref.get();
+
+      // Skip if exists with same price
+      if (existing.exists && existing.data()?.price === currentPrice) {
+        skipped++;
+        continue;
+      }
+
+      await ref.set({
+        id,
+        title: p.title || "Nike Item",
+        price: currentPrice,
+        originalPrice: fullPrice,
+        discountPercent,
+        store: "Nike",
+        storeKey: "nike",
+        imageUrl,
+        url: `https://www.nike.com/t/${p.slug}`,
+        source: "nike",
+        hot: discountPercent >= 40,
+        rare: discountPercent >= 50,
+        live: true,
+        createdAt: existing.exists
+          ? existing.data()?.createdAt
+          : new Date(),
+        updatedAt: new Date(),
+      }, { merge: true });
+
+      added++;
+    }
+
+    console.log(`👟 Nike: added=${added}, skipped=${skipped}`);
   }
 );
-//
-//  fetchNikeDeals.ts
-//  
-//
-//  Created by Miguel Cz on 12/16/25.
-//
-
