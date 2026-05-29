@@ -2,6 +2,7 @@
 import * as Notifications from 'expo-notifications';
 import * as Location from "expo-location";
 import Purchases from 'react-native-purchases';
+import firebase from "firebase/compat/app";
 
 import React, { useEffect } from "react";
 import { NavigationContainer, DarkTheme, DefaultTheme } from "@react-navigation/native";
@@ -51,10 +52,19 @@ Notifications.setNotificationHandler({
   }),
 });
 
-Purchases.configure({ apiKey: 'appl_UziJXOhRXKINbzrFMAQWFBcPziu' });
+try {
+  Purchases.configure({ apiKey: 'appl_UziJXOhRXKINbzrFMAQWFBcPziu' });
+} catch (e) {
+  console.log("[RevenueCat] Skipping in simulator/Expo Go");
+}
 
 export default function App() {
   useEffect(() => {
+    // Clear Firestore cache on start
+    try {
+      firebase.firestore().clearPersistence().catch(() => {});
+    } catch {}
+
     const unsub = auth.onAuthStateChanged((user) => {
       if (user) captureAndSaveLocation(user.uid);
     });

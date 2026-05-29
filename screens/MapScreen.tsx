@@ -13,7 +13,7 @@ import { db } from "../firebaseConfig";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { useUser } from "../context/UserContext";
-import Constants from "expo-constants";
+
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const ACCENT = "#FF7A00";
@@ -22,7 +22,8 @@ const SHEET_COLLAPSED = SH * 0.15;
 const SHEET_HALF      = SH * 0.45;
 const SHEET_FULL      = SH * 0.82;
 
-const GOOGLE_API_KEY = Constants.expoConfig?.ios?.config?.googleMapsApiKey ?? "";
+const GOOGLE_API_KEY = "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc";
+console.log("[MapScreen] API Key loaded:", GOOGLE_API_KEY ? "YES" : "NO - MISSING");
 
 /* ─── Store config ───────────────────────────────────────────── */
 
@@ -116,7 +117,6 @@ function getStoreEmoji(name: string): string {
   return "🏬";
 }
 
-/* ─── Fetch nearby stores ────────────────────────────────────── */
 
 async function fetchNearbyStores(
   lat: number,
@@ -131,28 +131,46 @@ async function fetchNearbyStores(
   await Promise.all(
     ALL_STORE_SEARCHES.map(async (storeName) => {
       try {
-        const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=16000&keyword=${encodeURIComponent(storeName)}&type=store&key=${GOOGLE_API_KEY}`;
-        const res = await fetch(url);
+        const res = await fetch(
+          `https://places.googleapis.com/v1/places:searchText`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Goog-Api-Key": GOOGLE_API_KEY,
+              "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.formattedAddress",
+            },
+            body: JSON.stringify({
+              maxResultCount: 3,
+              locationBias: {
+                circle: {
+                  center: { latitude: lat, longitude: lng },
+                  radius: 16000,
+                },
+              },
+              textQuery: storeName,
+            }),
+          }
+        );
         const data = await res.json();
+        if (data.places) {
+          for (const place of data.places) {
+            if (seen.has(place.id)) continue;
+            seen.add(place.id);
 
-        if (data.results) {
-          for (const place of data.results.slice(0, 3)) {
-            if (seen.has(place.place_id)) continue;
-            seen.add(place.place_id);
-
-            const storeLower = place.name.toLowerCase();
+            const storeLower = (place.displayName?.text || "").toLowerCase();
             const storeDeals = deals.filter(d =>
               (d.store || "").toLowerCase().includes(storeLower.split(" ")[0]) ||
               storeLower.includes((d.store || "").toLowerCase())
             );
 
             results.push({
-              id: place.place_id,
-              name: place.name,
-              latitude: place.geometry.location.lat,
-              longitude: place.geometry.location.lng,
-              address: place.vicinity || "",
-              isPremium: isPremiumStore(place.name),
+              id: place.id,
+              name: place.displayName?.text || storeName,
+              latitude: place.location.latitude,
+              longitude: place.location.longitude,
+              address: place.formattedAddress || "",
+              isPremium: isPremiumStore(place.displayName?.text || ""),
               deals: storeDeals,
             });
           }
