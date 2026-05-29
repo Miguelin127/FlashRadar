@@ -58,6 +58,7 @@ export { refreshBrokenImages } from "./refreshBrokenImages";
 export { watchDealUrlChanges } from "./watchDealUrlChanges";
 export { enrichDealV3 } from "./enrichDealV3";
 export { autoEnrichDeal } from "./autoEnrichDeal";
+export { fetchInstoreDeals } from "./fetchInstoreDeals";
 
 // ─────────────────────────────────────────────
 // DEAL LIFECYCLE
@@ -163,7 +164,7 @@ export const dailyQualityPurge = onSchedule(
       totalPurged += walmartBad.length;
       console.log(`[purge] Walmart low discount removed: ${walmartBad.length}`);
     }
-    
+
     // Nike — only keep 35%+ off
     const nikeSnap = await db.collection("deals_live")
       .where("storeKey", "==", "nike").get();
