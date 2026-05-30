@@ -1,3 +1,5 @@
+// functions/src/fetchInstoreDeals.ts
+
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import fetch from "node-fetch";
@@ -10,16 +12,25 @@ const RAPID_HOST = "realtime-walmart-data.p.rapidapi.com";
 const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_KEY ?? "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc";
 
 const SEARCH_CITIES = [
-  { name: "Chicago", lat: 41.8781, lng: -87.6298 },
-  { name: "Los Angeles", lat: 34.0522, lng: -118.2437 },
-  { name: "Houston", lat: 29.7604, lng: -95.3698 },
-  { name: "Phoenix", lat: 33.4484, lng: -112.0740 },
-  { name: "Dallas", lat: 32.7767, lng: -96.7970 },
-  { name: "Miami", lat: 25.7617, lng: -80.1918 },
-  { name: "New York", lat: 40.7128, lng: -74.0060 },
-  { name: "Atlanta", lat: 33.7490, lng: -84.3880 },
-  { name: "Seattle", lat: 47.6062, lng: -122.3321 },
-  { name: "Denver", lat: 39.7392, lng: -104.9903 },
+  { name: "Chicago",     lat: 41.8781,  lng: -87.6298  },
+  { name: "Los Angeles", lat: 34.0522,  lng: -118.2437 },
+  { name: "Houston",     lat: 29.7604,  lng: -95.3698  },
+  { name: "Phoenix",     lat: 33.4484,  lng: -112.0740 },
+  { name: "Dallas",      lat: 32.7767,  lng: -96.7970  },
+  { name: "Miami",       lat: 25.7617,  lng: -80.1918  },
+  { name: "New York",    lat: 40.7128,  lng: -74.0060  },
+  { name: "Atlanta",     lat: 33.7490,  lng: -84.3880  },
+  { name: "Seattle",     lat: 47.6062,  lng: -122.3321 },
+  { name: "Denver",      lat: 39.7392,  lng: -104.9903 },
+];
+
+// Store chains to seed on the map
+const STORE_CHAINS = [
+  { query: "Walmart Supercenter", key: "walmart",   label: "Walmart"    },
+  { query: "Target",              key: "target",    label: "Target"     },
+  { query: "Home Depot",          key: "homedepot", label: "Home Depot" },
+  { query: "Best Buy",            key: "bestbuy",   label: "Best Buy"   },
+  { query: "Costco Wholesale",    key: "costco",    label: "Costco"     },
 ];
 
 function parsePrice(v?: string): number | null {
@@ -28,7 +39,13 @@ function parsePrice(v?: string): number | null {
   return isFinite(n) && n > 0 ? n : null;
 }
 
-async function getNearbyWalmarts(lat: number, lng: number): Promise<any[]> {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function getNearbyStores(
+  lat: number,
+  lng: number,
+  query: string
+): Promise<any[]> {
   try {
     const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
       method: "POST",
@@ -38,7 +55,7 @@ async function getNearbyWalmarts(lat: number, lng: number): Promise<any[]> {
         "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.formattedAddress",
       },
       body: JSON.stringify({
-        textQuery: "Walmart Supercenter",
+        textQuery: query,
         maxResultCount: 3,
         locationBias: {
           circle: {
@@ -55,103 +72,160 @@ async function getNearbyWalmarts(lat: number, lng: number): Promise<any[]> {
   }
 }
 
+// Fetch deals from deals_live for a given storeKey
+async function getDealsForStore(storeKey: string): Promise<any[]> {
+  const snap = await db.collection("deals_live")
+    .where("storeKey", "==", storeKey)
+    .where("live", "==", true)
+    .limit(30)
+    .get();
+  return snap.docs.map((d) => d.data());
+}
+
+// Fetch Walmart rollback deals from RapidAPI
+async function fetchWalmartDeals(): Promise<any[]> {
+  const headers = {
+    "x-rapidapi-key": RAPID_KEY,
+    "x-rapidapi-host": RAPID_HOST,
+  };
+
+  const allItems: any[] = [];
+  for (let page = 1; page <= 3; page++) {
+    const res = await fetch(`https://${RAPID_HOST}/rollbacks?page=${page}`, { headers });
+    const json: any = await res.json();
+    if (res.status !== 200 || json.message || json.error) break;
+    const results = json.results ?? [];
+    allItems.push(...results);
+    if (results.length === 0) break;
+    if (page < 3) await sleep(400);
+  }
+
+  return allItems.filter((item) => {
+    const price = parsePrice(item.price);
+    const originalPrice = parsePrice(item.originalPrice) ?? parsePrice(item.wasPrice);
+    if (!price || !originalPrice || originalPrice <= price) return false;
+    const discount = Math.round(((originalPrice - price) / originalPrice) * 100);
+    return discount >= 30;
+  });
+}
+
 export const fetchInstoreDeals = onRequest(
-  { timeoutSeconds: 300, memory: "512MiB" },
+  { timeoutSeconds: 540, memory: "1GiB" },
   async (_req, res) => {
     if (!RAPID_KEY) {
       res.json({ error: "RAPIDAPI_KEY not set" });
       return;
     }
 
-    const headers = {
-      "x-rapidapi-key": RAPID_KEY,
-      "x-rapidapi-host": RAPID_HOST,
-    };
+    console.log("[InstoreDeals] Starting multi-store ingest...");
 
-    const [rollbackRes, clearanceRes] = await Promise.all([
-      fetch(`https://${RAPID_HOST}/rollbacks?page=1`, { headers }),
-      fetch(`https://${RAPID_HOST}/search?query=clearance&page=1`, { headers }),
+    // ── 1. Fetch Walmart deals from RapidAPI ────────────────────
+    const walmartDeals = await fetchWalmartDeals();
+    console.log(`[InstoreDeals] Walmart API deals: ${walmartDeals.length}`);
+
+    // ── 2. Fetch deals_live deals for non-Walmart stores ────────
+    const [targetDeals, homeDepotDeals, bestBuyDeals, costcoDeals] = await Promise.all([
+      getDealsForStore("target"),
+      getDealsForStore("homedepot"),
+      getDealsForStore("bestbuy"),
+      getDealsForStore("costco"),
     ]);
 
-    const rollbackJson: any = await rollbackRes.json();
-    const clearanceJson: any = await clearanceRes.json();
+    console.log(`[InstoreDeals] deals_live — Target: ${targetDeals.length}, HomeDepot: ${homeDepotDeals.length}, BestBuy: ${bestBuyDeals.length}, Costco: ${costcoDeals.length}`);
 
-    const allItems = [
-      ...(rollbackJson.results ?? []),
-      ...(clearanceJson.results ?? []),
-    ];
+    // Map storeKey → deals pool
+    const dealsByStore: Record<string, any[]> = {
+      walmart:   walmartDeals,
+      target:    targetDeals,
+      homedepot: homeDepotDeals,
+      bestbuy:   bestBuyDeals,
+      costco:    costcoDeals,
+    };
 
-    const deepDeals = allItems.filter(item => {
-      const price = parsePrice(item.price);
-      const originalPrice = parsePrice(item.originalPrice) ?? parsePrice(item.wasPrice);
-      if (!price || !originalPrice || originalPrice <= price) return false;
-      const discount = Math.round(((originalPrice - price) / originalPrice) * 100);
-      return discount >= 75;
-    });
-
-    console.log(`[InstoreDeals] Found ${deepDeals.length} deals at 75%+ off`);
-
-    if (deepDeals.length === 0) {
-      res.json({ success: true, written: 0, message: "No deals at 75%+ off" });
-      return;
+    // ── 3. Collect store locations ───────────────────────────────
+    const storeLocations: Record<string, any[]> = {};
+    for (const chain of STORE_CHAINS) {
+      storeLocations[chain.key] = [];
     }
 
-    const allStores: any[] = [];
     for (const city of SEARCH_CITIES) {
-      const stores = await getNearbyWalmarts(city.lat, city.lng);
-      allStores.push(...stores);
+      for (const chain of STORE_CHAINS) {
+        const places = await getNearbyStores(city.lat, city.lng, chain.query);
+        storeLocations[chain.key].push(...places);
+        await sleep(100); // stay under Places API rate limit
+      }
     }
 
-    const seenStores = new Set<string>();
-    const uniqueStores = allStores.filter(s => {
-      if (seenStores.has(s.id)) return false;
-      seenStores.add(s.id);
-      return true;
-    });
-
-    console.log(`[InstoreDeals] Found ${uniqueStores.length} Walmart stores`);
-
-    if (uniqueStores.length === 0) {
-      res.json({ success: true, written: 0, message: "No stores found" });
-      return;
+    // Dedupe store locations
+    for (const chain of STORE_CHAINS) {
+      const seen = new Set<string>();
+      storeLocations[chain.key] = storeLocations[chain.key].filter((p) => {
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      });
+      console.log(`[InstoreDeals] ${chain.label} locations: ${storeLocations[chain.key].length}`);
     }
 
+    // ── 4. Write deals_instore ───────────────────────────────────
     let written = 0;
-    for (const deal of deepDeals.slice(0, 20)) {
-      const price = parsePrice(deal.price);
-      const originalPrice = parsePrice(deal.originalPrice) ?? parsePrice(deal.wasPrice);
-      if (!price || !originalPrice) continue;
-      const discountPercent = Math.round(((originalPrice - price) / originalPrice) * 100);
-      const imageUrl = deal.image ?? deal.Image ?? null;
-      if (!imageUrl) continue;
+    const batch = db.batch();
 
-      const store = uniqueStores[written % uniqueStores.length];
-      const id = `instore_walmart_${deal.usItemId ?? deal.id}_${store.id}`;
+    for (const chain of STORE_CHAINS) {
+      const deals = dealsByStore[chain.key] ?? [];
+      const stores = storeLocations[chain.key] ?? [];
 
-      await db.collection("deals_instore").doc(id).set({
-        id,
-        title: deal.name ?? deal.title ?? "Walmart Clearance Deal",
-        price,
-        originalPrice,
-        discountPercent,
-        store: store.displayName?.text ?? "Walmart",
-        storeKey: "walmart",
-        storeAddress: store.formattedAddress ?? "",
-        latitude: store.location.latitude,
-        longitude: store.location.longitude,
-        imageUrl,
-        url: `https://www.walmart.com${deal.canonicalUrl ?? ""}`,
-        source: "walmart_instore",
-        hot: true,
-        rare: discountPercent >= 85,
-        lightning: discountPercent >= 90,
-        live: true,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
+      if (deals.length === 0 || stores.length === 0) continue;
 
-      written++;
+      // Distribute deals across stores (round-robin)
+      const maxDeals = Math.min(deals.length, 15);
+      for (let i = 0; i < maxDeals; i++) {
+        const deal = deals[i];
+        const store = stores[i % stores.length];
+
+        const price = parsePrice(deal.price) ?? deal.price;
+        const originalPrice = parsePrice(deal.originalPrice) ?? deal.originalPrice ?? null;
+
+        if (!price) continue;
+
+        const discountPercent = deal.discountPercent ??
+          (originalPrice && originalPrice > price
+            ? Math.round(((originalPrice - price) / originalPrice) * 100)
+            : null);
+
+        const imageUrl = deal.imageUrl ?? deal.image ?? null;
+        const dealId = deal.id ?? `${chain.key}_${i}`;
+        const id = `instore_${chain.key}_${dealId}_${store.id}`;
+        const ref = db.collection("deals_instore").doc(id);
+
+        batch.set(ref, {
+          id,
+          title: deal.title ?? deal.name ?? `${chain.label} Deal`,
+          price,
+          originalPrice: originalPrice ?? null,
+          discountPercent: discountPercent ?? null,
+          store: store.displayName?.text ?? chain.label,
+          storeKey: chain.key,
+          storeAddress: store.formattedAddress ?? "",
+          latitude: store.location.latitude,
+          longitude: store.location.longitude,
+          imageUrl,
+          affiliateUrl: deal.affiliateUrl ?? null,
+          url: deal.affiliateUrl ?? deal.url ?? null,
+          source: `${chain.key}_instore`,
+          hot: (discountPercent ?? 0) >= 30,
+          rare: (discountPercent ?? 0) >= 50,
+          lightning: (discountPercent ?? 0) >= 70,
+          live: true,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        written++;
+      }
     }
 
+    await batch.commit();
     console.log(`[InstoreDeals] Written ${written} in-store deals`);
     res.json({ success: true, written });
   }

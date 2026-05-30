@@ -14,7 +14,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { useUser } from "../context/UserContext";
 
-
 const { width: SW, height: SH } = Dimensions.get("window");
 const ACCENT = "#FF7A00";
 
@@ -23,7 +22,6 @@ const SHEET_HALF      = SH * 0.45;
 const SHEET_FULL      = SH * 0.82;
 
 const GOOGLE_API_KEY = "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc";
-console.log("[MapScreen] API Key loaded:", GOOGLE_API_KEY ? "YES" : "NO - MISSING");
 
 /* ─── Store config ───────────────────────────────────────────── */
 
@@ -55,6 +53,7 @@ type Deal = {
   store: string;
   storeKey?: string;
   price: number;
+  originalPrice?: number | null;
   latitude: number;
   longitude: number;
   address?: string;
@@ -81,12 +80,12 @@ type NearbyStore = {
 /* ─── Category filters ───────────────────────────────────────── */
 
 const CATEGORIES = [
-  { key: "All",         label: "All 💰" },
-  { key: "Electronics", label: "💻 Electronics" },
-  { key: "Grocery",     label: "🛒 Grocery" },
-  { key: "Clothing",    label: "👕 Clothing" },
-  { key: "Auto",        label: "🚗 Auto" },
-  { key: "Other",       label: "🧩 Other" },
+  { key: "All",          label: "All 💰" },
+  { key: "Electronics",  label: "💻 Electronics" },
+  { key: "Grocery",      label: "🛒 Grocery" },
+  { key: "Clothing",     label: "👕 Clothing" },
+  { key: "Auto",         label: "🚗 Auto" },
+  { key: "Other",        label: "🧩 Other" },
 ];
 
 /* ─── Store emoji ────────────────────────────────────────────── */
@@ -117,6 +116,19 @@ function getStoreEmoji(name: string): string {
   return "🏬";
 }
 
+/* ─── Proximity deal matching ────────────────────────────────── */
+
+// Match deals to a store by lat/lng proximity (~500m)
+function matchDealsByProximity(deals: Deal[], lat: number, lng: number): Deal[] {
+  return deals.filter((d) => {
+    if (typeof d.latitude !== "number" || typeof d.longitude !== "number") return false;
+    const dlat = Math.abs(d.latitude - lat);
+    const dlng = Math.abs(d.longitude - lng);
+    return dlat < 0.005 && dlng < 0.005;
+  });
+}
+
+/* ─── Fetch nearby stores ────────────────────────────────────── */
 
 async function fetchNearbyStores(
   lat: number,
@@ -158,10 +170,11 @@ async function fetchNearbyStores(
             if (seen.has(place.id)) continue;
             seen.add(place.id);
 
-            const storeLower = (place.displayName?.text || "").toLowerCase();
-            const storeDeals = deals.filter(d =>
-              (d.store || "").toLowerCase().includes(storeLower.split(" ")[0]) ||
-              storeLower.includes((d.store || "").toLowerCase())
+            // Match deals from deals_instore by proximity
+            const storeDeals = matchDealsByProximity(
+              deals,
+              place.location.latitude,
+              place.location.longitude
             );
 
             results.push({
@@ -336,6 +349,9 @@ function StoreRow({ store, onPress, dark, userIsPremium }: {
         {!isLocked && store.deals.length > 0 && (
           <Text style={row.dealCount}>🔥 {store.deals.length} deals available</Text>
         )}
+        {!isLocked && store.deals.length === 0 && (
+          <Text style={[row.dealCount, { color: "#555" }]}>No active deals</Text>
+        )}
       </View>
       <View style={[row.btn, { backgroundColor: isLocked ? "#333" : color }]}>
         <Text style={row.btnTxt}>{isLocked ? "PRO" : "VIEW"}</Text>
@@ -366,10 +382,50 @@ const row = StyleSheet.create({
   btnTxt: { color: "#fff", fontWeight: "900", fontSize: 10 },
 });
 
+/* ─── Deal Row (in store sheet) ──────────────────────────────── */
+
+function StoreDealRow({ deal, dark, onPress }: {
+  deal: Deal; dark: boolean; onPress: () => void;
+}) {
+  const color = deal.lightning ? "#facc15" : deal.rare ? "#a855f7" : deal.hot ? "#ef4444" : ACCENT;
+  return (
+    <TouchableOpacity
+      style={[styles.dealRow, { backgroundColor: dark ? "#1a1a1a" : "#f4f4f4" }]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={[styles.dealBar, { backgroundColor: color }]} />
+      <View style={{ flex: 1, padding: 10 }}>
+        <Text style={{ color: dark ? "#fff" : "#111", fontWeight: "700", fontSize: 13 }} numberOfLines={2}>
+          {deal.title}
+        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+          <Text style={{ color, fontWeight: "900", fontSize: 15 }}>
+            ${Number(deal.price).toFixed(2)}
+          </Text>
+          {deal.originalPrice && (
+            <Text style={{ color: "#666", fontSize: 11, textDecorationLine: "line-through" }}>
+              ${Number(deal.originalPrice).toFixed(2)}
+            </Text>
+          )}
+          {deal.discountPercent && (
+            <View style={{ backgroundColor: color + "22", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+              <Text style={{ color, fontSize: 10, fontWeight: "900" }}>-{deal.discountPercent}%</Text>
+            </View>
+          )}
+        </View>
+      </View>
+      <View style={[styles.dealBtn, { backgroundColor: color }]}>
+        <Text style={styles.dealBtnTxt}>GO</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 /* ─── Main Screen ────────────────────────────────────────────── */
 
 export default function MapScreen() {
-  const [deals, setDeals] = useState<Deal[]>([]);
+  const [instoreDeals, setInstoreDeals] = useState<Deal[]>([]);
   const [nearbyStores, setNearbyStores] = useState<NearbyStore[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingStores, setLoadingStores] = useState(false);
@@ -380,6 +436,7 @@ export default function MapScreen() {
   const [currentRegion, setCurrentRegion] = useState<Region | null>(null);
   const [searchArea, setSearchArea] = useState(false);
   const [viewMode, setViewMode] = useState<"stores" | "deals">("stores");
+  const [selectedStore, setSelectedStore] = useState<NearbyStore | null>(null);
 
   const mapRef = useRef<MapView>(null);
   const { theme, colors } = useTheme();
@@ -388,6 +445,7 @@ export default function MapScreen() {
 
   const sheetY = useRef(new Animated.Value(SHEET_COLLAPSED)).current;
   const lastSheetY = useRef(SHEET_COLLAPSED);
+
   const sheetPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -412,15 +470,22 @@ export default function MapScreen() {
     lastSheetY.current = to;
   };
 
+  // Subscribe to deals_instore (have lat/lng)
   useEffect(() => {
-    const unsubscribe = db.collection("deals_live")
+    const unsubscribe = db.collection("deals_instore")
+      .where("live", "==", true)
       .onSnapshot((snap) => {
-        const items: Deal[] = snap.docs
-          .map((d) => ({ id: d.id, ...(d.data() as Omit<Deal, "id">) }))
-          .filter((d) => typeof d.latitude === "number" && typeof d.longitude === "number");
-        setDeals(items);
+        const items: Deal[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<Deal, "id">),
+        }));
+        setInstoreDeals(items);
       });
+    return () => unsubscribe();
+  }, []);
 
+  // Load location and stores once
+  useEffect(() => {
     const loadLocation = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") { setLoading(false); return; }
@@ -432,41 +497,51 @@ export default function MapScreen() {
       setCurrentRegion(r);
       setLoading(false);
       setLoadingStores(true);
-      const stores = await fetchNearbyStores(latitude, longitude, []);
+      const stores = await fetchNearbyStores(latitude, longitude, instoreDeals);
       setNearbyStores(stores);
       setLoadingStores(false);
     };
-
     loadLocation();
-    return () => unsubscribe();
   }, []);
+
+  // Re-match deals to stores when instoreDeals updates
+  useEffect(() => {
+    if (instoreDeals.length === 0 || nearbyStores.length === 0) return;
+    setNearbyStores((prev) =>
+      prev.map((store) => ({
+        ...store,
+        deals: matchDealsByProximity(instoreDeals, store.latitude, store.longitude),
+      }))
+    );
+  }, [instoreDeals]);
 
   const searchThisArea = async () => {
     if (!currentRegion) return;
     setSearchArea(false);
     setLoadingStores(true);
-    const stores = await fetchNearbyStores(currentRegion.latitude, currentRegion.longitude, deals);
+    const stores = await fetchNearbyStores(currentRegion.latitude, currentRegion.longitude, instoreDeals);
     setNearbyStores(stores);
     setLoadingStores(false);
   };
 
   const filteredDeals = useMemo(() => {
-    if (selectedCategory === "All") return deals;
-    return deals.filter((d) => d.category === selectedCategory);
-  }, [deals, selectedCategory]);
+    if (selectedCategory === "All") return instoreDeals;
+    return instoreDeals.filter((d) => d.category === selectedCategory);
+  }, [instoreDeals, selectedCategory]);
 
   const premiumStoreCount = nearbyStores.filter(s => s.isPremium).length;
 
   const handleStorePress = (store: NearbyStore) => {
     if (store.isPremium && !isPremium) return;
     setSelectedId(store.id);
+    setSelectedStore(store);
     mapRef.current?.animateToRegion({
       latitude: store.latitude - 0.003,
       longitude: store.longitude,
       latitudeDelta: 0.04,
       longitudeDelta: 0.04,
     }, 400);
-    snapSheet(SHEET_HALF);
+    snapSheet(store.deals.length > 0 ? SHEET_HALF : SHEET_COLLAPSED + 80);
   };
 
   const recenter = () => {
@@ -503,10 +578,12 @@ export default function MapScreen() {
     );
   }
 
-  const selectedStore = nearbyStores.find(s => s.id === selectedId);
   const sheetStores = selectedStore
-    ? [selectedStore, ...nearbyStores.filter(s => s.id !== selectedId)]
+    ? [selectedStore, ...nearbyStores.filter(s => s.id !== selectedStore.id)]
     : nearbyStores;
+
+  // When a store is selected, show its deals in the sheet
+  const sheetDeals = selectedStore ? selectedStore.deals : filteredDeals;
 
   return (
     <View style={styles.safe}>
@@ -517,7 +594,11 @@ export default function MapScreen() {
         customMapStyle={dark ? darkMapStyle : []}
         showsUserLocation={false}
         onRegionChange={(r) => { setCurrentRegion(r); setSearchArea(true); }}
-        onPress={() => { setSelectedId(null); snapSheet(SHEET_COLLAPSED); }}
+        onPress={() => {
+          setSelectedId(null);
+          setSelectedStore(null);
+          snapSheet(SHEET_COLLAPSED);
+        }}
       >
         {userLocation && (
           <>
@@ -567,17 +648,18 @@ export default function MapScreen() {
         ))}
       </MapView>
 
+      {/* ── Top overlay ── */}
       <SafeAreaView style={styles.topOverlay} pointerEvents="box-none">
         <View style={styles.modeToggle}>
           <TouchableOpacity
             style={[styles.modeBtn, viewMode === "stores" && styles.modeBtnActive]}
-            onPress={() => setViewMode("stores")}
+            onPress={() => { setViewMode("stores"); setSelectedStore(null); setSelectedId(null); }}
           >
             <Text style={[styles.modeBtnText, viewMode === "stores" && { color: "#000" }]}>🏬 Stores</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.modeBtn, viewMode === "deals" && styles.modeBtnActive]}
-            onPress={() => setViewMode("deals")}
+            onPress={() => { setViewMode("deals"); setSelectedStore(null); setSelectedId(null); }}
           >
             <Text style={[styles.modeBtnText, viewMode === "deals" && { color: "#000" }]}>🔥 Deals</Text>
           </TouchableOpacity>
@@ -627,18 +709,42 @@ export default function MapScreen() {
       <View style={styles.countPill}>
         <View style={styles.countDot} />
         <Text style={styles.countText}>
-          {viewMode === "stores" ? `${nearbyStores.length} stores nearby` : `${filteredDeals.length} deals nearby`}
+          {viewMode === "stores"
+            ? `${nearbyStores.length} stores nearby`
+            : `${filteredDeals.length} deals nearby`}
         </Text>
       </View>
 
+      {/* ── Bottom sheet ── */}
       <Animated.View style={[styles.sheet, { height: sheetY }]}>
         <View {...sheetPanResponder.panHandlers} style={styles.handleWrap}>
           <View style={styles.handle} />
           <View style={styles.sheetHeader}>
-            <Text style={[styles.sheetTitle, { color: dark ? "#fff" : "#111" }]}>
-              {selectedStore ? selectedStore.name : viewMode === "stores" ? `${nearbyStores.length} Stores Near You` : `${filteredDeals.length} Deals Near You`}
-            </Text>
+            <View style={{ flex: 1 }}>
+              {selectedStore && (
+                <Text style={{ color: "#888", fontSize: 11, marginBottom: 2 }}>
+                  {getStoreEmoji(selectedStore.name)} {selectedStore.name}
+                </Text>
+              )}
+              <Text style={[styles.sheetTitle, { color: dark ? "#fff" : "#111" }]}>
+                {selectedStore
+                  ? selectedStore.deals.length > 0
+                    ? `${selectedStore.deals.length} Deals Here`
+                    : "No active deals"
+                  : viewMode === "stores"
+                    ? `${nearbyStores.length} Stores Near You`
+                    : `${filteredDeals.length} Deals Near You`}
+              </Text>
+            </View>
             <View style={styles.sheetSnapBtns}>
+              {selectedStore && (
+                <TouchableOpacity
+                  onPress={() => { setSelectedStore(null); setSelectedId(null); snapSheet(SHEET_COLLAPSED); }}
+                  style={{ marginRight: 4 }}
+                >
+                  <Ionicons name="close-outline" size={20} color="#666" />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity onPress={() => snapSheet(SHEET_HALF)}>
                 <Ionicons name="remove-outline" size={20} color="#666" />
               </TouchableOpacity>
@@ -649,7 +755,25 @@ export default function MapScreen() {
           </View>
         </View>
 
-        {viewMode === "stores" ? (
+        {/* Store deals view when a store is selected */}
+        {selectedStore ? (
+          <FlatList
+            data={sheetDeals}
+            keyExtractor={(d) => d.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 40 }}
+            ListEmptyComponent={
+              <View style={styles.emptySheet}>
+                <Ionicons name="pricetag-outline" size={36} color="#444" />
+                <Text style={styles.emptySheetText}>No deals at this store</Text>
+                <Text style={styles.emptySheetSub}>Check back later for new deals</Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <StoreDealRow deal={item} dark={dark} onPress={() => openDeal(item)} />
+            )}
+          />
+        ) : viewMode === "stores" ? (
           <FlatList
             data={sheetStores}
             keyExtractor={(s) => s.id}
@@ -693,19 +817,7 @@ export default function MapScreen() {
               </View>
             }
             renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[styles.dealRow, { backgroundColor: dark ? "#111" : "#f9f9f9" }]}
-                onPress={() => openDeal(item)}
-              >
-                <View style={[styles.dealBar, { backgroundColor: item.lightning ? "#facc15" : item.rare ? "#a855f7" : ACCENT }]} />
-                <View style={{ flex: 1, padding: 10 }}>
-                  <Text style={{ color: dark ? "#fff" : "#111", fontWeight: "700", fontSize: 13 }} numberOfLines={1}>{item.title}</Text>
-                  <Text style={{ color: ACCENT, fontWeight: "900", fontSize: 15 }}>${Number(item.price).toFixed(2)}</Text>
-                </View>
-                <View style={styles.dealBtn}>
-                  <Text style={styles.dealBtnTxt}>GO</Text>
-                </View>
-              </TouchableOpacity>
+              <StoreDealRow deal={item} dark={dark} onPress={() => openDeal(item)} />
             )}
           />
         )}
@@ -721,36 +833,85 @@ const styles = StyleSheet.create({
   map: { width: SW, height: SH },
   center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
   loadingText: { color: "#888", marginTop: 12, fontWeight: "600", textAlign: "center" },
-  userDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: "rgba(255,122,0,0.3)", justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: ACCENT },
+  userDot: {
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: "rgba(255,122,0,0.3)",
+    justifyContent: "center", alignItems: "center",
+    borderWidth: 1.5, borderColor: ACCENT,
+  },
   userDotInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: ACCENT },
   topOverlay: { position: "absolute", top: 0, left: 0, right: 0 },
-  modeToggle: { flexDirection: "row", alignSelf: "center", marginTop: 12, backgroundColor: "rgba(0,0,0,0.8)", borderRadius: 999, padding: 3, gap: 2, borderWidth: 1, borderColor: "rgba(255,122,0,0.3)" },
+  modeToggle: {
+    flexDirection: "row", alignSelf: "center", marginTop: 12,
+    backgroundColor: "rgba(0,0,0,0.8)", borderRadius: 999,
+    padding: 3, gap: 2, borderWidth: 1, borderColor: "rgba(255,122,0,0.3)",
+  },
   modeBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 999 },
   modeBtnActive: { backgroundColor: ACCENT },
   modeBtnText: { color: "#fff", fontWeight: "800", fontSize: 13 },
   chipRow: { paddingHorizontal: 12, paddingTop: 8, gap: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, shadowColor: "#000", shadowRadius: 4, shadowOpacity: 0.3, elevation: 4 },
+  chip: {
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+    shadowColor: "#000", shadowRadius: 4, shadowOpacity: 0.3, elevation: 4,
+  },
   chipText: { fontSize: 12, fontWeight: "800" },
-  premiumBanner: { marginHorizontal: 12, marginTop: 8, backgroundColor: "rgba(0,0,0,0.85)", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: "rgba(255,122,0,0.3)" },
+  premiumBanner: {
+    marginHorizontal: 12, marginTop: 8,
+    backgroundColor: "rgba(0,0,0,0.85)", borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderWidth: 1, borderColor: "rgba(255,122,0,0.3)",
+  },
   premiumBannerText: { color: ACCENT, fontSize: 11, fontWeight: "800", textAlign: "center" },
-  searchAreaBtn: { position: "absolute", top: SH * 0.2, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#1a1a1a", paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: ACCENT + "55", shadowColor: "#000", shadowRadius: 6, shadowOpacity: 0.4, elevation: 6 },
+  searchAreaBtn: {
+    position: "absolute", top: SH * 0.2, alignSelf: "center",
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: "#1a1a1a", paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 999, borderWidth: 1, borderColor: ACCENT + "55",
+    shadowColor: "#000", shadowRadius: 6, shadowOpacity: 0.4, elevation: 6,
+  },
   searchAreaText: { color: "#fff", fontWeight: "800", fontSize: 13 },
-  recenterBtn: { position: "absolute", right: 16, bottom: SHEET_COLLAPSED + 20, backgroundColor: "#1a1a1a", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", shadowColor: "#000", shadowRadius: 6, shadowOpacity: 0.4, elevation: 6 },
-  countPill: { position: "absolute", left: 16, bottom: SHEET_COLLAPSED + 20, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.8)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,122,0,0.3)" },
+  recenterBtn: {
+    position: "absolute", right: 16, bottom: SHEET_COLLAPSED + 20,
+    backgroundColor: "#1a1a1a", padding: 12, borderRadius: 12,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+    shadowColor: "#000", shadowRadius: 6, shadowOpacity: 0.4, elevation: 6,
+  },
+  countPill: {
+    position: "absolute", left: 16, bottom: SHEET_COLLAPSED + 20,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: "rgba(0,0,0,0.8)", paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,122,0,0.3)",
+  },
   countDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: ACCENT },
   countText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  sheet: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "#0f0f0f", borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: 1, borderColor: "rgba(255,122,0,0.2)", shadowColor: "#000", shadowRadius: 20, shadowOpacity: 0.5, elevation: 20 },
+  sheet: {
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    backgroundColor: "#0f0f0f",
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    borderTopWidth: 1, borderColor: "rgba(255,122,0,0.2)",
+    shadowColor: "#000", shadowRadius: 20, shadowOpacity: 0.5, elevation: 20,
+  },
   handleWrap: { paddingTop: 10, paddingHorizontal: 16, paddingBottom: 4 },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#333", alignSelf: "center", marginBottom: 10 },
+  handle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: "#333", alignSelf: "center", marginBottom: 10,
+  },
   sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   sheetTitle: { fontSize: 16, fontWeight: "900" },
   sheetSnapBtns: { flexDirection: "row", gap: 8, alignItems: "center" },
   emptySheet: { alignItems: "center", paddingVertical: 30, gap: 6 },
   emptySheetText: { color: "#555", fontWeight: "900", fontSize: 15 },
   emptySheetSub: { color: "#444", fontSize: 12 },
-  dealRow: { flexDirection: "row", alignItems: "center", borderRadius: 12, marginHorizontal: 12, marginBottom: 8, overflow: "hidden" },
+  dealRow: {
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 12, marginHorizontal: 12, marginBottom: 8, overflow: "hidden",
+  },
   dealBar: { width: 4, alignSelf: "stretch" },
-  dealBtn: { backgroundColor: ACCENT, margin: 10, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, alignItems: "center" },
+  dealBtn: {
+    backgroundColor: ACCENT, margin: 10,
+    paddingHorizontal: 10, paddingVertical: 8,
+    borderRadius: 8, alignItems: "center",
+  },
   dealBtnTxt: { color: "#000", fontWeight: "900", fontSize: 10 },
 });
 
