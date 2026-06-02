@@ -3,7 +3,6 @@ import * as Notifications from 'expo-notifications';
 import * as Location from "expo-location";
 import Purchases from 'react-native-purchases';
 import firebase from "firebase/compat/app";
-import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
 
 import React, { useEffect } from "react";
 import { NavigationContainer, DarkTheme, DefaultTheme } from "@react-navigation/native";
@@ -52,27 +51,27 @@ Notifications.setNotificationHandler({
 });
 
 try {
-  Purchases.configure({ apiKey: 'appl_UziJXOhRXKINbzrFMAQWFBcPziu' });
+  Purchases.configure({  apiKey: 'appl_UziJXOhRXKINbzrFMAQWFBcPziu'  });
 } catch (e) {
   console.log("[RevenueCat] Skipping in simulator/Expo Go");
 }
 
 export default function App() {
   useEffect(() => {
-    // ATT request — must happen early
-    requestTrackingPermissionsAsync().then(({ status }) => {
-      console.log("[ATT] Tracking status:", status);
-    });
-
-    // Clear Firestore cache on start
-    try {
-      firebase.firestore().clearPersistence().catch(() => {});
-    } catch {}
+    const timer = setTimeout(() => {
+      try {
+        firebase.firestore().clearPersistence().catch(() => {});
+      } catch {}
+    }, 500);
 
     const unsub = auth.onAuthStateChanged((user) => {
       if (user) captureAndSaveLocation(user.uid);
     });
-    return unsub;
+
+    return () => {
+      clearTimeout(timer);
+      unsub();
+    };
   }, []);
 
   return (
