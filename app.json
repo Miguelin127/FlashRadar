@@ -2,12 +2,10 @@
   "expo": {
     "name": "FlashRadar",
     "slug": "flashradar-app",
-    "sdkVersion": "55.0.0",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -16,13 +14,12 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.miguelin1.flashradarapp",
-      "buildNumber": "7",
       "config": {
         "googleMapsApiKey": "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc"
       },
       "infoPlist": {
         "NSUserNotificationsUsageDescription": "FlashRadar sends you instant alerts when rare deals and lightning offers drop near you.",
-        "NSLocationWhenInUseUsageDescription": "FlashRadar uses your location to show nearby deals, clearance sales, and store-specific offers within your area. For example, we'll alert you when a Target 2 miles away has a clearance sale on electronics.",
+        "NSLocationWhenInUseUsageDescription": "FlashRadar uses your location to show nearby deals, clearance sales, and store-specific offers within your area.",
         "NSLocationAlwaysUsageDescription": "FlashRadar uses your location to detect nearby deals and send you alerts when rare finds appear at stores close to you.",
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -68,7 +65,10 @@
       ],
       "expo-web-browser",
       "expo-font",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-tracking-transparency"
     ],
     "scheme": "flashradar"
   }
