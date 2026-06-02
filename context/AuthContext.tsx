@@ -17,7 +17,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 // ── Google OAuth client IDs ─────────────────────────────────────────────────
 // Get these from Google Cloud Console → OAuth 2.0 Client IDs
-const GOOGLE_IOS_CLIENT_ID = "2868928124-l7iretmorlvhjtjfs4f5hffo4tk0m7om.apps.googleusercontent.com";
+const GOOGLE_IOS_CLIENT_ID = "2868928124-g7ha6o9jvfj9ul9dectbn24ksmlol7q5.apps.googleusercontent.com";
 const GOOGLE_ANDROID_CLIENT_ID = "2868928124-t06eluv2f4cm4o7dfpthd7ltj1j8m5ik.apps.googleusercontent.com";
 const GOOGLE_WEB_CLIENT_ID = "2868928124-mc285lh7neu7iul1vespr2k5jo8uteok.apps.googleusercontent.com";
 
@@ -75,12 +75,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   // Google auth session
-  const redirectUri = "https://auth.expo.io/@miguelin1/flashradar-app";  // Expo proxy  // Expo proxy  // Expo proxy
+  const redirectUri = AuthSession.makeRedirectUri({ scheme: "flashradar" });
   const [_, googleResponse, googlePromptAsync] = Google.useAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID,
-    redirectUri,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
     webClientId: GOOGLE_WEB_CLIENT_ID,
+    redirectUri,
   });
 
   // Handle Google response

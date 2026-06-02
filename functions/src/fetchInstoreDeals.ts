@@ -33,8 +33,9 @@ const STORE_CHAINS = [
   { query: "Costco Wholesale",    key: "costco",    label: "Costco"     },
 ];
 
-function parsePrice(v?: string): number | null {
-  if (!v || v === "Not available") return null;
+function parsePrice(v?: string | number): number | null {
+  if (v === undefined || v === null || v === "Not available") return null;
+  if (typeof v === "number") return isFinite(v) && v > 0 ? v : null;
   const n = Number(v.replace(/[^0-9.]/g, ""));
   return isFinite(n) && n > 0 ? n : null;
 }

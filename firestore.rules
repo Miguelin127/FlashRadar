@@ -20,6 +20,10 @@ service cloud.firestore {
       allow read: if true;
       allow write, delete: if isAdmin();
     }
+    match /deals_instore/{dealId} {
+      allow read: if true;
+      allow write, delete: if isAdmin();
+    }
     match /deals_live/{dealId} {
       allow read: if true;
       allow write, delete: if isAdmin();

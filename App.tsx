@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import * as Location from "expo-location";
 import Purchases from 'react-native-purchases';
 import firebase from "firebase/compat/app";
+import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
 
 import React, { useEffect } from "react";
 import { NavigationContainer, DarkTheme, DefaultTheme } from "@react-navigation/native";
@@ -33,7 +34,6 @@ async function captureAndSaveLocation(uid: string) {
 
 function AppWithTheme() {
   const { darkMode } = useTheme();
-
   return (
     <NavigationContainer theme={darkMode ? DarkTheme : DefaultTheme}>
       <RootNavigator />
@@ -41,7 +41,6 @@ function AppWithTheme() {
   );
 }
 
-// ── Notification handler ──────────────────────────────────────────────────────
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -60,6 +59,11 @@ try {
 
 export default function App() {
   useEffect(() => {
+    // ATT request — must happen early
+    requestTrackingPermissionsAsync().then(({ status }) => {
+      console.log("[ATT] Tracking status:", status);
+    });
+
     // Clear Firestore cache on start
     try {
       firebase.firestore().clearPersistence().catch(() => {});

@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.miguelin1.flashradarapp",
-      "buildNumber": "6",
+      "buildNumber": "7",
       "config": {
         "googleMapsApiKey": "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc"
       },
