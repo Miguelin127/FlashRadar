@@ -23,11 +23,6 @@
         "NSLocationAlwaysUsageDescription": "FlashRadar uses your location to detect nearby deals and send you alerts when rare finds appear at stores close to you.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "splash": {
-        "image": "./assets/splash.png",
-        "resizeMode": "contain",
-        "backgroundColor": "#000000"
-      },
       "requireFullScreen": true
     },
     "android": {
@@ -41,12 +36,7 @@
         "RECEIVE_BOOT_COMPLETED",
         "POST_NOTIFICATIONS",
         "VIBRATE"
-      ],
-      "splash": {
-        "image": "./assets/splash.png",
-        "resizeMode": "contain",
-        "backgroundColor": "#000000"
-      }
+      ]
     },
     "extra": {
       "eas": {
@@ -68,7 +58,12 @@
       "expo-apple-authentication",
       "expo-sharing",
       "expo-status-bar",
-      "expo-tracking-transparency"
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "FlashRadar uses this to provide personalized deal recommendations and improve your experience."
+        }
+      ]
     ],
     "scheme": "flashradar"
   }
