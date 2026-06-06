@@ -3,30 +3,63 @@
 export interface Deal {
   id: string;
   title: string;
+  description?: string;
   store: string;
+  storeKey?: string;
   price: number;
   originalPrice?: number;
-  zip: string;
-  image: string;
-  timestamp?: any;
-
-  // Optional fields used across Explore/Map/Radar
-  rare?: boolean;
   discountPercent?: number;
-  distance?: number; // distance calculated from ZIP or GPS
+  zip?: string;
+  image?: string;
+  imageUrl?: string | null;
+  images?: string[];
+  timestamp?: any;
+  publishedAt?: any;
+
+  // Location
   latitude?: number;
   longitude?: number;
+  distance?: number;
+  distanceInMiles?: number | null;
+
+  // Flags
+  rare?: boolean;
+  hot?: boolean;
+  live?: boolean;
+  isHot?: boolean;
+  isLive?: boolean;
+  isSaved?: boolean;
+  lightning?: boolean;
+
+  // Category / tier
   category?: string;
+  tier?: "free" | "premium" | string | null;
+
+  // Links
+  url?: string | null;
+  link?: string;
+  merchantUrl?: string | null;
+  affiliateUrl?: string | null;
+
+  // Promo
+  couponCode?: string;
+  promoCode?: string;
+
+  // Amazon
+  asin?: string;
 
   // Voting
   upVotes?: number;
   downVotes?: number;
 
-  // Runtime-only fields (not stored in Firestore, but used in UI)
-  isHot?: boolean;
-  isLive?: boolean;
-  isSaved?: boolean;
-  distanceInMiles?: number | null;
+  // Scoring
+  dealScore?: number;
+  resaleIntel?: {
+    marketValue: number;
+    profitPotential: number;
+    roiPercent: number;
+    demandLevel: "NORMAL" | "HIGH" | "ULTRA";
+  } | null;
 }
 
 export type RootStackParamList = {

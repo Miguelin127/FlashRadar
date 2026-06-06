@@ -144,7 +144,7 @@ export const dailyQualityPurge = onSchedule(
     // eBay — only keep 30%+ off
     const ebaySnap = await db.collection("deals_live")
       .where("storeKey", "==", "ebay").get();
-    const ebayBad = ebaySnap.docs.filter(d => (d.data().discountPercent ?? 0) < 30);
+    const ebayBad = ebaySnap.docs.filter(d => (d.data().discountPercent ?? 0) < 50);
     if (ebayBad.length > 0) {
       const batch = db.batch();
       ebayBad.forEach(d => batch.delete(d.ref));
