@@ -50,7 +50,7 @@ export type Deal = {
 /* ─── Constants ──────────────────────────────────────────────── */
 
 const ACCENT = "#FF7A00";
-const QUERY_LIMIT = 500;
+const QUERY_LIMIT = 4000;
 
 const PREMIUM_STORES = [
   "amazon", "bestbuy", "costco", "samsclub", "lowes",
