@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, Alert, Dimensions,
+  ActivityIndicator, Alert, Dimensions, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -311,10 +311,23 @@ export default function UpgradeScreen() {
             </Text>
           )}
         </TouchableOpacity>
-
-        <Text style={styles.legalText}>
+<Text style={styles.legalText}>
           Subscription auto-renews. Cancel anytime in Settings → Manage Subscription.
-          By subscribing you agree to our Terms of Service and Privacy Policy.
+          By subscribing you agree to our{" "}
+          <Text
+            style={{ textDecorationLine: "underline", color: "#ff6b00" }}
+            onPress={() => Linking.openURL("https://flashradarapp.com/terms.html")}
+          >
+            Terms of Use (EULA)
+          </Text>
+          {" "}and{" "}
+          <Text
+            style={{ textDecorationLine: "underline", color: "#ff6b00" }}
+            onPress={() => Linking.openURL("https://flashradarapp.com/privacy.html")}
+          >
+            Privacy Policy
+          </Text>
+          .
         </Text>
       </ScrollView>
     </SafeAreaView>
