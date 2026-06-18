@@ -90,23 +90,34 @@ async function fetchWalmartDeals(): Promise<any[]> {
     "x-rapidapi-host": RAPID_HOST,
   };
 
+  const KEYWORDS = [
+    "clearance", "deals", "kitchen", "home", "toys",
+    "furniture", "appliances", "tools", "bedding", "clothing",
+  ];
   const allItems: any[] = [];
-  let dryStreak = 0;
-  for (let page = 1; page <= 40; page++) {
-    const res = await fetch(`https://${RAPID_HOST}/rollbacks?page=${page}`, { headers });
-    if (res.status !== 200) break;
-    const json: any = await res.json();
-    if (json.message || json.error) break;
-    const results = json.results ?? [];
-    allItems.push(...results);
-    if (results.length === 0) {
-      if (++dryStreak >= 3) break;
-    } else {
-      dryStreak = 0;
+  const seenIds = new Set<string>();
+  for (const kw of KEYWORDS) {
+    try {
+      const res = await fetch(
+        `https://${RAPID_HOST}/search?keyword=${encodeURIComponent(kw)}`,
+        { headers }
+      );
+      if (res.status !== 200) { await sleep(300); continue; }
+      const json: any = await res.json();
+      const results = json.results ?? [];
+      for (const it of results) {
+        const id = it.id ?? it.usItemId;
+        if (id && !seenIds.has(id)) {
+          seenIds.add(id);
+          allItems.push(it);
+        }
+      }
+    } catch (e) {
+      console.warn(`[InstoreDeals] search failed for "${kw}":`, e);
     }
     await sleep(300);
   }
-  console.log(`[InstoreDeals] Walmart raw items collected: ${allItems.length}`);
+  console.log(`[InstoreDeals] Walmart raw items collected (deduped): ${allItems.length}`);
 
   return allItems.filter((item) => {
     const price = parsePrice(item.price);

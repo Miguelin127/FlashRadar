@@ -2,6 +2,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import axios from "axios";
 import { db } from "./firebaseAdmin";
+import { isBlockedContent } from "./contentFilter";
 
 // 🔐 Firebase Secret
 const KEEPA_KEY = defineSecret("KEEPA_API_KEY");
@@ -89,6 +90,11 @@ export const fetchAmazonDealsKeepa = onSchedule(
 
       // Floor: skip Amazon deals under 25% off (or with no provable discount)
       if (discountPercent === null || discountPercent < 25) {
+        return;
+      }
+
+      // Content filter: skip adult/explicit products
+      if (isBlockedContent(p.title)) {
         return;
       }
 
