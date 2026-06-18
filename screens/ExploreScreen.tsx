@@ -51,6 +51,7 @@ export type Deal = {
 
 const ACCENT = "#FF7A00";
 const QUERY_LIMIT = 4000;
+const PAGE_SIZE = 40;
 
 const PREMIUM_STORES = [
   "amazon", "bestbuy", "costco", "samsclub", "lowes",
@@ -64,11 +65,21 @@ type FilterType = typeof FILTERS[number];
 
 const SORT_OPTIONS = [
   { key: "newest", label: "Newest" },
-  { key: "discount", label: "% Off" },
+  { key: "discount", label: "% Off ↓" },
+  { key: "discount-low", label: "% Off ↑" },
   { key: "price-low", label: "Price ↑" },
   { key: "price-high", label: "Price ↓" },
 ] as const;
 type SortKey = typeof SORT_OPTIONS[number]["key"];
+
+const PRICE_RANGES = [
+  { key: "all", label: "Any Price", min: 0, max: Infinity },
+  { key: "u25", label: "Under $25", min: 0, max: 25 },
+  { key: "25-100", label: "$25–100", min: 25, max: 100 },
+  { key: "100-500", label: "$100–500", min: 100, max: 500 },
+  { key: "500+", label: "$500+", min: 500, max: Infinity },
+] as const;
+type PriceKey = typeof PRICE_RANGES[number]["key"];
 
 /* ─── Helpers ────────────────────────────────────────────────── */
 
@@ -102,6 +113,12 @@ function mapDoc(d: any): Deal {
   };
 }
 
+// Title-case a storeKey for display (e.g. "bestbuy" -> "Bestbuy", "homedepot" -> "Homedepot")
+function prettyStore(key: string): string {
+  if (!key) return "Store";
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
 /* ─── Screen ─────────────────────────────────────────────────── */
 
 export default function ExploreScreen() {
@@ -111,8 +128,11 @@ export default function ExploreScreen() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
   const [sort, setSort] = useState<SortKey>("newest");
+  const [storeFilter, setStoreFilter] = useState<string>("all");
+  const [priceRange, setPriceRange] = useState<PriceKey>("all");
   const [gridMode, setGridMode] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const listRef = useRef<FlatList>(null);
   const backToTopAnim = useRef(new Animated.Value(0)).current;
@@ -150,6 +170,20 @@ export default function ExploreScreen() {
     return () => unsub();
   }, []);
 
+  /* ── Store list derived from actual deals ── */
+  const storeOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const d of rawDeals) {
+      const key = (d.storeKey || d.store || "").toLowerCase();
+      if (!key) continue;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    // Sort by count desc so the biggest stores show first
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([key]) => key);
+  }, [rawDeals]);
+
   /* ── Filter + Sort ── */
   const visibleDeals = useMemo(() => {
     let list = rawDeals;
@@ -161,6 +195,21 @@ export default function ExploreScreen() {
       );
     }
 
+    // Store filter
+    if (storeFilter !== "all") {
+      list = list.filter(
+        (d) => (d.storeKey || d.store || "").toLowerCase() === storeFilter
+      );
+    }
+
+    // Price range filter
+    if (priceRange !== "all") {
+      const range = PRICE_RANGES.find((r) => r.key === priceRange);
+      if (range) {
+        list = list.filter((d) => d.price >= range.min && d.price < range.max);
+      }
+    }
+
     if (filter === "hot") list = list.filter((d) => d.hot);
     else if (filter === "rare") list = list.filter((d) => d.rare);
     else if (filter === "lightning") list = list.filter((d) => d.lightning);
@@ -168,6 +217,7 @@ export default function ExploreScreen() {
 
     list = [...list].sort((a, b) => {
       if (sort === "discount") return (b.discountPercent ?? 0) - (a.discountPercent ?? 0);
+      if (sort === "discount-low") return (a.discountPercent ?? 0) - (b.discountPercent ?? 0);
       if (sort === "price-low") return (a.price ?? 0) - (b.price ?? 0);
       if (sort === "price-high") return (b.price ?? 0) - (a.price ?? 0);
       const ta = a.createdAt?.seconds ?? 0;
@@ -176,7 +226,19 @@ export default function ExploreScreen() {
     });
 
     return list;
-  }, [rawDeals, search, filter, sort]);
+  }, [rawDeals, search, filter, sort, storeFilter, priceRange]);
+
+  // Reset pagination whenever the result set changes
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, filter, sort, storeFilter, priceRange]);
+
+  // The slice actually rendered
+  const pagedDeals = useMemo(
+    () => visibleDeals.slice(0, visibleCount),
+    [visibleDeals, visibleCount]
+  );
+  const hasMore = visibleCount < visibleDeals.length;
 
   const lockedCount = useMemo(() => {
     if (isPremium) return 0;
@@ -316,6 +378,56 @@ export default function ExploreScreen() {
           )}
         />
 
+        {/* Store filter chips */}
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={["all", ...storeOptions]}
+          keyExtractor={(s) => "store-" + s}
+          style={styles.storeList}
+          renderItem={({ item: s }) => {
+            const active = storeFilter === s;
+            return (
+              <TouchableOpacity
+                onPress={() => setStoreFilter(s)}
+                style={[
+                  styles.storeChip,
+                  { backgroundColor: active ? ACCENT : dark ? "#1a1a1a" : "#eee" },
+                ]}
+              >
+                <Text style={[styles.storeChipText, { color: active ? "#000" : dark ? "#aaa" : "#555" }]}>
+                  {s === "all" ? "🏬 All Stores" : prettyStore(s)}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+
+        {/* Price range chips */}
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={PRICE_RANGES as unknown as typeof PRICE_RANGES[number][]}
+          keyExtractor={(p) => "price-" + p.key}
+          style={styles.priceList}
+          renderItem={({ item: p }) => {
+            const active = priceRange === p.key;
+            return (
+              <TouchableOpacity
+                onPress={() => setPriceRange(p.key)}
+                style={[
+                  styles.priceChip,
+                  { backgroundColor: active ? ACCENT : dark ? "#1a1a1a" : "#eee" },
+                ]}
+              >
+                <Text style={[styles.priceChipText, { color: active ? "#000" : dark ? "#aaa" : "#555" }]}>
+                  {p.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+
         {/* Sort row */}
         <FlatList
           horizontal
@@ -344,13 +456,17 @@ export default function ExploreScreen() {
       {/* ── DEAL LIST ── */}
       <FlatList
         ref={listRef}
-        data={visibleDeals}
+        data={pagedDeals}
         key={gridMode ? "grid" : "list"}
         keyExtractor={(item) => item.id}
         numColumns={gridMode ? 2 : 1}
         contentContainerStyle={[styles.list, gridMode && styles.gridPadding]}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        onEndReachedThreshold={0.5}
+        onEndReached={() => {
+          if (hasMore) setVisibleCount((c) => c + PAGE_SIZE);
+        }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ACCENT} />
         }
@@ -362,21 +478,39 @@ export default function ExploreScreen() {
           </View>
         }
         ListFooterComponent={
-          !isPremium ? (
-            <TouchableOpacity
-              style={styles.unlockBox}
-              onPress={() => navigation.navigate("Upgrade")}
-            >
-              <Ionicons name="lock-closed-outline" size={18} color="#fff" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.unlockTitle}>Premium Stores Locked</Text>
-                <Text style={styles.unlockSub}>
-                  Amazon, Best Buy, Costco, Apple Store + more · Go Premium
+          <View>
+            {/* Load More button */}
+            {hasMore && (
+              <TouchableOpacity
+                style={styles.loadMoreBtn}
+                onPress={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              >
+                <Text style={styles.loadMoreText}>
+                  Load More · {visibleDeals.length - visibleCount} left
                 </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="#888" />
-            </TouchableOpacity>
-          ) : <View style={{ height: 100 }} />
+                <Ionicons name="chevron-down" size={16} color={ACCENT} />
+              </TouchableOpacity>
+            )}
+
+            {/* Premium upsell */}
+            {!isPremium ? (
+              <TouchableOpacity
+                style={styles.unlockBox}
+                onPress={() => navigation.navigate("Upgrade")}
+              >
+                <Ionicons name="lock-closed-outline" size={18} color="#fff" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.unlockTitle}>Premium Stores Locked</Text>
+                  <Text style={styles.unlockSub}>
+                    Amazon, Best Buy, Costco, Apple Store + more · Go Premium
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#888" />
+              </TouchableOpacity>
+            ) : (
+              <View style={{ height: 100 }} />
+            )}
+          </View>
         }
         renderItem={renderItem}
       />
@@ -417,6 +551,12 @@ const styles = StyleSheet.create({
   filterList: { marginBottom: 8 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, marginRight: 6 },
   chipText: { fontSize: 11, fontWeight: "800" },
+  storeList: { marginBottom: 8 },
+  storeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, marginRight: 6 },
+  storeChipText: { fontSize: 11, fontWeight: "800" },
+  priceList: { marginBottom: 8 },
+  priceChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, marginRight: 6 },
+  priceChipText: { fontSize: 11, fontWeight: "800" },
   sortList: { marginBottom: 6 },
   sortChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: "#333", marginRight: 6 },
   sortText: { fontSize: 11, fontWeight: "700" },
@@ -426,6 +566,13 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", paddingVertical: 60, gap: 8 },
   emptyTitle: { color: "#555", fontWeight: "900", fontSize: 16, letterSpacing: 1 },
   emptySub: { color: "#666", fontSize: 13 },
+  loadMoreBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    backgroundColor: "rgba(255,122,0,0.08)",
+    borderWidth: 1, borderColor: ACCENT + "44",
+    borderRadius: 12, paddingVertical: 14, marginHorizontal: 12, marginTop: 6, marginBottom: 4,
+  },
+  loadMoreText: { color: ACCENT, fontSize: 13, fontWeight: "800" },
   unlockBox: {
     backgroundColor: "#111", borderWidth: 1, borderColor: ACCENT + "33",
     margin: 12, padding: 16, borderRadius: 14,

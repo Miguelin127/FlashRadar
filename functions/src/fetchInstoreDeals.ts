@@ -91,15 +91,22 @@ async function fetchWalmartDeals(): Promise<any[]> {
   };
 
   const allItems: any[] = [];
-  for (let page = 1; page <= 3; page++) {
+  let dryStreak = 0;
+  for (let page = 1; page <= 40; page++) {
     const res = await fetch(`https://${RAPID_HOST}/rollbacks?page=${page}`, { headers });
+    if (res.status !== 200) break;
     const json: any = await res.json();
-    if (res.status !== 200 || json.message || json.error) break;
+    if (json.message || json.error) break;
     const results = json.results ?? [];
     allItems.push(...results);
-    if (results.length === 0) break;
-    if (page < 3) await sleep(400);
+    if (results.length === 0) {
+      if (++dryStreak >= 3) break;
+    } else {
+      dryStreak = 0;
+    }
+    await sleep(300);
   }
+  console.log(`[InstoreDeals] Walmart raw items collected: ${allItems.length}`);
 
   return allItems.filter((item) => {
     const price = parsePrice(item.price);
@@ -207,6 +214,7 @@ export const fetchInstoreDeals = onRequest(
           discountPercent: discountPercent ?? null,
           store: store.displayName?.text ?? chain.label,
           storeKey: chain.key,
+          category: deal.category ?? "Other",
           storeAddress: store.formattedAddress ?? "",
           latitude: store.location.latitude,
           longitude: store.location.longitude,

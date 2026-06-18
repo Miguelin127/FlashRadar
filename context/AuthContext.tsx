@@ -75,12 +75,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   // Google auth session
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: "flashradar" });
   const [_, googleResponse, googlePromptAsync] = Google.useAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
     webClientId: GOOGLE_WEB_CLIENT_ID,
-    redirectUri,
   });
 
   // Handle Google response

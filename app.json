@@ -21,7 +21,14 @@
         "NSUserNotificationsUsageDescription": "FlashRadar sends you instant alerts when rare deals and lightning offers drop near you.",
         "NSLocationWhenInUseUsageDescription": "FlashRadar uses your location to show nearby deals, clearance sales, and store-specific offers within your area.",
         "NSLocationAlwaysUsageDescription": "FlashRadar uses your location to detect nearby deals and send you alerts when rare finds appear at stores close to you.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.2868928124-g7ha6o9jvfj9ul9dectbn24ksmlol7q5"
+            ]
+          }
+        ]
       },
       "requireFullScreen": true
     },

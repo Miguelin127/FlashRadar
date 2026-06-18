@@ -497,23 +497,24 @@ export default function MapScreen() {
       setCurrentRegion(r);
       setLoading(false);
       setLoadingStores(true);
-      const stores = await fetchNearbyStores(latitude, longitude, instoreDeals);
+      const stores = await fetchNearbyStores(latitude, longitude, []);
       setNearbyStores(stores);
       setLoadingStores(false);
     };
     loadLocation();
   }, []);
 
-  // Re-match deals to stores when instoreDeals updates
+  // Re-match deals to stores whenever deals OR stores change
   useEffect(() => {
-    if (instoreDeals.length === 0 || nearbyStores.length === 0) return;
+    if (nearbyStores.length === 0) return;
     setNearbyStores((prev) =>
       prev.map((store) => ({
         ...store,
         deals: matchDealsByProximity(instoreDeals, store.latitude, store.longitude),
       }))
     );
-  }, [instoreDeals]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instoreDeals, nearbyStores.length]);
 
   const searchThisArea = async () => {
     if (!currentRegion) return;
@@ -526,7 +527,7 @@ export default function MapScreen() {
 
   const filteredDeals = useMemo(() => {
     if (selectedCategory === "All") return instoreDeals;
-    return instoreDeals.filter((d) => d.category === selectedCategory);
+    return instoreDeals.filter((d) => (d.category ?? "Other") === selectedCategory);
   }, [instoreDeals, selectedCategory]);
 
   const premiumStoreCount = nearbyStores.filter(s => s.isPremium).length;

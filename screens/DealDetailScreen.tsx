@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   Linking,
 } from "react-native";
-import { RouteProp } from "@react-navigation/native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { Deal } from "../components/DealCard";
 
@@ -16,6 +17,7 @@ import { Deal } from "../components/DealCard";
 
 type DealWithHistory = Deal & {
   originalPrice?: number | null;
+  discountPercent?: number | null;
   avg30?: number | null;
   avg60?: number | null;
   avg90?: number | null;
@@ -57,6 +59,7 @@ function normalizeImage(url?: string | null) {
 
 export default function DealDetailScreen({ route }: Props) {
   const { deal } = route.params;
+  const navigation = useNavigation<any>();
 
   // ✅ FIXED IMAGE RESOLUTION
   const imageUri = useMemo(() => {
@@ -89,96 +92,148 @@ export default function DealDetailScreen({ route }: Props) {
       ? Math.max(...historyPrices)
       : null;
 
-  const discountPercent =
+  // Prefer the deal's own discountPercent; fall back to computed from history
+  const computedDiscount =
     currentPrice && oldPrice && oldPrice > currentPrice
       ? Math.round(((oldPrice - currentPrice) / oldPrice) * 100)
       : null;
 
+  const discountPercent =
+    typeof deal.discountPercent === "number" && deal.discountPercent > 0
+      ? Math.round(deal.discountPercent)
+      : computedDiscount;
+
   return (
-    <ScrollView style={styles.container}>
-      {/* IMAGE */}
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} style={styles.image} />
-      ) : (
-        <View style={styles.imageFallback}>
-          <Ionicons name="image-outline" size={48} color="#555" />
-          <Text style={styles.imageFallbackText}>
-            Image unavailable
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.content}>
-        {/* TITLE */}
-        <Text style={styles.title}>{deal.title}</Text>
-
-        {/* STORE */}
-        <Text style={styles.store}>{deal.store}</Text>
-
-        {/* DEAL STRENGTH */}
-        <View style={styles.strengthRow}>
-          <Ionicons name="flash" size={16} color={strength.color} />
-          <Text style={[styles.strengthText, { color: strength.color }]}>
-            {strength.label}
-          </Text>
-        </View>
-
-        {/* PRICE */}
-        <View style={styles.priceRow}>
-          {currentPrice ? (
-            <Text style={styles.price}>
-              ${currentPrice.toFixed(2)}
-            </Text>
-          ) : (
-            <Text style={styles.priceUnavailable}>See deal</Text>
-          )}
-
-          {oldPrice && discountPercent && (
-            <>
-              <Text style={styles.originalPrice}>
-                ${oldPrice.toFixed(2)}
-              </Text>
-              <View style={styles.discountBadge}>
-                <Text style={styles.discountText}>
-                  {discountPercent}% OFF
-                </Text>
-              </View>
-            </>
-          )}
-        </View>
-
-        {/* META */}
-        <View style={styles.metaRow}>
-          <Ionicons name="time-outline" size={14} color="#aaa" />
-          <Text style={styles.metaText}>
-            Posted {timeAgo(deal.timestamp)}
-          </Text>
-        </View>
-
-        {/* DESCRIPTION */}
-        <Text style={styles.description}>
-          This deal is live and may sell out quickly. Pricing and availability
-          can change at any time.
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      {/* HEADER BAR */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="chevron-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {deal.store}
         </Text>
-
-        {/* CTA */}
-        {dealUrl && (
-          <TouchableOpacity
-            style={styles.openBtn}
-            onPress={() => Linking.openURL(dealUrl)}
-          >
-            <Text style={styles.openText}>Get Deal</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.backBtn} />
       </View>
-    </ScrollView>
+
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* IMAGE */}
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={styles.image} />
+        ) : (
+          <View style={styles.imageFallback}>
+            <Ionicons name="image-outline" size={48} color="#555" />
+            <Text style={styles.imageFallbackText}>
+              Image unavailable
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.content}>
+          {/* TITLE */}
+          <Text style={styles.title}>{deal.title}</Text>
+
+          {/* STORE */}
+          <Text style={styles.store}>{deal.store}</Text>
+
+          {/* DEAL STRENGTH */}
+          <View style={styles.strengthRow}>
+            <Ionicons name="flash" size={16} color={strength.color} />
+            <Text style={[styles.strengthText, { color: strength.color }]}>
+              {strength.label}
+            </Text>
+          </View>
+
+          {/* PRICE */}
+          <View style={styles.priceRow}>
+            {currentPrice ? (
+              <Text style={styles.price}>
+                ${currentPrice.toFixed(2)}
+              </Text>
+            ) : (
+              <Text style={styles.priceUnavailable}>See deal</Text>
+            )}
+
+            {oldPrice && discountPercent && (
+              <>
+                <Text style={styles.originalPrice}>
+                  ${oldPrice.toFixed(2)}
+                </Text>
+                <View style={styles.discountBadge}>
+                  <Text style={styles.discountText}>
+                    {discountPercent}% OFF
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
+
+          {/* META */}
+          <View style={styles.metaRow}>
+            <Ionicons name="time-outline" size={14} color="#aaa" />
+            <Text style={styles.metaText}>
+              Posted {timeAgo(deal.timestamp)}
+            </Text>
+          </View>
+
+          {/* DESCRIPTION */}
+          <Text style={styles.description}>
+            This deal is live and may sell out quickly. Pricing and availability
+            can change at any time.
+          </Text>
+
+          {/* CTA */}
+          {dealUrl && (
+            <TouchableOpacity
+              style={styles.openBtn}
+              onPress={() => Linking.openURL(dealUrl)}
+            >
+              <Text style={styles.openText}>Get Deal</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 /* ───────────────────── STYLES ───────────────────── */
 
 const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: "#000" },
   container: { flex: 1, backgroundColor: "#000" },
+
+  headerBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    backgroundColor: "#000",
+  },
+
+  backBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  headerTitle: {
+    flex: 1,
+    textAlign: "center",
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
 
   image: {
     width: "100%",
