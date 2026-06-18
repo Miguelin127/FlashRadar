@@ -87,6 +87,11 @@ export const fetchAmazonDealsKeepa = onSchedule(
           ? Math.round(((listPrice - price) / listPrice) * 100)
           : null;
 
+      // Floor: skip Amazon deals under 25% off (or with no provable discount)
+      if (discountPercent === null || discountPercent < 25) {
+        return;
+      }
+
       batch.set(
         db.collection("deals_online").doc(`AMZ_${p.asin}`),
         {

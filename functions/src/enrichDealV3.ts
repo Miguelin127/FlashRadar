@@ -86,10 +86,10 @@ export async function runEnrichment(dealId: string) {
     return;
   }
 
-  /* handle ebay first — block under 30% discount */
+  /* handle ebay first — block under 50% discount */
   if (domain.includes("ebay.com")) {
     const discountPercent = deal.discountPercent ?? 0;
-    if (discountPercent < 30) {
+    if (discountPercent < 50) {
       await dealRef.update({
         enrichmentStatus: "flagged",
         blockedReason: "ebay_low_discount"
@@ -137,12 +137,26 @@ export async function runEnrichment(dealId: string) {
 
     const parsedPrice = parseFloat(priceText.replace(/[^\d.]/g, ""));
 
+    const genericStoreKey = domain.split(".")[0];
+    const FLOORS: Record<string, number> = {
+      amazon: 25, walmart: 25, nike: 35, target: 25, homedepot: 25,
+    };
+    const genericDiscount = deal.discountPercent ?? 0;
+    const genericFloor = FLOORS[genericStoreKey] ?? 25;
+    if (genericDiscount < genericFloor) {
+      await dealRef.update({
+        enrichmentStatus: "flagged",
+        blockedReason: `${genericStoreKey}_low_discount`
+      });
+      return;
+    }
+
     await dealRef.set({
       title,
       imageUrl: image || deal.imageUrl || deal.image,
       price: parsedPrice ?? deal.price,
       store: domain,
-      storeKey: domain.split(".")[0],
+      storeKey: genericStoreKey,
       canonicalUrl: url,
       authorityScore: 100,
       enrichmentStatus: "enriched",
