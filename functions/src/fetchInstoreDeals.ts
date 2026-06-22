@@ -3,6 +3,7 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import fetch from "node-fetch";
+import { isBlockedContent } from "./contentFilter";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -216,6 +217,9 @@ export const fetchInstoreDeals = onRequest(
         const dealId = deal.id ?? `${chain.key}_${i}`;
         const id = `instore_${chain.key}_${dealId}_${store.id}`;
         const ref = db.collection("deals_instore").doc(id);
+
+        const wmTitle = deal.title ?? deal.name ?? "";
+        if (isBlockedContent(wmTitle)) continue;
 
         batch.set(ref, {
           id,

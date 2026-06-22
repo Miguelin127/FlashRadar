@@ -1,6 +1,7 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import axios from "axios";
 import { db } from "./firebaseAdmin";
+import { isBlockedContent } from "./contentFilter";
 
 export const fetchNikeDeals = onSchedule(
   {
@@ -40,6 +41,8 @@ export const fetchNikeDeals = onSchedule(
         skipped++;
         continue;
       }
+
+      if (isBlockedContent(p.title)) continue;
 
       await ref.set({
         id,

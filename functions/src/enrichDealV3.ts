@@ -2,6 +2,7 @@ import { onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { isBlockedContent } from "./contentFilter";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -96,6 +97,13 @@ export async function runEnrichment(dealId: string) {
       });
       return;
     }
+    if (isBlockedContent(deal.title)) {
+      await dealRef.update({
+        enrichmentStatus: "flagged",
+        blockedReason: "adult_content"
+      });
+      return;
+    }
     await dealRef.set({
       store: "ebay.com",
       storeKey: "ebay",
@@ -147,6 +155,14 @@ export async function runEnrichment(dealId: string) {
       await dealRef.update({
         enrichmentStatus: "flagged",
         blockedReason: `${genericStoreKey}_low_discount`
+      });
+      return;
+    }
+
+    if (isBlockedContent(title) || isBlockedContent(deal.title)) {
+      await dealRef.update({
+        enrichmentStatus: "flagged",
+        blockedReason: "adult_content"
       });
       return;
     }
