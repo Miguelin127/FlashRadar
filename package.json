@@ -36,7 +36,6 @@
     "expo-sharing": "~56.0.16",
     "expo-status-bar": "~56.0.4",
     "expo-system-ui": "~56.0.5",
-    "expo-tracking-transparency": "~56.0.5",
     "expo-web-browser": "~56.0.5",
     "firebase": "11.10.0",
     "firebase-functions": "^7.2.5",
