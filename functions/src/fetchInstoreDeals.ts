@@ -198,7 +198,7 @@ export const fetchInstoreDeals = onRequest(
       if (deals.length === 0 || stores.length === 0) continue;
 
       // Distribute deals across stores (round-robin)
-      const maxDeals = Math.min(deals.length, 15);
+      const maxDeals = Math.min(deals.length, 50);
       for (let i = 0; i < maxDeals; i++) {
         const deal = deals[i];
         const store = stores[i % stores.length];
