@@ -250,9 +250,14 @@ export const dailyQualityPurge = onSchedule(
 
     // Apply store caps — keep top N by discount per store
     const postDedupSnap = await db.collection("deals_live").get();
+    // Manually-published deals (from the Pipeline/Admin) are curated and must
+    // never be evicted by store caps. Exempt them by source.
+    const MANUAL_SOURCES = new Set(["manual-entry", "ironclad_v11", "pipeline", "vip"]);
     const storeGroups: Record<string, admin.firestore.QueryDocumentSnapshot[]> = {};
     postDedupSnap.docs.forEach(d => {
-      const key = (d.data().storeKey || "unknown").toLowerCase();
+      const data = d.data();
+      if (MANUAL_SOURCES.has((data.source || "").toLowerCase())) return; // skip caps for manual deals
+      const key = (data.storeKey || "unknown").toLowerCase();
       if (!storeGroups[key]) storeGroups[key] = [];
       storeGroups[key].push(d);
     });
@@ -289,3 +294,4 @@ export { resolveTitle } from "./resolveTitle";
 export { detectSoldPrice } from "./detectSoldPrice";
 export { previewDealV2 } from "./previewDeal";
 export { getPrintfulProducts } from "./getPrintfulProducts";export { fetchImpactCatalog } from "./fetchImpactCatalog";
+export { expireManualDeals } from "./expireManualDeals";

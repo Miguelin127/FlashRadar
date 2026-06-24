@@ -91,7 +91,14 @@ export default function SettingsScreen() {
   const handleLogout = async () => {
     Alert.alert("Log out", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Log out", style: "destructive", onPress: async () => await auth.signOut() },
+      {
+        text: "Log out",
+        style: "destructive",
+        onPress: async () => {
+          await auth.signOut();
+          navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        },
+      },
     ]);
   };
 
@@ -124,6 +131,7 @@ export default function SettingsScreen() {
                       savedSnap.docs.forEach((d) => batch.delete(d.ref));
                       await batch.commit();
                       await auth.currentUser?.delete();
+                      navigation.reset({ index: 0, routes: [{ name: "Login" }] });
                     } catch (err: any) {
                       if (err.code === "auth/requires-recent-login") {
                         Alert.alert("Re-authentication Required", "For security, please log out and log back in before deleting your account.", [{ text: "OK" }]);
