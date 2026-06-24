@@ -288,4 +288,4 @@ export { parseProduct } from "./parseProduct";
 export { resolveTitle } from "./resolveTitle";
 export { detectSoldPrice } from "./detectSoldPrice";
 export { previewDealV2 } from "./previewDeal";
-export { getPrintfulProducts } from "./getPrintfulProducts";
+export { getPrintfulProducts } from "./getPrintfulProducts";export { fetchImpactCatalog } from "./fetchImpactCatalog";

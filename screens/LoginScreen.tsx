@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import SafeAreaWrapper from "../components/SafeAreaWrapper";
 import { useAuth } from "../context/AuthContext";
+import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as AppleAuthentication from "expo-apple-authentication";
 
@@ -16,6 +17,13 @@ const ADMIN_EMAIL = "miguelx.x127@gmail.com";
 
 export default function LoginScreen() {
   const { signIn, signUp, signInWithGoogle, signInWithApple } = useAuth();
+  const navigation = useNavigation<any>();
+
+  // After a successful sign-in, return the user to browsing.
+  const dismiss = () => {
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate("MainTabs");
+  };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,6 +36,7 @@ export default function LoginScreen() {
       setLoading(mode);
       if (mode === "login") await signIn(email.trim(), password);
       else await signUp(email.trim(), password);
+      dismiss();
     } catch (e: any) {
       Alert.alert(mode === "login" ? "Login failed" : "Signup failed", e.message);
     } finally { setLoading(null); }
@@ -37,6 +46,7 @@ export default function LoginScreen() {
     try {
       setLoading("google");
       await signInWithGoogle();
+      dismiss();
     } catch (e: any) {
       Alert.alert("Google sign-in failed", e.message);
     } finally { setLoading(null); }
@@ -46,6 +56,7 @@ export default function LoginScreen() {
     try {
       setLoading("apple");
       await signInWithApple();
+      dismiss();
     } catch (e: any) {
       if (e.code !== "ERR_REQUEST_CANCELED") {
         Alert.alert("Apple sign-in failed", e.message);

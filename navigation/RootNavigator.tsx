@@ -18,8 +18,6 @@ import AdminPostDealScreen from "../screens/AdminPostDealScreen";
 
 import type { RootTabParamList } from "./BottomTabsNavigator";
 
-/* ─── Types ──────────────────────────────────────────────────── */
-
 export type RootStackParamList = {
   Login: undefined;
   MainTabs?: { screen?: keyof RootTabParamList };
@@ -35,36 +33,33 @@ export type RootStackParamList = {
   AdminPostDeal: undefined;
 };
 
-/* ─── Navigator ──────────────────────────────────────────────── */
-
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
-  const { user, ready } = useAuth();
+  const { ready } = useAuth();
 
   if (!ready) return null;
 
+  // Browsing is open to everyone (Apple Guideline 5.1.1(v)). Account-based
+  // screens are still registered; each one checks auth at point-of-use and
+  // prompts sign-in (e.g. DealCard's save button alerts "Please sign in").
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {user ? (
-        <>
-          <Stack.Screen name="MainTabs" component={BottomTabsNavigator} />
-          <Stack.Screen name="DealDetail" component={DealDetailScreen as any} />
-          <Stack.Screen name="FlipScanner" component={FlipScannerScreen} />
-          <Stack.Screen name="FlipHistory" component={FlipHistoryScreen} />
-          <Stack.Screen name="FlipItResult" component={FlipItResultScreen as any} />
-          <Stack.Screen name="MyFlips" component={MyFlipsScreen} />
-          <Stack.Screen name="PremiumIntro" component={PremiumIntroScreen} />
-          <Stack.Screen name="Referral" component={ReferralScreen} />
-          <Stack.Screen name="Upgrade" component={UpgradeScreen} />
-          <Stack.Screen name="AdminPostDeal" component={AdminPostDealScreen} />
-          <Stack.Screen name="CreatorDashboard" component={
-            require("../screens/CreatorDashboard").default
-          } />
-        </>
-      ) : (
-        <Stack.Screen name="Login" component={LoginScreen} />
-      )}
+      <Stack.Screen name="MainTabs" component={BottomTabsNavigator} />
+      <Stack.Screen name="DealDetail" component={DealDetailScreen as any} />
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="FlipScanner" component={FlipScannerScreen} />
+      <Stack.Screen name="FlipHistory" component={FlipHistoryScreen} />
+      <Stack.Screen name="FlipItResult" component={FlipItResultScreen as any} />
+      <Stack.Screen name="MyFlips" component={MyFlipsScreen} />
+      <Stack.Screen name="PremiumIntro" component={PremiumIntroScreen} />
+      <Stack.Screen name="Referral" component={ReferralScreen} />
+      <Stack.Screen name="Upgrade" component={UpgradeScreen} />
+      <Stack.Screen name="AdminPostDeal" component={AdminPostDealScreen} />
+      <Stack.Screen
+        name="CreatorDashboard"
+        component={require("../screens/CreatorDashboard").default}
+      />
     </Stack.Navigator>
   );
 }

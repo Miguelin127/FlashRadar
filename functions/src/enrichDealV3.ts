@@ -27,7 +27,8 @@ const ALLOWED_DOMAINS = [
   "homedepot.com",
   "bestbuy.com",
   "apple.com",
-  "ebay.com"
+  "ebay.com",
+  "sjv.io"
 ];
 
 function extractDomain(url: string): string | null {
@@ -61,6 +62,23 @@ export async function runEnrichment(dealId: string) {
   }
 
   const domain = extractDomain(url);
+
+  // API-sourced deals (Impact catalogs) already have complete, trusted data
+  // from the catalog API. Their `url` is an affiliate redirect (sjv.io), NOT a
+  // scrapeable product page — so skip HTML scraping and mark enriched directly,
+  // preserving the clean title/price/image/discount we already have.
+  if (deal.source === "impact") {
+    await dealRef.set({
+      enrichmentStatus: "enriched",
+      imageUrl: deal.image || deal.imageUrl || null,
+      canonicalUrl: deal.url,
+      storeKey: deal.storeKey || "bestchoice",
+      authorityScore: 100,
+      lastValidatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      blockedReason: admin.firestore.FieldValue.delete(),
+    }, { merge: true });
+    return;
+  }
 
   if (!domain) {
     await dealRef.update({
