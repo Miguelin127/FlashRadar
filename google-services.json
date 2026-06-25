@@ -50,6 +50,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "2868928124-66q9ulho0utbk5q4huvpud7tfn3a8g7d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.miguelin1.flashradarapp",
+            "certificate_hash": "11f86100bdc0249101b5a1771b04043c5cdc5425"
+          }
+        },
+        {
           "client_id": "2868928124-t06eluv2f4cm4o7dfpthd7ltj1j8m5ik.apps.googleusercontent.com",
           "client_type": 3
         }
