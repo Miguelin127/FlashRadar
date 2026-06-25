@@ -74,3 +74,6 @@ functions/*.json
 ios/
 android/
 .expo/
+
+/android
+/ios

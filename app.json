@@ -2,15 +2,10 @@
   "expo": {
     "name": "FlashRadar",
     "slug": "flashradar-app",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.miguelin1.flashradarapp",
@@ -34,16 +29,24 @@
     },
     "android": {
       "package": "com.miguelin1.flashradarapp",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "RECEIVE_BOOT_COMPLETED",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
         "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc"
+        }
+      }
     },
     "extra": {
       "eas": {
@@ -64,7 +67,15 @@
       "expo-font",
       "expo-apple-authentication",
       "expo-sharing",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        }
+      ]
     ],
     "scheme": "flashradar"
   }

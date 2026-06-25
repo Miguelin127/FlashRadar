@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { Deal } from "../components/DealCard";
+import { useAuth } from "../context/AuthContext";
 
 /* ───────────────────── TYPES ───────────────────── */
 
@@ -60,6 +61,7 @@ function normalizeImage(url?: string | null) {
 export default function DealDetailScreen({ route }: Props) {
   const { deal } = route.params;
   const navigation = useNavigation<any>();
+  const { user } = useAuth();
 
   // ✅ FIXED IMAGE RESOLUTION
   const imageUri = useMemo(() => {
@@ -199,6 +201,20 @@ export default function DealDetailScreen({ route }: Props) {
               <Text style={styles.openText}>Get Deal</Text>
             </TouchableOpacity>
           )}
+
+          {/* GUEST SIGN-IN NUDGE */}
+          {!user && (
+            <TouchableOpacity
+              style={styles.signInNudge}
+              onPress={() => navigation.navigate("Login")}
+            >
+              <Ionicons name="notifications-outline" size={18} color="#FF7A00" />
+              <Text style={styles.signInText}>
+                Sign in to save deals & get price alerts
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color="#FF7A00" />
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -209,6 +225,19 @@ export default function DealDetailScreen({ route }: Props) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#000" },
+  signInNudge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FF7A00",
+    backgroundColor: "rgba(255,122,0,0.08)",
+  },
+  signInText: { flex: 1, color: "#FF7A00", fontWeight: "700", fontSize: 14 },
   container: { flex: 1, backgroundColor: "#000" },
 
   headerBar: {

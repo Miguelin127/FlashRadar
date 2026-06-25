@@ -1,0 +1,82 @@
+{
+  "project_info": {
+    "project_number": "2868928124",
+    "project_id": "flashradar-71c93",
+    "storage_bucket": "flashradar-71c93.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:2868928124:android:00f0a45e20f08991e033f9",
+        "android_client_info": {
+          "package_name": "com.flashradar.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "2868928124-t06eluv2f4cm4o7dfpthd7ltj1j8m5ik.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArUOiLs6lYxk0tM8lfQ0o39ZZbQE_5_4w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "2868928124-mc285lh7neu7iul1vespr2k5jo8uteok.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "2868928124-g7ha6o9jvfj9ul9dectbn24ksmlol7q5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.miguelin1.flashradarapp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:2868928124:android:5a0dc5e652ae52cae033f9",
+        "android_client_info": {
+          "package_name": "com.miguelin1.flashradarapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "2868928124-t06eluv2f4cm4o7dfpthd7ltj1j8m5ik.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArUOiLs6lYxk0tM8lfQ0o39ZZbQE_5_4w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "2868928124-mc285lh7neu7iul1vespr2k5jo8uteok.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "2868928124-g7ha6o9jvfj9ul9dectbn24ksmlol7q5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.miguelin1.flashradarapp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
