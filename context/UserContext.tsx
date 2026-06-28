@@ -37,6 +37,7 @@ export function isStoreAccessible(store: string, isPremium: boolean): boolean {
 
 type UserContextType = {
   isPremium: boolean;
+  isAdmin: boolean;
   subscriptionStatus: string;
   loading: boolean;
   trialActive: boolean;
@@ -45,6 +46,7 @@ type UserContextType = {
 
 const UserContext = createContext<UserContextType>({
   isPremium: false,
+  isAdmin: false,
   subscriptionStatus: "none",
   loading: true,
   trialActive: false,
@@ -102,8 +104,10 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     return () => unsub();
   }, [user]);
 
+  const isAdmin = (user?.email || "").toLowerCase() === "miguelx.x127@gmail.com";
+
   return (
-    <UserContext.Provider value={{ isPremium, subscriptionStatus, loading, trialActive, trialEndsAt }}>
+    <UserContext.Provider value={{ isPremium, isAdmin, subscriptionStatus, loading, trialActive, trialEndsAt }}>
       {children}
     </UserContext.Provider>
   );

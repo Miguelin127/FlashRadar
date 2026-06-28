@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { db } from "../firebaseConfig";
 import DealCard from "../components/DealCard";
 import { useTheme } from "../context/ThemeContext";
+import { PREMIUM_STORES, FREE_DEAL_LIMIT, isStoreLocked } from "../constants/premiumStores";
 import { useUser } from "../context/UserContext";
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -52,13 +53,6 @@ export type Deal = {
 const ACCENT = "#FF7A00";
 const QUERY_LIMIT = 4000;
 const PAGE_SIZE = 40;
-
-const PREMIUM_STORES = [
-  "amazon", "bestbuy", "costco", "samsclub", "lowes",
-  "apple", "nordstrom", "bloomingdales", "neimanmarcus",
-  "saks", "macys", "sephora", "nike", "footlocker",
-  "gamestop", "tjmaxx", "marshalls", "ross", "burlington",
-];
 
 const FILTERS = ["all", "hot", "rare", "lightning", "code"] as const;
 type FilterType = typeof FILTERS[number];
@@ -139,7 +133,7 @@ export default function ExploreScreen() {
   const { theme, colors } = useTheme();
   const dark = theme === "dark";
   const navigation = useNavigation<any>();
-  const { isPremium } = useUser();
+  const { isPremium, isAdmin } = useUser();
 
   /* ── Load deals — force server fetch first, then live updates ── */
   useEffect(() => {
@@ -186,7 +180,8 @@ export default function ExploreScreen() {
 
   /* ── Filter + Sort ── */
   const visibleDeals = useMemo(() => {
-    let list = rawDeals;
+    // Drop ghost/malformed deals (no image) that render as bare buttons
+    let list = rawDeals.filter((d) => !!(d.imageUrl || d.image));
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -225,8 +220,13 @@ export default function ExploreScreen() {
       return tb - ta;
     });
 
+    // Free users capped at FREE_DEAL_LIMIT; premium unlimited
+    if (!isPremium && list.length > FREE_DEAL_LIMIT) {
+      list = list.slice(0, FREE_DEAL_LIMIT);
+    }
+
     return list;
-  }, [rawDeals, search, filter, sort, storeFilter, priceRange]);
+  }, [rawDeals, search, filter, sort, storeFilter, priceRange, isPremium]);
 
   // Reset pagination whenever the result set changes
   useEffect(() => {
@@ -346,7 +346,7 @@ export default function ExploreScreen() {
           >
             <Ionicons name="lock-closed-outline" size={13} color={ACCENT} />
             <Text style={styles.premiumBannerText}>
-              🔒 {lockedCount} premium deals locked — Tap to unlock
+              🔒 {isAdmin ? `${lockedCount} ` : ""}premium deals locked — Tap to unlock
             </Text>
             <Ionicons name="chevron-forward" size={13} color="#888" />
           </TouchableOpacity>
@@ -449,7 +449,11 @@ export default function ExploreScreen() {
 
         {/* Results count */}
         <Text style={styles.resultsCount}>
-          {visibleDeals.length} deals{!isPremium ? " · Upgrade to unlock all stores" : ""}
+          {isAdmin
+            ? `${visibleDeals.length} deals`
+            : !isPremium && visibleDeals.length >= FREE_DEAL_LIMIT
+            ? "Upgrade to see 1000s of deals"
+            : ""}
         </Text>
       </View>
 
@@ -486,7 +490,7 @@ export default function ExploreScreen() {
                 onPress={() => setVisibleCount((c) => c + PAGE_SIZE)}
               >
                 <Text style={styles.loadMoreText}>
-                  Load More · {visibleDeals.length - visibleCount} left
+                  Load More{isAdmin ? ` · ${visibleDeals.length - visibleCount} left` : ""}
                 </Text>
                 <Ionicons name="chevron-down" size={16} color={ACCENT} />
               </TouchableOpacity>

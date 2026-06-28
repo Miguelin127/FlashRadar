@@ -2,13 +2,16 @@
   "expo": {
     "name": "FlashRadar",
     "slug": "flashradar-app",
-    "version": "1.0.4",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.miguelin1.flashradarapp",
+      "config": {
+        "googleMapsApiKey": "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc"
+      },
       "infoPlist": {
         "NSUserNotificationsUsageDescription": "FlashRadar sends you instant alerts when rare deals and lightning offers drop near you.",
         "NSLocationWhenInUseUsageDescription": "FlashRadar uses your location to show nearby deals, clearance sales, and store-specific offers within your area.",
@@ -71,13 +74,6 @@
           "image": "./assets/splash.png",
           "resizeMode": "contain",
           "backgroundColor": "#000000"
-        }
-      ],
-      [
-        "react-native-maps",
-        {
-          "iosGoogleMapsApiKey": "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc",
-          "androidGoogleMapsApiKey": "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc"
         }
       ]
     ],

@@ -9,7 +9,12 @@ const IMPACT_ACCOUNT_SID = defineSecret("IMPACT_ACCOUNT_SID");
 const IMPACT_AUTH_TOKEN = defineSecret("IMPACT_AUTH_TOKEN");
 
 const CATALOGS = [
-  { catalogId: "23231", store: "Best Choice Products", storeKey: "bestchoice" },
+  { catalogId: "23231", store: "Best Choice Products", storeKey: "bestchoice", cap: 400 },
+  { catalogId: "25480", store: "Kingbull Electric Bikes", storeKey: "kingbull", cap: 200 },
+  { catalogId: "31985", store: "OutIn", storeKey: "outin", cap: 200 },
+  { catalogId: "32038", store: "HiBy", storeKey: "hiby", cap: 200 },
+  { catalogId: "32670", store: "Satechi", storeKey: "satechi", cap: 200 },
+  { catalogId: "33668", store: "Philips Home Access", storeKey: "philips", cap: 200 },
 ];
 
 const DISCOUNT_FLOOR = 25;
@@ -118,9 +123,11 @@ export const fetchImpactCatalog = onSchedule(
           const affiliateUrl = item?.Url;
           if (!affiliateUrl) { catSkipped++; continue; }
 
+          if (catWritten >= (cat.cap ?? 400)) { catSkipped++; continue; }
+
           const merchantUrl = decodeMerchantUrl(affiliateUrl);
           const imageUrl = item?.ImageUrl || null;
-          const id = `BCP_${cat.catalogId}_${catalogItemId}`;
+          const id = `impact_${cat.storeKey}_${catalogItemId}`;
 
           batch.set(
             db.collection("deals_live").doc(id),

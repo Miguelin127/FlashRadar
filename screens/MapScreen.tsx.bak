@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import {
   StyleSheet, Dimensions, ActivityIndicator, View,
-  TouchableOpacity, Animated, Text, FlatList, Image,
+  TouchableOpacity, Animated, Text, FlatList,
   PanResponder, Linking, Platform, ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -61,7 +61,6 @@ type Deal = {
   hot?: boolean;
   lightning?: boolean;
   category?: string;
-  imageUrl?: string | null;
   discountPercent?: number | null;
   affiliateUrl?: string | null;
   merchantUrl?: string | null;
@@ -396,13 +395,6 @@ function StoreDealRow({ deal, dark, onPress }: {
       activeOpacity={0.85}
     >
       <View style={[styles.dealBar, { backgroundColor: color }]} />
-      {deal.imageUrl ? (
-        <Image source={{ uri: deal.imageUrl }} style={styles.dealThumb} />
-      ) : (
-        <View style={[styles.dealThumb, styles.dealThumbFallback]}>
-          <Text style={{ fontSize: 22 }}>{getStoreEmoji(deal.store || "")}</Text>
-        </View>
-      )}
       <View style={{ flex: 1, padding: 10 }}>
         <Text style={{ color: dark ? "#fff" : "#111", fontWeight: "700", fontSize: 13 }} numberOfLines={2}>
           {deal.title}
@@ -411,21 +403,20 @@ function StoreDealRow({ deal, dark, onPress }: {
           <Text style={{ color, fontWeight: "900", fontSize: 15 }}>
             ${Number(deal.price).toFixed(2)}
           </Text>
-          {deal.originalPrice ? (
+          {deal.originalPrice && (
             <Text style={{ color: "#666", fontSize: 11, textDecorationLine: "line-through" }}>
               ${Number(deal.originalPrice).toFixed(2)}
             </Text>
-          ) : null}
-          {deal.discountPercent ? (
+          )}
+          {deal.discountPercent && (
             <View style={{ backgroundColor: color + "22", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
               <Text style={{ color, fontSize: 10, fontWeight: "900" }}>-{deal.discountPercent}%</Text>
             </View>
-          ) : null}
+          )}
         </View>
       </View>
-      <View style={[styles.dealBtn, { backgroundColor: color, flexDirection: "row", alignItems: "center", gap: 3 }]}>
-        <Ionicons name="navigate" size={12} color="#000" />
-        <Text style={styles.dealBtnTxt}>DriveMe</Text>
+      <View style={[styles.dealBtn, { backgroundColor: color }]}>
+        <Text style={styles.dealBtnTxt}>GO</Text>
       </View>
     </TouchableOpacity>
   );
@@ -564,15 +555,6 @@ export default function MapScreen() {
     if (url) Linking.openURL(url);
   };
 
-  const driveTo = (deal: Deal) => {
-    const lat = deal.latitude, lng = deal.longitude;
-    const label = encodeURIComponent(deal.store || deal.title || "Deal");
-    const url = Platform.OS === "ios"
-      ? `http://maps.apple.com/?daddr=${lat},${lng}&q=${label}`
-      : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-    Linking.openURL(url);
-  };
-
   if (loading) {
     return (
       <View style={[styles.safe, { backgroundColor: colors.background }]}>
@@ -652,28 +634,19 @@ export default function MapScreen() {
           </Marker>
         ))}
 
-        {viewMode === "deals" && filteredDeals.map((deal) => {
-          const onDealPress = () => {
-            setSelectedId(deal.id);
-            mapRef.current?.animateToRegion({ latitude: deal.latitude - 0.003, longitude: deal.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 400);
-            snapSheet(SHEET_HALF);
-          };
-          return (
-            <Marker
-              key={deal.id}
-              coordinate={{ latitude: deal.latitude, longitude: deal.longitude }}
-              anchor={{ x: 0.5, y: 1 }}
-              onPress={onDealPress}
-              tracksViewChanges={false}
-            >
-              <DealMarker
-                deal={deal}
-                selected={selectedId === deal.id}
-                onPress={onDealPress}
-              />
-            </Marker>
-          );
-        })}
+        {viewMode === "deals" && filteredDeals.map((deal) => (
+          <Marker
+            key={deal.id}
+            coordinate={{ latitude: deal.latitude, longitude: deal.longitude }}
+            anchor={{ x: 0.5, y: 1 }}
+          >
+            <DealMarker
+              deal={deal}
+              selected={selectedId === deal.id}
+              onPress={() => { setSelectedId(deal.id); snapSheet(SHEET_HALF); }}
+            />
+          </Marker>
+        ))}
       </MapView>
 
       {/* ── Top overlay ── */}
@@ -798,7 +771,7 @@ export default function MapScreen() {
               </View>
             }
             renderItem={({ item }) => (
-              <StoreDealRow deal={item} dark={dark} onPress={() => driveTo(item)} />
+              <StoreDealRow deal={item} dark={dark} onPress={() => openDeal(item)} />
             )}
           />
         ) : viewMode === "stores" ? (
@@ -845,7 +818,7 @@ export default function MapScreen() {
               </View>
             }
             renderItem={({ item }) => (
-              <StoreDealRow deal={item} dark={dark} onPress={() => driveTo(item)} />
+              <StoreDealRow deal={item} dark={dark} onPress={() => openDeal(item)} />
             )}
           />
         )}
@@ -935,8 +908,6 @@ const styles = StyleSheet.create({
     borderRadius: 12, marginHorizontal: 12, marginBottom: 8, overflow: "hidden",
   },
   dealBar: { width: 4, alignSelf: "stretch" },
-  dealThumb: { width: 54, height: 54, borderRadius: 8, margin: 8, backgroundColor: "#222" },
-  dealThumbFallback: { alignItems: "center", justifyContent: "center" },
   dealBtn: {
     backgroundColor: ACCENT, margin: 10,
     paddingHorizontal: 10, paddingVertical: 8,

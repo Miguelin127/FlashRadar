@@ -12,6 +12,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import DealCard from "../components/DealCard";
 import { useTheme } from "../context/ThemeContext";
+import { useUser } from "../context/UserContext";
+import { isStoreLocked } from "../constants/premiumStores";
 import { StatusBar } from "expo-status-bar";
 import { usePulseAnimation } from "../FlashRadar/hooks/usePulseAnimation";
 
@@ -61,6 +63,7 @@ export default function FavoritesScreen() {
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const navigation = useNavigation();
+  const { isPremium } = useUser();
   const { theme, colors } = useTheme();
   const isDarkMode = theme === "dark";
 
@@ -187,14 +190,16 @@ export default function FavoritesScreen() {
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => {
           const isHot = item.price < 10;
+          const isLocked = isStoreLocked(item.storeKey, isPremium);
           const isLive = item.timestamp && Date.now() / 1000 - (item.timestamp.seconds || 0) < 600;
           return (
             <View style={[styles.cardWrapper, { backgroundColor: isDarkMode ? "#1E1E1E" : "#fff", borderColor: isDarkMode ? "#333" : "#ddd" }]}>
               <DealCard
                 deal={{ ...item, hot: isHot, live: isLive, rare: item.rare, isSaved: true }}
                 onSaveToggle={() => toggleSave(item)}
-                onPress={() => openDeal(item)}
+                onPress={() => { if (isLocked) { (navigation as any).navigate("Upgrade"); } else { openDeal(item); } }}
                 darkMode={isDarkMode}
+                blurred={isLocked}
               />
               <View style={styles.tagRow}>
                 {isLive && <PulseTag text="🟢 Live" color="green" />}
