@@ -433,6 +433,22 @@ function StoreDealRow({ deal, dark, onPress }: {
 
 /* ─── Main Screen ────────────────────────────────────────────── */
 
+const RADIUS_DEFAULT = 10; // miles; adjustable
+
+function distanceMiles(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number }
+): number {
+  const R = 3958.8; // earth radius in miles
+  const toRad = (x: number) => (x * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
 export default function MapScreen() {
   const [instoreDeals, setInstoreDeals] = useState<Deal[]>([]);
   const [nearbyStores, setNearbyStores] = useState<NearbyStore[]>([]);
@@ -442,6 +458,8 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [radiusMiles, setRadiusMiles] = useState(RADIUS_DEFAULT);
+  const [locationDenied, setLocationDenied] = useState(false);
   const [currentRegion, setCurrentRegion] = useState<Region | null>(null);
   const [searchArea, setSearchArea] = useState(false);
   const [viewMode, setViewMode] = useState<"stores" | "deals">("stores");
@@ -497,7 +515,7 @@ export default function MapScreen() {
   useEffect(() => {
     const loadLocation = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") { setLoading(false); return; }
+      if (status !== "granted") { setLocationDenied(true); setLoading(false); return; }
       const loc = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = loc.coords;
       setUserLocation({ latitude, longitude });
@@ -534,10 +552,19 @@ export default function MapScreen() {
     setLoadingStores(false);
   };
 
+  // Only in-store deals within radiusMiles of the user
+  const nearbyInstoreDeals = useMemo(() => {
+    if (!userLocation) return [];
+    return instoreDeals.filter((d) =>
+      d.latitude != null && d.longitude != null &&
+      distanceMiles(userLocation, { latitude: d.latitude, longitude: d.longitude }) <= radiusMiles
+    );
+  }, [instoreDeals, userLocation, radiusMiles]);
+
   const filteredDeals = useMemo(() => {
-    if (selectedCategory === "All") return instoreDeals;
-    return instoreDeals.filter((d) => (d.category ?? "Other") === selectedCategory);
-  }, [instoreDeals, selectedCategory]);
+    if (selectedCategory === "All") return nearbyInstoreDeals;
+    return nearbyInstoreDeals.filter((d) => (d.category ?? "Other") === selectedCategory);
+  }, [nearbyInstoreDeals, selectedCategory]);
 
   const premiumStoreCount = nearbyStores.filter(s => s.isPremium).length;
 
@@ -838,11 +865,38 @@ export default function MapScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 40 }}
             ListEmptyComponent={
-              <View style={styles.emptySheet}>
-                <Ionicons name="map-outline" size={36} color="#444" />
-                <Text style={styles.emptySheetText}>No deals in this area</Text>
-                <Text style={styles.emptySheetSub}>Move the map to explore other zones</Text>
-              </View>
+              locationDenied ? (
+                <View style={styles.emptySheet}>
+                  <Ionicons name="location-outline" size={36} color={ACCENT} />
+                  <Text style={styles.emptySheetText}>See deals near you</Text>
+                  <Text style={styles.emptySheetSub}>Enable location to find in-store deals within {radiusMiles} miles.</Text>
+                  <TouchableOpacity
+                    style={styles.enableLocBtn}
+                    onPress={async () => {
+                      const { status } = await Location.requestForegroundPermissionsAsync();
+                      if (status === "granted") {
+                        setLocationDenied(false);
+                        const loc = await Location.getCurrentPositionAsync({});
+                        const { latitude, longitude } = loc.coords;
+                        setUserLocation({ latitude, longitude });
+                        const r = { latitude, longitude, latitudeDelta: 0.08, longitudeDelta: 0.08 };
+                        setRegion(r);
+                        setCurrentRegion(r);
+                      } else {
+                        Linking.openSettings();
+                      }
+                    }}
+                  >
+                    <Text style={styles.enableLocBtnText}>Enable Location</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.emptySheet}>
+                  <Ionicons name="map-outline" size={36} color="#444" />
+                  <Text style={styles.emptySheetText}>No deals in this area</Text>
+                  <Text style={styles.emptySheetSub}>Move the map to explore other zones</Text>
+                </View>
+              )
             }
             renderItem={({ item }) => (
               <StoreDealRow deal={item} dark={dark} onPress={() => driveTo(item)} />
@@ -930,6 +984,11 @@ const styles = StyleSheet.create({
   emptySheet: { alignItems: "center", paddingVertical: 30, gap: 6 },
   emptySheetText: { color: "#555", fontWeight: "900", fontSize: 15 },
   emptySheetSub: { color: "#444", fontSize: 12 },
+  enableLocBtn: {
+    marginTop: 16, backgroundColor: ACCENT, paddingHorizontal: 24,
+    paddingVertical: 12, borderRadius: 10,
+  },
+  enableLocBtnText: { color: "#000", fontWeight: "800", fontSize: 14 },
   dealRow: {
     flexDirection: "row", alignItems: "center",
     borderRadius: 12, marginHorizontal: 12, marginBottom: 8, overflow: "hidden",
