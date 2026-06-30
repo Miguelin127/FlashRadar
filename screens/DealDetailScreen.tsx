@@ -13,6 +13,7 @@ import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { Deal } from "../components/DealCard";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 
 /* ───────────────────── TYPES ───────────────────── */
 
@@ -62,6 +63,7 @@ export default function DealDetailScreen({ route }: Props) {
   const { deal } = route.params;
   const navigation = useNavigation<any>();
   const { user } = useAuth();
+  const { colors } = useTheme();
 
   // ✅ FIXED IMAGE RESOLUTION
   const imageUri = useMemo(() => {
@@ -106,24 +108,24 @@ export default function DealDetailScreen({ route }: Props) {
       : computedDiscount;
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={["top"]}>
       {/* HEADER BAR */}
-      <View style={styles.headerBar}>
+      <View style={[styles.headerBar, { backgroundColor: colors.background }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
           {deal.store}
         </Text>
         <View style={styles.backBtn} />
       </View>
 
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
@@ -141,10 +143,10 @@ export default function DealDetailScreen({ route }: Props) {
 
         <View style={styles.content}>
           {/* TITLE */}
-          <Text style={styles.title}>{deal.title}</Text>
+          <Text style={[styles.title, { color: colors.text }]}>{deal.title}</Text>
 
           {/* STORE */}
-          <Text style={styles.store}>{deal.store}</Text>
+          <Text style={[styles.store, { color: colors.subtext }]}>{deal.store}</Text>
 
           {/* DEAL STRENGTH */}
           <View style={styles.strengthRow}>
@@ -166,7 +168,7 @@ export default function DealDetailScreen({ route }: Props) {
 
             {oldPrice && discountPercent && (
               <>
-                <Text style={styles.originalPrice}>
+                <Text style={[styles.originalPrice, { color: colors.subtext }]}>
                   ${oldPrice.toFixed(2)}
                 </Text>
                 <View style={styles.discountBadge}>
@@ -180,14 +182,14 @@ export default function DealDetailScreen({ route }: Props) {
 
           {/* META */}
           <View style={styles.metaRow}>
-            <Ionicons name="time-outline" size={14} color="#aaa" />
-            <Text style={styles.metaText}>
+            <Ionicons name="time-outline" size={14} color={colors.subtext} />
+            <Text style={[styles.metaText, { color: colors.subtext }]}>
               Posted {timeAgo(deal.timestamp)}
             </Text>
           </View>
 
           {/* DESCRIPTION */}
-          <Text style={styles.description}>
+          <Text style={[styles.description, { color: colors.subtext }]}>
             This deal is live and may sell out quickly. Pricing and availability
             can change at any time.
           </Text>
