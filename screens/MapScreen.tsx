@@ -771,7 +771,7 @@ export default function MapScreen() {
       </View>
 
       {/* ── Bottom sheet ── */}
-      <Animated.View style={[styles.sheet, { height: sheetY }]}>
+      <Animated.View style={[styles.sheet, { height: sheetY, backgroundColor: colors.background }]}>
         <View {...sheetPanResponder.panHandlers} style={styles.handleWrap}>
           <View style={styles.handle} />
           <View style={styles.sheetHeader}>
