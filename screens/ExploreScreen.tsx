@@ -54,6 +54,32 @@ const ACCENT = "#FF7A00";
 const QUERY_LIMIT = 4000;
 const PAGE_SIZE = 40;
 
+// Weave free + premium deals: 20 free, then 6 premium, repeat.
+// premium is pre-shuffled (session-stable) by the caller.
+function interleaveFeed(free: Deal[], premium: Deal[]): Deal[] {
+  const FREE_CHUNK = 20;
+  const PREM_CHUNK = 6;
+  const out: Deal[] = [];
+  let fi = 0, pi = 0;
+  while (fi < free.length || pi < premium.length) {
+    for (let i = 0; i < FREE_CHUNK && fi < free.length; i++) out.push(free[fi++]);
+    for (let i = 0; i < PREM_CHUNK && pi < premium.length; i++) out.push(premium[pi++]);
+  }
+  return out;
+}
+
+// Deterministic shuffle from a numeric seed (session-stable).
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const a = [...arr];
+  let s = seed;
+  const rand = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 const FILTERS = ["all", "hot", "rare", "lightning", "code"] as const;
 type FilterType = typeof FILTERS[number];
 
@@ -124,6 +150,8 @@ export default function ExploreScreen() {
   const [sort, setSort] = useState<SortKey>("newest");
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [priceRange, setPriceRange] = useState<PriceKey>("all");
+  const [tierFilter, setTierFilter] = useState<"free" | "all">("all");
+  const shuffleSeed = useRef(Math.floor(Math.random() * 100000)).current;
   const [gridMode, setGridMode] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -220,13 +248,27 @@ export default function ExploreScreen() {
       return tb - ta;
     });
 
+    // ── Tier handling (free users only; premium sees everything as-is) ──
+    if (!isPremium) {
+      const isPrem = (d: Deal) => PREMIUM_STORES.includes((d.storeKey || "").toLowerCase());
+      const freeDeals = list.filter((d) => !isPrem(d));
+      if (tierFilter === "free") {
+        // Free tier: only free-store deals, no premium
+        list = freeDeals;
+      } else {
+        // All tier: weave 20 free : 6 premium (premium shuffled, session-stable)
+        const premDeals = seededShuffle(list.filter(isPrem), shuffleSeed);
+        list = interleaveFeed(freeDeals, premDeals);
+      }
+    }
+
     // Free users capped at FREE_DEAL_LIMIT; premium unlimited
     if (!isPremium && list.length > FREE_DEAL_LIMIT) {
       list = list.slice(0, FREE_DEAL_LIMIT);
     }
 
     return list;
-  }, [rawDeals, search, filter, sort, storeFilter, priceRange, isPremium]);
+  }, [rawDeals, search, filter, sort, storeFilter, priceRange, isPremium, tierFilter, shuffleSeed]);
 
   // Reset pagination whenever the result set changes
   useEffect(() => {
@@ -377,6 +419,26 @@ export default function ExploreScreen() {
             </TouchableOpacity>
           )}
         />
+
+        {/* Free / All tier toggle (free users only) */}
+        {!isPremium && (
+          <View style={styles.tierToggle}>
+            {(["free", "all"] as const).map((t) => (
+              <TouchableOpacity
+                key={t}
+                onPress={() => setTierFilter(t)}
+                style={[
+                  styles.tierBtn,
+                  { backgroundColor: tierFilter === t ? ACCENT : dark ? "#1a1a1a" : "#eee" },
+                ]}
+              >
+                <Text style={[styles.tierBtnText, { color: tierFilter === t ? "#000" : dark ? "#aaa" : "#555" }]}>
+                  {t === "free" ? "Free" : "All Deals"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Store filter chips */}
         <FlatList
@@ -556,6 +618,9 @@ const styles = StyleSheet.create({
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, marginRight: 6 },
   chipText: { fontSize: 11, fontWeight: "800" },
   storeList: { marginBottom: 8 },
+  tierToggle: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  tierBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 999 },
+  tierBtnText: { fontSize: 13, fontWeight: "800" },
   storeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, marginRight: 6 },
   storeChipText: { fontSize: 11, fontWeight: "800" },
   priceList: { marginBottom: 8 },
