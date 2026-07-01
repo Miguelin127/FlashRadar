@@ -8,6 +8,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { useNavigation } from "@react-navigation/native";
 import { initializePurchases, getProducts, purchaseSubscription, restorePurchases } from "../utils/purchases";
 
@@ -95,6 +96,7 @@ const PREMIUM_FEATURES: PremiumFeature[] = [
 /* ─── Sub-components ─────────────────────────────────────────── */
 
 function CompareRow({ label, included }: FreeFeature) {
+  const { colors } = useTheme();
   return (
     <View style={cr.row}>
       <Ionicons
@@ -102,7 +104,7 @@ function CompareRow({ label, included }: FreeFeature) {
         size={18}
         color={included ? "#22c55e" : "#444"}
       />
-      <Text style={[cr.label, { color: included ? "#fff" : "#555" }]}>
+      <Text style={[cr.label, { color: included ? colors.text : colors.subtext }]}>
         {label}
       </Text>
     </View>
@@ -115,14 +117,15 @@ const cr = StyleSheet.create({
 });
 
 function FeatureCard({ icon, label, sub, color }: PremiumFeature) {
+  const { colors } = useTheme();
   return (
-    <View style={[fc.card, { borderColor: color + "33" }]}>
+    <View style={[fc.card, { backgroundColor: colors.card, borderColor: color + "33" }]}>
       <View style={[fc.iconWrap, { backgroundColor: color + "18" }]}>
         <Ionicons name={icon} size={20} color={color} />
       </View>
       <View style={fc.text}>
-        <Text style={fc.label}>{label}</Text>
-        <Text style={fc.sub}>{sub}</Text>
+        <Text style={[fc.label, { color: colors.text }]}>{label}</Text>
+        <Text style={[fc.sub, { color: colors.subtext }]}>{sub}</Text>
       </View>
     </View>
   );
@@ -146,6 +149,7 @@ const fc = StyleSheet.create({
 /* ─── Main Screen ────────────────────────────────────────────── */
 
 export default function UpgradeScreen() {
+  const { colors } = useTheme();
   const [plan, setPlan] = useState<"monthly" | "yearly">("yearly");
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
@@ -195,14 +199,14 @@ export default function UpgradeScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: "#000" }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Close ── */}
         <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={22} color="#888" />
+          <Ionicons name="close" size={22} color={colors.subtext} />
         </TouchableOpacity>
 
         {/* ── Hero ── */}
@@ -211,8 +215,8 @@ export default function UpgradeScreen() {
             <Ionicons name="flash" size={28} color={ACCENT} />
           </View>
           <Text style={styles.heroTag}>FLASHRADAR PREMIUM</Text>
-          <Text style={styles.heroTitle}>Get the{"\n"}full radar.</Text>
-          <Text style={styles.heroSub}>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>Get the{"\n"}full radar.</Text>
+          <Text style={[styles.heroSub, { color: colors.subtext }]}>
             Unlock every store, every rare find, and every flip opportunity.
           </Text>
         </View>
@@ -221,27 +225,27 @@ export default function UpgradeScreen() {
         <View style={styles.planToggle}>
           <TouchableOpacity
             onPress={() => setPlan("monthly")}
-            style={[styles.planBtn, plan === "monthly" && styles.planBtnActive]}
+            style={[styles.planBtn, { backgroundColor: colors.card }, plan === "monthly" && styles.planBtnActive]}
           >
-            <Text style={[styles.planBtnLabel, plan === "monthly" && { color: "#000" }]}>
+            <Text style={[styles.planBtnLabel, { color: colors.subtext }, plan === "monthly" && { color: "#000" }]}>
               Monthly
             </Text>
-            <Text style={[styles.planBtnPrice, plan === "monthly" && { color: "#000" }]}>
+            <Text style={[styles.planBtnPrice, { color: colors.text }, plan === "monthly" && { color: "#000" }]}>
               $6.99/mo
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => setPlan("yearly")}
-            style={[styles.planBtn, plan === "yearly" && styles.planBtnActive]}
+            style={[styles.planBtn, { backgroundColor: colors.card }, plan === "yearly" && styles.planBtnActive]}
           >
             <View style={styles.savingsBadge}>
               <Text style={styles.savingsBadgeText}>SAVE {savings}%</Text>
             </View>
-            <Text style={[styles.planBtnLabel, plan === "yearly" && { color: "#000" }]}>
+            <Text style={[styles.planBtnLabel, { color: colors.subtext }, plan === "yearly" && { color: "#000" }]}>
               Yearly
             </Text>
-            <Text style={[styles.planBtnPrice, plan === "yearly" && { color: "#000" }]}>
+            <Text style={[styles.planBtnPrice, { color: colors.text }, plan === "yearly" && { color: "#000" }]}>
               $69.99/yr
             </Text>
             <Text style={[styles.planBtnSub, plan === "yearly" && { color: "#00000088" }]}>
@@ -269,28 +273,28 @@ export default function UpgradeScreen() {
         </TouchableOpacity>
         <Text style={styles.ctaSub}>Cancel anytime · Billed through Apple</Text>
         <TouchableOpacity onPress={handleRestore} style={{ marginTop: 4 }}>
-          <Text style={{ color: "#666", fontSize: 12, textAlign: "center", textDecorationLine: "underline" }}>
+          <Text style={{ color: colors.subtext, fontSize: 12, textAlign: "center", textDecorationLine: "underline" }}>
             Restore Purchases
           </Text>
         </TouchableOpacity>
 
         {/* ── Features ── */}
-        <Text style={styles.sectionTitle}>What you unlock</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>What you unlock</Text>
         {PREMIUM_FEATURES.map((f) => (
           <FeatureCard key={f.label} {...f} />
         ))}
 
         {/* ── Free vs Premium ── */}
-        <View style={styles.compareWrap}>
-          <Text style={styles.compareColTitle}>What's included in Free</Text>
+        <View style={[styles.compareWrap, { backgroundColor: colors.card }]}>
+          <Text style={[styles.compareColTitle, { color: colors.subtext }]}>What's included in Free</Text>
           {FREE_FEATURES.map((f) => (
             <CompareRow key={f.label} {...f} />
           ))}
         </View>
 
         {/* ── Social proof ── */}
-        <View style={styles.proofWrap}>
-          <Text style={styles.proofText}>
+        <View style={[styles.proofWrap, { backgroundColor: colors.card }]}>
+          <Text style={[styles.proofText, { color: colors.subtext }]}>
             "Found a $40 Pokémon card lot at Target clearance.{"\n"}
             Sold for $210 on eBay. FlashRadar paid for itself in one flip."
           </Text>
@@ -311,7 +315,7 @@ export default function UpgradeScreen() {
             </Text>
           )}
         </TouchableOpacity>
-<Text style={styles.legalText}>
+<Text style={[styles.legalText, { color: colors.subtext }]}>
           Subscription auto-renews. Cancel anytime in Settings → Manage Subscription.
           By subscribing you agree to our{" "}
           <Text
