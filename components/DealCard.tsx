@@ -147,7 +147,7 @@ export default function DealCard({
   if (compact) {
     return (
       <Pressable
-        onPress={blurred || isExpired ? () => {} : onPress}
+        onPress={isExpired ? () => {} : onPress}
         style={[
           cs.card,
           deal.rare && cs.rareCard,
@@ -245,7 +245,7 @@ export default function DealCard({
   // ── FULL / LIST MODE ─────────────────────────────────────────
   return (
     <Pressable
-      onPress={blurred || isExpired ? () => {} : onPress}
+      onPress={isExpired ? () => {} : onPress}
       style={[
         fs.card,
         deal.rare && fs.rareCard,

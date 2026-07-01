@@ -395,6 +395,32 @@ export default function ExploreScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Filter chips */}
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={FILTERS as unknown as FilterType[]}
+          keyExtractor={(f) => f}
+          style={styles.filterList}
+          renderItem={({ item: f }) => (
+            <TouchableOpacity
+              onPress={() => setFilter(f)}
+              style={[
+                styles.chip,
+                { backgroundColor: filter === f ? ACCENT : dark ? "#1a1a1a" : "#eee" },
+              ]}
+            >
+              <Text style={[styles.chipText, { color: filter === f ? "#000" : dark ? "#aaa" : "#555" }]}>
+                {f === "all" ? "ALL"
+                  : f === "hot" ? "🔥 HOT"
+                  : f === "rare" ? "💎 RARE"
+                  : f === "lightning" ? "⚡ LIGHTNING"
+                  : "🏷 GET CODE"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
+
         {/* Free / All tier toggle (free users only) */}
         {!isPremium && (
           <View style={styles.tierToggle}>
@@ -415,83 +441,74 @@ export default function ExploreScreen() {
           </View>
         )}
 
-        {/* Dropdown filter row */}
-        <View style={styles.dropRow}>
-          <TouchableOpacity
-            style={[styles.dropBtn, { backgroundColor: dark ? "#1a1a1a" : "#eee" }, openPanel === "filter" && { borderColor: ACCENT, borderWidth: 1 }]}
-            onPress={() => setOpenPanel(openPanel === "filter" ? null : "filter")}
-          >
-            <Text style={[styles.dropBtnText, { color: dark ? "#fff" : "#111" }]} numberOfLines={1}>
-              {filter === "all" ? "Filter" : filter === "hot" ? "🔥 Hot" : filter === "rare" ? "💎 Rare" : filter === "lightning" ? "⚡ Lightning" : "🏷 Code"}
-            </Text>
-            <Text style={[styles.dropCaret, { color: dark ? "#aaa" : "#666" }]}>▾</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.dropBtn, { backgroundColor: dark ? "#1a1a1a" : "#eee" }, openPanel === "stores" && { borderColor: ACCENT, borderWidth: 1 }]}
-            onPress={() => setOpenPanel(openPanel === "stores" ? null : "stores")}
-          >
-            <Text style={[styles.dropBtnText, { color: dark ? "#fff" : "#111" }]} numberOfLines={1}>
-              {storeFilter === "all" ? "🏬 All Stores" : prettyStore(storeFilter)}
-            </Text>
-            <Text style={[styles.dropCaret, { color: dark ? "#aaa" : "#666" }]}>▾</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.dropBtn, { backgroundColor: dark ? "#1a1a1a" : "#eee" }, openPanel === "arrange" && { borderColor: ACCENT, borderWidth: 1 }]}
-            onPress={() => setOpenPanel(openPanel === "arrange" ? null : "arrange")}
-          >
-            <Text style={[styles.dropBtnText, { color: dark ? "#fff" : "#111" }]} numberOfLines={1}>
-              Arrange By
-            </Text>
-            <Text style={[styles.dropCaret, { color: dark ? "#aaa" : "#666" }]}>▾</Text>
-          </TouchableOpacity>
-        </View>
-
-        {openPanel === "filter" && (
-          <View style={[styles.panel, { backgroundColor: dark ? "#141414" : "#f7f7f7" }]}>
-            {(FILTERS as unknown as FilterType[]).map((f) => (
-              <TouchableOpacity key={f} onPress={() => { setFilter(f); setOpenPanel(null); }}
-                style={[styles.panelChip, { backgroundColor: filter === f ? ACCENT : dark ? "#242424" : "#fff" }]}>
-                <Text style={[styles.panelChipText, { color: filter === f ? "#000" : dark ? "#ddd" : "#333" }]}>
-                  {f === "all" ? "All" : f === "hot" ? "🔥 Hot" : f === "rare" ? "💎 Rare" : f === "lightning" ? "⚡ Lightning" : "🏷 Get Code"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {openPanel === "stores" && (
-          <View style={[styles.panel, { backgroundColor: dark ? "#141414" : "#f7f7f7" }]}>
-            {["all", ...storeOptions].map((s) => (
-              <TouchableOpacity key={"store-" + s} onPress={() => { setStoreFilter(s); setOpenPanel(null); }}
-                style={[styles.panelChip, { backgroundColor: storeFilter === s ? ACCENT : dark ? "#242424" : "#fff" }]}>
-                <Text style={[styles.panelChipText, { color: storeFilter === s ? "#000" : dark ? "#ddd" : "#333" }]}>
+        {/* Store filter chips */}
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={["all", ...storeOptions]}
+          keyExtractor={(s) => "store-" + s}
+          style={styles.storeList}
+          renderItem={({ item: s }) => {
+            const active = storeFilter === s;
+            return (
+              <TouchableOpacity
+                onPress={() => setStoreFilter(s)}
+                style={[
+                  styles.storeChip,
+                  { backgroundColor: active ? ACCENT : dark ? "#1a1a1a" : "#eee" },
+                ]}
+              >
+                <Text style={[styles.storeChipText, { color: active ? "#000" : dark ? "#aaa" : "#555" }]}>
                   {s === "all" ? "🏬 All Stores" : prettyStore(s)}
                 </Text>
               </TouchableOpacity>
-            ))}
-          </View>
-        )}
+            );
+          }}
+        />
 
-        {openPanel === "arrange" && (
-          <View style={[styles.panel, { backgroundColor: dark ? "#141414" : "#f7f7f7" }]}>
-            <Text style={[styles.panelLabel, { color: dark ? "#888" : "#999" }]}>Price</Text>
-            {(PRICE_RANGES as unknown as typeof PRICE_RANGES[number][]).map((pr) => (
-              <TouchableOpacity key={"price-" + pr.key} onPress={() => { setPriceRange(pr.key); }}
-                style={[styles.panelChip, { backgroundColor: priceRange === pr.key ? ACCENT : dark ? "#242424" : "#fff" }]}>
-                <Text style={[styles.panelChipText, { color: priceRange === pr.key ? "#000" : dark ? "#ddd" : "#333" }]}>{pr.label}</Text>
+        {/* Price range chips */}
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={PRICE_RANGES as unknown as typeof PRICE_RANGES[number][]}
+          keyExtractor={(p) => "price-" + p.key}
+          style={styles.priceList}
+          renderItem={({ item: p }) => {
+            const active = priceRange === p.key;
+            return (
+              <TouchableOpacity
+                onPress={() => setPriceRange(p.key)}
+                style={[
+                  styles.priceChip,
+                  { backgroundColor: active ? ACCENT : dark ? "#1a1a1a" : "#eee" },
+                ]}
+              >
+                <Text style={[styles.priceChipText, { color: active ? "#000" : dark ? "#aaa" : "#555" }]}>
+                  {p.label}
+                </Text>
               </TouchableOpacity>
-            ))}
-            <Text style={[styles.panelLabel, { color: dark ? "#888" : "#999", width: "100%" }]}>Sort</Text>
-            {(SORT_OPTIONS as unknown as typeof SORT_OPTIONS[number][]).map((so) => (
-              <TouchableOpacity key={so.key} onPress={() => { setSort(so.key); }}
-                style={[styles.panelChip, { backgroundColor: sort === so.key ? ACCENT : dark ? "#242424" : "#fff" }]}>
-                <Text style={[styles.panelChipText, { color: sort === so.key ? "#000" : dark ? "#ddd" : "#333" }]}>{so.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+            );
+          }}
+        />
+
+        {/* Sort row */}
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={SORT_OPTIONS as unknown as typeof SORT_OPTIONS[number][]}
+          keyExtractor={(s) => s.key}
+          style={styles.sortList}
+          renderItem={({ item: s }) => (
+            <TouchableOpacity
+              onPress={() => setSort(s.key)}
+              style={[styles.sortChip, sort === s.key && { borderColor: ACCENT }]}
+            >
+              <Text style={[styles.sortText, { color: sort === s.key ? ACCENT : dark ? "#888" : "#666" }]}>
+                {s.label}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
 
         {/* Results count */}
         <Text style={styles.resultsCount}>
@@ -603,20 +620,6 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 11, fontWeight: "800" },
   storeList: { marginBottom: 8 },
   tierToggle: { flexDirection: "row", gap: 8, marginBottom: 10 },
-  dropRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
-  dropBtn: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderColor: "transparent", borderWidth: 1,
-  },
-  dropBtnText: { fontSize: 13, fontWeight: "700" },
-  dropCaret: { fontSize: 12, marginLeft: 4 },
-  panel: {
-    flexDirection: "row", flexWrap: "wrap", gap: 8,
-    padding: 12, borderRadius: 12, marginBottom: 10,
-  },
-  panelChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 },
-  panelChipText: { fontSize: 13, fontWeight: "700" },
-  panelLabel: { fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1, marginTop: 2, marginBottom: 2, width: "100%" },
   tierBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 999 },
   tierBtnText: { fontSize: 13, fontWeight: "800" },
   storeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, marginRight: 6 },
