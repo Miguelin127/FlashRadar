@@ -15,3 +15,10 @@ export function isStoreLocked(storeKey: string | undefined, isPremium: boolean):
   if (isPremium) return false;
   return PREMIUM_STORES.includes((storeKey || "").toLowerCase());
 }
+
+// Name-based matcher (for map/display-name contexts) — shares PREMIUM_STORES.
+export function isStoreLockedByName(storeName: string, isPremium: boolean): boolean {
+  if (isPremium) return false;
+  const norm = (storeName || "").toLowerCase().replace(/[^a-z]/g, "");
+  return PREMIUM_STORES.some((k) => norm.includes(k));
+}

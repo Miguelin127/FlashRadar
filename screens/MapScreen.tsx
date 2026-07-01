@@ -12,6 +12,7 @@ import * as Location from "expo-location";
 import { db } from "../firebaseConfig";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
+import { isStoreLockedByName } from "../constants/premiumStores";
 import { useUser } from "../context/UserContext";
 
 const { width: SW, height: SH } = Dimensions.get("window");
@@ -25,7 +26,6 @@ const GOOGLE_API_KEY = "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc";
 
 /* ─── Store config ───────────────────────────────────────────── */
 
-const FREE_STORES = ["walmart", "target", "home depot"];
 
 const PREMIUM_STORE_NAMES = [
   "Best Buy", "Costco", "Sam's Club", "Lowe's",
@@ -39,11 +39,6 @@ const ALL_STORE_SEARCHES = [
   "Walmart", "Target", "Home Depot",
   ...PREMIUM_STORE_NAMES,
 ];
-
-function isPremiumStore(name: string): boolean {
-  const lower = name.toLowerCase();
-  return !FREE_STORES.some(s => lower.includes(s));
-}
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -184,7 +179,7 @@ async function fetchNearbyStores(
               latitude: place.location.latitude,
               longitude: place.location.longitude,
               address: place.formattedAddress || "",
-              isPremium: isPremiumStore(place.displayName?.text || ""),
+              isPremium: isStoreLockedByName(storeName, false),
               deals: storeDeals,
             });
           }
