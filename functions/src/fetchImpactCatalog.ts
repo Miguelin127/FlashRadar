@@ -11,7 +11,6 @@ const IMPACT_AUTH_TOKEN = defineSecret("IMPACT_AUTH_TOKEN");
 const CATALOGS = [
   { catalogId: "23231", store: "Best Choice Products", storeKey: "bestchoice", cap: 400 },
   { catalogId: "25480", store: "Kingbull Electric Bikes", storeKey: "kingbull", cap: 200 },
-  { catalogId: "31985", store: "OutIn", storeKey: "outin", cap: 200 },
   { catalogId: "32038", store: "HiBy", storeKey: "hiby", cap: 200 },
   { catalogId: "32670", store: "Satechi", storeKey: "satechi", cap: 200 },
   { catalogId: "33668", store: "Philips Home Access", storeKey: "philips", cap: 200 },
