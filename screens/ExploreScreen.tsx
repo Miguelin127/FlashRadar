@@ -210,7 +210,7 @@ export default function ExploreScreen() {
   /* ── Filter + Sort ── */
   const visibleDeals = useMemo(() => {
     // Drop ghost/malformed deals (no image) that render as bare buttons
-    let list = rawDeals.filter((d) => !!(d.imageUrl || d.image) && !d.expired);
+    let list = rawDeals.filter((d) => !!(d.imageUrl || d.image) && !d.expired && Number.isFinite(Number(d.price)) && Number(d.price) > 0);
 
     if (search.trim()) {
       const q = search.toLowerCase();

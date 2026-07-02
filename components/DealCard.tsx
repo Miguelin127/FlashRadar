@@ -209,7 +209,7 @@ export default function DealCard({
 
           <View style={cs.priceRow}>
             <Text style={[cs.price, isExpired && { color: "#555" }]}>
-              {deal.price != null ? `$${Number(deal.price).toFixed(2)}` : "—"}
+              {Number.isFinite(Number(deal.price)) && Number(deal.price) > 0 ? `$${Number(deal.price).toFixed(2)}` : "See deal"}
             </Text>
             {deal.originalPrice != null && deal.price != null && deal.originalPrice > deal.price && (
               <Text style={cs.original}>${Number(deal.originalPrice).toFixed(2)}</Text>
@@ -338,7 +338,7 @@ export default function DealCard({
           <View>
             <View style={fs.priceInner}>
               <Text style={[fs.price, { color: isExpired ? "#555" : darkMode ? "#fff" : "#111" }]}>
-                {deal.price != null ? `$${Number(deal.price).toFixed(2)}` : "See deal"}
+                {Number.isFinite(Number(deal.price)) && Number(deal.price) > 0 ? `$${Number(deal.price).toFixed(2)}` : "See deal"}
               </Text>
               {(deal.discountPercent ?? 0) > 0 && !isExpired && (
                 <View style={fs.discountBadge}>
