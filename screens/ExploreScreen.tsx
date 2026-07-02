@@ -3,13 +3,14 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   View, Text, StyleSheet, FlatList, ActivityIndicator,
-  TouchableOpacity, TextInput, RefreshControl, Animated,
+  TouchableOpacity, TextInput, RefreshControl, Animated, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { db } from "../firebaseConfig";
+import { db, functions } from "../firebaseConfig";
+import { httpsCallable } from "firebase/functions";
 import DealCard from "../components/DealCard";
 import { useTheme } from "../context/ThemeContext";
 import { PREMIUM_STORES, FREE_DEAL_LIMIT, isStoreLocked } from "../constants/premiumStores";
@@ -163,6 +164,49 @@ export default function ExploreScreen() {
   const dark = theme === "dark";
   const navigation = useNavigation<any>();
   const { isPremium, isAdmin } = useUser();
+  const [aiSearching, setAiSearching] = useState(false);
+
+  // Map a numeric price ceiling to the nearest PriceKey range.
+  const mapPriceToRange = (max: number | null): PriceKey => {
+    if (max == null) return "all";
+    if (max <= 25) return "u25";
+    if (max <= 100) return "25-100";
+    if (max <= 500) return "100-500";
+    return "500+";
+  };
+
+  const runAiSearch = async () => {
+    const q = search.trim();
+    if (!q || aiSearching) return;
+    setAiSearching(true);
+    try {
+      const call = httpsCallable(functions, "parseSearch");
+      const res: any = await call({ query: q, isPremium });
+      if (res.data?.limitReached) {
+        Alert.alert(
+          "Daily AI searches used",
+          "You've used your 5 free AI searches today. Upgrade to Premium for unlimited AI search.",
+          [{ text: "Not now", style: "cancel" }, { text: "Upgrade", onPress: () => navigation.navigate("Upgrade") }]
+        );
+        return;
+      }
+      const parsed = res.data?.parsed;
+      if (parsed) {
+        if (parsed.keywords) setSearch(parsed.keywords);
+        setPriceRange(mapPriceToRange(parsed.priceMax ?? null));
+        if (parsed.sortBy) setSort(parsed.sortBy);
+        if (parsed.storeHint) {
+          const hint = String(parsed.storeHint).toLowerCase();
+          const match = storeOptions.find((so) => so.toLowerCase().includes(hint) || hint.includes(so.toLowerCase()));
+          setStoreFilter(match || "all");
+        }
+      }
+    } catch (e) {
+      Alert.alert("AI search failed", "Please try again.");
+    } finally {
+      setAiSearching(false);
+    }
+  };
 
   /* ── Load deals — force server fetch first, then live updates ── */
   useEffect(() => {
@@ -374,7 +418,16 @@ export default function ExploreScreen() {
             onChangeText={setSearch}
             style={[styles.searchInput, { color: dark ? "#fff" : "#111" }]}
           />
-          {search.length > 0 && (
+          {search.trim().length > 0 && (
+            <TouchableOpacity onPress={runAiSearch} disabled={aiSearching} style={styles.aiBtn}>
+              {aiSearching ? (
+                <ActivityIndicator size="small" color="#FF7A00" />
+              ) : (
+                <Ionicons name="sparkles" size={16} color="#FF7A00" />
+              )}
+            </TouchableOpacity>
+          )}
+          {search.length > 0 && !aiSearching && (
             <TouchableOpacity onPress={() => setSearch("")}>
               <Ionicons name="close-circle" size={15} color="#888" />
             </TouchableOpacity>
@@ -589,6 +642,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "900" },
   layoutBtn: { padding: 8, borderRadius: 10 },
   searchBox: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, height: 40, borderRadius: 10, marginBottom: 10 },
+  aiBtn: { paddingHorizontal: 4 },
   searchInput: { flex: 1, fontSize: 14 },
   premiumBanner: {
     flexDirection: "row", alignItems: "center", gap: 8,
