@@ -105,7 +105,11 @@ export const fetchImpactCatalog = onSchedule(
 
           const price = parseFloat(item?.CurrentPrice);
           const originalPrice = parseFloat(item?.OriginalPrice);
-          const discountPercent = parseInt(item?.DiscountPercentage, 10);
+          let discountPercent = parseInt(item?.DiscountPercentage, 10);
+          // Fallback: compute from prices when the catalog's DiscountPercentage is blank (e.g. OutIn)
+          if (isNaN(discountPercent) && price > 0 && originalPrice > price) {
+            discountPercent = Math.round(((originalPrice - price) / originalPrice) * 100);
+          }
 
           if (!price || price <= 0) { catSkipped++; continue; }
           if (isNaN(discountPercent) || discountPercent < DISCOUNT_FLOOR) { catSkipped++; continue; }
