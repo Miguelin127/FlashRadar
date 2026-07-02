@@ -210,7 +210,7 @@ export default function ExploreScreen() {
   /* ── Filter + Sort ── */
   const visibleDeals = useMemo(() => {
     // Drop ghost/malformed deals (no image) that render as bare buttons
-    let list = rawDeals.filter((d) => !!(d.imageUrl || d.image));
+    let list = rawDeals.filter((d) => !!(d.imageUrl || d.image) && !d.expired);
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -286,7 +286,7 @@ export default function ExploreScreen() {
   const lockedCount = useMemo(() => {
     if (isPremium) return 0;
     return rawDeals.filter(d =>
-      PREMIUM_STORES.includes((d.storeKey || "").toLowerCase())
+      PREMIUM_STORES.includes((d.storeKey || "").toLowerCase()) && !d.expired
     ).length;
   }, [rawDeals, isPremium]);
 
