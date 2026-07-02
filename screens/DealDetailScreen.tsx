@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { Deal } from "../components/DealCard";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { useUser } from "../context/UserContext";
+import { functions } from "../firebaseConfig";
+import { httpsCallable } from "firebase/functions";
 
 /* ───────────────────── TYPES ───────────────────── */
 
@@ -64,6 +67,25 @@ export default function DealDetailScreen({ route }: Props) {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
   const { colors } = useTheme();
+  const { isPremium } = useUser();
+  const [aiExplain, setAiExplain] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const call = httpsCallable(functions, "explainDeal");
+        const res: any = await call({ dealId: deal.id });
+        if (alive) setAiExplain(res.data?.explanation ?? null);
+      } catch (e) {
+        if (alive) setAiExplain(null);
+      } finally {
+        if (alive) setAiLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [deal.id]);
 
   // ✅ FIXED IMAGE RESOLUTION
   const imageUri = useMemo(() => {
@@ -193,6 +215,59 @@ export default function DealDetailScreen({ route }: Props) {
             This deal is live and may sell out quickly. Pricing and availability
             can change at any time.
           </Text>
+
+          {/* AI DEAL ANALYSIS */}
+          {(aiLoading || aiExplain) && (
+            <View style={[aiCard.wrap, { backgroundColor: colors.card }]}>
+              <View style={aiCard.head}>
+                <Ionicons name="sparkles" size={15} color="#FF7A00" />
+                <Text style={[aiCard.headText, { color: colors.text }]}>Why this deal?</Text>
+              </View>
+
+              {aiLoading ? (
+                <Text style={[aiCard.loading, { color: colors.subtext }]}>Analyzing deal…</Text>
+              ) : aiExplain ? (
+                <>
+                  {(() => {
+                    const v = aiExplain.verdict || "Fair";
+                    const vc = v === "Strong Buy" ? "#22c55e"
+                      : v === "Good Deal" ? "#FF7A00"
+                      : v === "Skip" ? "#ef4444" : "#888";
+                    return (
+                      <View style={[aiCard.verdictBadge, { backgroundColor: vc }]}>
+                        <Text style={aiCard.verdictText}>{v}</Text>
+                      </View>
+                    );
+                  })()}
+
+                  {!!aiExplain.savingsNote && (
+                    <Text style={[aiCard.savings, { color: colors.text }]}>{aiExplain.savingsNote}</Text>
+                  )}
+                  {!!aiExplain.reasoning && (
+                    <Text style={[aiCard.reason, { color: colors.subtext }]}>{aiExplain.reasoning}</Text>
+                  )}
+
+                  {/* Flip analysis — premium only */}
+                  {aiExplain.flipPotential && (
+                    isPremium ? (
+                      <View style={aiCard.flipRow}>
+                        <Ionicons name="trending-up" size={14} color="#22c55e" />
+                        <Text style={[aiCard.flipText, { color: colors.text }]}>
+                          Flip potential: <Text style={{ fontWeight: "900" }}>{aiExplain.flipPotential}</Text>
+                        </Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity style={aiCard.flipLocked} onPress={() => navigation.navigate("Upgrade")}>
+                        <Ionicons name="lock-closed" size={13} color="#FF7A00" />
+                        <Text style={aiCard.flipLockedText}>Unlock flip analysis with Premium</Text>
+                        <Ionicons name="chevron-forward" size={13} color="#FF7A00" />
+                      </TouchableOpacity>
+                    )
+                  )}
+                </>
+              ) : null}
+            </View>
+          )}
 
           {/* CTA */}
           {dealUrl && (
@@ -384,4 +459,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
   },
+});
+
+const aiCard = StyleSheet.create({
+  wrap: { marginTop: 18, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "rgba(255,122,0,0.25)" },
+  head: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
+  headText: { fontSize: 14, fontWeight: "900" },
+  loading: { fontSize: 13, fontStyle: "italic" },
+  verdictBadge: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, marginBottom: 8 },
+  verdictText: { color: "#000", fontSize: 12, fontWeight: "900" },
+  savings: { fontSize: 14, fontWeight: "800", marginBottom: 6 },
+  reason: { fontSize: 13, lineHeight: 19 },
+  flipRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
+  flipText: { fontSize: 13, fontWeight: "600" },
+  flipLocked: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, backgroundColor: "rgba(255,122,0,0.08)", borderWidth: 1, borderColor: "rgba(255,122,0,0.25)" },
+  flipLockedText: { flex: 1, color: "#FF7A00", fontSize: 12, fontWeight: "800" },
 });

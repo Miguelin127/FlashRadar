@@ -3,6 +3,7 @@ import "firebase/compat/auth";
 import "firebase/compat/firestore";
 import { Platform } from "react-native";
 import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFunctions } from "firebase/functions";
 // @ts-ignore - getReactNativePersistence exists in the RN bundle, missing from web types
 import { initializeAuth, getReactNativePersistence } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -56,4 +57,6 @@ const db = firebase.firestore();
 const projectOptions = firebase.app().options as { projectId?: string };
 console.log("🔥 Firestore project ID:", projectOptions.projectId || "unknown");
 
-export { firebase, auth, db };
+const functions = getFunctions(modularApp, "us-central1");
+
+export { firebase, auth, db, functions };
