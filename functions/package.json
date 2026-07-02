@@ -8,6 +8,7 @@
     "lint": "echo \"no lint configured\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.109.1",
     "@sendgrid/mail": "^8.1.6",
     "cheerio": "^1.2.0",
     "fast-xml-parser": "^5.3.3",

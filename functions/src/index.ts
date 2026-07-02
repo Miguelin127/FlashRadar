@@ -294,4 +294,5 @@ export { resolveTitle } from "./resolveTitle";
 export { detectSoldPrice } from "./detectSoldPrice";
 export { previewDealV2 } from "./previewDeal";
 export { getPrintfulProducts } from "./getPrintfulProducts";export { fetchImpactCatalog } from "./fetchImpactCatalog";
+export { explainDeal } from "./explainDeal";
 export { expireManualDeals } from "./expireManualDeals";
