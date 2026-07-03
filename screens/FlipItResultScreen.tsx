@@ -129,7 +129,8 @@ function confidenceBadge(value?: number) {
    SCREEN
 ───────────────────────────── */
 
-export default function FlipItResultScreen({ flip }: Props) {
+export default function FlipItResultScreen(props: any) {
+  const flip = props?.flip ?? props?.route?.params?.flip;
   if (!flip) {
     return (
       <View style={styles.container}>
@@ -280,10 +281,10 @@ Best Platform: ${flip.bestPlatform}
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Profit Summary</Text>
-        <Text>Buy Price: ${flip.buyPrice}</Text>
-        <Text>Avg Resale: ${flip.avgResalePrice}</Text>
-        <Text>Net Profit: ${flip.netProfit}</Text>
-        <Text>Break Even: ${flip.breakEvenPrice}</Text>
+        <Text style={{ color: "#ddd", fontSize: 14, marginTop: 2 }}>Buy Price: ${flip.buyPrice}</Text>
+        <Text style={{ color: "#ddd", fontSize: 14, marginTop: 2 }}>Avg Resale: ${flip.avgResalePrice}</Text>
+        <Text style={{ color: "#ddd", fontSize: 14, marginTop: 2 }}>Net Profit: ${flip.netProfit}</Text>
+        <Text style={{ color: "#ddd", fontSize: 14, marginTop: 2 }}>Break Even: ${flip.breakEvenPrice}</Text>
       </View>
 
       {(flip as any).resaleEstimate && (
@@ -307,7 +308,7 @@ Best Platform: ${flip.bestPlatform}
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Best Platform</Text>
-        <Text>{flip.bestPlatform}</Text>
+        <Text style={{ color: "#ddd", fontSize: 15, fontWeight: "700" }}>{flip.bestPlatform}</Text>
       </View>
 
       {/* ── SELL IT: AI Listing Generator ── */}
@@ -384,7 +385,7 @@ const sell = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0e0e0e", padding: 16 },
+  container: { flex: 1, backgroundColor: "#0e0e0e", padding: 16, paddingTop: 64 },
   verdictCard: {
     padding: 16,
     borderRadius: 12,

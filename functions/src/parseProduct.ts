@@ -58,24 +58,13 @@ export const parseProduct = onRequest(async (req, res) => {
     // ─────────────────────────────
     // VALIDATION
     // ─────────────────────────────
-    if (!title || !price || Number.isNaN(price)) {
-      res.status(422).json({
-        error: "Unable to extract product data",
-        debug: {
-          titleFound: Boolean(title),
-          priceFound: Boolean(price),
-          site: new URL(url).hostname,
-        },
-      });
-      return;
-    }
-
-    // ─────────────────────────────
-    // SUCCESS
-    // ─────────────────────────────
+    // Return whatever we found. Partial (title but no price) is still useful —
+    // the app can prefill the title and ask the user for the price.
+    const cleanPrice = price && !Number.isNaN(price) && price > 0 ? price : null;
     res.status(200).json({
-      title,
-      price,
+      title: title || null,
+      price: cleanPrice,
+      partial: !title || !cleanPrice,
       site: new URL(url).hostname,
     });
     return;

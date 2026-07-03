@@ -10,6 +10,8 @@ import {
   Pressable,
   Alert,
   TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,7 +21,9 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { useUser } from "../context/UserContext";
-import { firebase, db } from "../firebaseConfig";
+import { firebase, db, functions } from "../firebaseConfig";
+import { httpsCallable } from "firebase/functions";
+import { analyzeFlip } from "../services/analyzeFlip";
 
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
@@ -52,6 +56,47 @@ export default function FlipItScreen() {
   const [dealUrl, setDealUrl] = useState("");
   const [totalFlips, setTotalFlips] = useState(0);
   const [totalProfit, setTotalProfit] = useState(0);
+  const [pTitle, setPTitle] = useState("");
+  const [pBuyPrice, setPBuyPrice] = useState("");
+  const [pCondition, setPCondition] = useState("Used - Good");
+  const [showFields, setShowFields] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  // Unified analyzer — every input path (link/manual) ends here.
+  const analyzeAndShow = async () => {
+    const title = pTitle.trim();
+    const buy = Number(pBuyPrice);
+    if (!title) { Alert.alert("Missing product", "Enter a product name."); return; }
+    if (!buy || Number.isNaN(buy) || buy <= 0) { Alert.alert("Missing price", "Enter a valid buy price."); return; }
+
+    setAnalyzing(true);
+    let resaleMid = Math.round(buy * 1.4); // conservative fallback
+    let estimate: any = null;
+    try {
+      const call = httpsCallable(functions, "estimateResale");
+      const res: any = await call({ title, condition: pCondition, buyPrice: buy });
+      estimate = res.data?.estimate ?? null;
+      if (estimate?.mid && Number(estimate.mid) > 0) resaleMid = Number(estimate.mid);
+    } catch (e) {
+      // silent fallback to conservative default
+    }
+
+    const demand = estimate?.confidence === "high" ? "HIGH" : estimate?.confidence === "low" ? "LOW" : "MEDIUM";
+    const flip = analyzeFlip({
+      userId: user?.uid || "anon",
+      title,
+      buyPrice: buy,
+      priceHistory: [{ date: Date.now(), price: buy }],
+      platformInputs: {
+        ebay: { resalePrice: resaleMid, buyPrice: buy, estimatedFees: Math.round(resaleMid * 0.13), demand },
+      },
+      demand,
+      dealOrigin: "MANUAL",
+      source: "LINK",
+    });
+    setAnalyzing(false);
+    navigation.navigate("FlipItResult", { flip: { ...flip, resaleEstimate: estimate } });
+  };
 
   /* ───────── LIVE FLIP PERFORMANCE ───────── */
   useEffect(() => {
@@ -102,69 +147,31 @@ export default function FlipItScreen() {
 
   /* ───────── EVALUATE DEAL ───────── */
   const evaluateDeal = async () => {
-    if (!dealUrl.trim()) {
-      Alert.alert("Missing link", "Paste a product link first.");
+    if (!dealUrl.trim() || !dealUrl.startsWith("http")) {
+      Alert.alert("Invalid link", "Paste a valid product URL (Amazon, Target, Home Depot, Walmart, etc.).");
       return;
     }
-
-    if (!dealUrl.startsWith("http")) {
-      Alert.alert("Invalid link", "Please paste a valid product URL.");
-      return;
-    }
-
+    setAnalyzing(true);
     try {
       const res = await fetch(PARSE_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: dealUrl }),
       });
-
-      const data = await res.json();
-
-      if (!res.ok || data?.error) {
-        Alert.alert(
-          "Limited data",
-          "We couldn't auto-detect the price. Please enter it manually."
-        );
-        return;
+      const data = await res.json().catch(() => ({}));
+      // Use whatever we got — title and/or price. Never dead-end.
+      if (data?.title) setPTitle(String(data.title).slice(0, 200));
+      if (data?.price) setPBuyPrice(String(data.price));
+      setShowFields(true);
+      setAnalyzing(false);
+      if (!data?.price) {
+        Alert.alert("Almost there", "We got the product name — just confirm the buy price below, then Analyze.");
       }
-
-      const price = Number(String(data.price ?? "").replace(/[^0-9.]/g, ""));
-
-      if (!Number.isFinite(price) || price <= 0) {
-        Alert.alert(
-          "Invalid price",
-          "Detected price was invalid. Please enter manually."
-        );
-        return;
-      }
-
-      const title = String(data.title || "Product").slice(0, 200);
-
-      // ── Compat SDK ─────────────────────────────────────────────────────────
-      await db
-        .collection("users")
-        .doc(user!.uid)
-        .collection("flips")
-        .add({
-          title,
-          buyPrice: price,
-          sellPrice: 0,
-          profit: 0,
-          source: "link",
-          createdFrom: "flipit",
-          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-
-      Alert.alert(
-        "Deal Evaluated",
-        `${title}\n\nBuy Price: $${price.toFixed(2)}\n\nSaved to My Flips`
-      );
-
-      setDealUrl("");
     } catch (err) {
-      console.error(err);
-      Alert.alert("Evaluation failed", "Unable to evaluate this product.");
+      // Even on total failure, let them enter manually.
+      setShowFields(true);
+      setAnalyzing(false);
+      Alert.alert("Enter details", "Couldn't read that link — enter the product name and price below.");
     }
   };
 
@@ -262,8 +269,45 @@ export default function FlipItScreen() {
             onPress={() => requirePremium(evaluateDeal)}
             style={styles.evalBtn}
           >
-            <Text style={styles.evalText}>Evaluate Deal</Text>
+            <Text style={styles.evalText}>{analyzing ? "Working…" : "Evaluate Deal"}</Text>
           </Pressable>
+
+          {!showFields && (
+            <TouchableOpacity onPress={() => setShowFields(true)} style={{ marginTop: 12 }}>
+              <Text style={{ color: "#FF7A00", fontWeight: "700", textAlign: "center" }}>or enter manually →</Text>
+            </TouchableOpacity>
+          )}
+
+          {showFields && (
+            <View style={{ marginTop: 14 }}>
+              <TextInput
+                value={pTitle}
+                onChangeText={setPTitle}
+                placeholder="Product name"
+                placeholderTextColor={textSecondary}
+                style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textPrimary }]}
+              />
+              <TextInput
+                value={pBuyPrice}
+                onChangeText={setPBuyPrice}
+                placeholder="Buy price ($)"
+                keyboardType="decimal-pad"
+                placeholderTextColor={textSecondary}
+                style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textPrimary, marginTop: 10 }]}
+              />
+              <View style={styles.condRow}>
+                {["New", "Like New", "Used - Good", "Used - Fair"].map((c) => (
+                  <TouchableOpacity key={c} onPress={() => setPCondition(c)}
+                    style={[styles.condChip, { borderColor: inputBorder }, pCondition === c && styles.condChipActive]}>
+                    <Text style={[styles.condText, { color: pCondition === c ? "#000" : textSecondary }]}>{c}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Pressable onPress={() => requirePremium(analyzeAndShow)} style={[styles.evalBtn, { marginTop: 12 }]} disabled={analyzing}>
+                {analyzing ? <ActivityIndicator color="#fff" /> : <Text style={styles.evalText}>Analyze Flip</Text>}
+              </Pressable>
+            </View>
+          )}
         </View>
 
         {/* ───── PERFORMANCE ───── */}
@@ -315,6 +359,10 @@ const styles = StyleSheet.create({
   analyticsTitle: { fontSize: 16, fontWeight: "900", marginBottom: 10 },
   metric: { fontSize: 14, marginBottom: 6 },
   input: { borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 12 },
+  condRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  condChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1 },
+  condChipActive: { backgroundColor: "#FF7A00", borderColor: "#FF7A00" },
+  condText: { fontSize: 12, fontWeight: "700" },
   evalBtn: {
     backgroundColor: "#ff8c00",
     paddingVertical: 12,
