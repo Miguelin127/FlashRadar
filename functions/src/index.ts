@@ -296,4 +296,5 @@ export { previewDealV2 } from "./previewDeal";
 export { getPrintfulProducts } from "./getPrintfulProducts";export { fetchImpactCatalog } from "./fetchImpactCatalog";
 export { explainDeal } from "./explainDeal";
 export { parseSearch } from "./parseSearch";
+export { generateListing } from "./generateListing";
 export { expireManualDeals } from "./expireManualDeals";

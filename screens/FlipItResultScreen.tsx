@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,10 +7,18 @@ import {
   TouchableOpacity,
   Share,
   Linking,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { FlipItem, getFlipExplanation } from "../utils";
+import { useNavigation } from "@react-navigation/native";
+import { useUser } from "../context/UserContext";
+import { functions } from "../firebaseConfig";
+import { httpsCallable } from "firebase/functions";
+let Clipboard: typeof import("expo-clipboard") | null = null;
+try { Clipboard = require("expo-clipboard"); } catch { Clipboard = null; }
 
 /* ─────────────────────────────
    CONSTANTS
@@ -131,6 +139,45 @@ export default function FlipItResultScreen({ flip }: Props) {
   }
 
   const flipScore = useMemo(() => computeFlipScore(flip), [flip]);
+  const navigation = useNavigation<any>();
+  const { isPremium } = useUser();
+  const [platform, setPlatform] = useState("Facebook Marketplace");
+  const [listing, setListing] = useState<any>(null);
+  const [listingLoading, setListingLoading] = useState(false);
+
+  const genListing = async () => {
+    if (!isPremium) { navigation.navigate("Upgrade"); return; }
+    if (listingLoading) return;
+    setListingLoading(true);
+    try {
+      const call = httpsCallable(functions, "generateListing");
+      const res: any = await call({
+        title: flip.title,
+        buyPrice: flip.buyPrice,
+        avgResalePrice: flip.avgResalePrice,
+        condition: "Used - Good",
+        platform,
+      });
+      setListing(res.data?.draft ?? null);
+    } catch (e) {
+      Alert.alert("Couldn't generate listing", "Please try again.");
+    } finally {
+      setListingLoading(false);
+    }
+  };
+
+  const copyListing = async () => {
+    if (!listing) return;
+    const text = `${listing.title}
+
+${listing.description}
+
+Asking: ${listing.suggestedPrice}`;
+    if (Clipboard?.setStringAsync) {
+      await Clipboard.setStringAsync(text);
+      Alert.alert("Copied!", "Listing copied — paste it into " + platform + ".");
+    }
+  };
   const riskReasons = useMemo(() => getRiskReasons(flip), [flip]);
 
   const confidenceNumber =
@@ -243,11 +290,71 @@ Best Platform: ${flip.bestPlatform}
         <Text style={styles.sectionTitle}>Best Platform</Text>
         <Text>{flip.bestPlatform}</Text>
       </View>
+
+      {/* ── SELL IT: AI Listing Generator ── */}
+      <View style={sell.card}>
+        <Text style={sell.head}>Sell It Fast</Text>
+        <Text style={sell.sub}>AI writes your marketplace listing</Text>
+
+        <View style={sell.platRow}>
+          {["Facebook Marketplace", "OfferUp", "Mercari"].map((pl) => (
+            <TouchableOpacity key={pl} onPress={() => setPlatform(pl)}
+              style={[sell.platChip, platform === pl && sell.platChipActive]}>
+              <Text style={[sell.platText, platform === pl && sell.platTextActive]}>
+                {pl.replace(" Marketplace", "")}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <TouchableOpacity style={sell.genBtn} onPress={genListing} disabled={listingLoading}>
+          {listingLoading ? (
+            <ActivityIndicator color="#000" />
+          ) : (
+            <Text style={sell.genText}>{isPremium ? "Generate Listing" : "🔒 Generate Listing (Premium)"}</Text>
+          )}
+        </TouchableOpacity>
+
+        {listing && (
+          <View style={sell.draft}>
+            <Text style={sell.draftTitle}>{listing.title}</Text>
+            <Text style={sell.draftDesc}>{listing.description}</Text>
+            <Text style={sell.draftPrice}>Asking: ${listing.suggestedPrice}</Text>
+            {Array.isArray(listing.tips) && listing.tips.map((t: string, i: number) => (
+              <Text key={i} style={sell.tip}>• {t}</Text>
+            ))}
+            <TouchableOpacity style={sell.copyBtn} onPress={copyListing}>
+              <Ionicons name="copy-outline" size={15} color="#000" />
+              <Text style={sell.copyText}>Copy Listing</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
     </ScrollView>
   );
 }
 
 /* ───────────────────────────── */
+
+const sell = StyleSheet.create({
+  card: { backgroundColor: "#141414", borderRadius: 14, padding: 16, margin: 12, borderWidth: 1, borderColor: "rgba(255,122,0,0.3)" },
+  head: { color: "#fff", fontSize: 17, fontWeight: "900" },
+  sub: { color: "#888", fontSize: 12, marginTop: 2, marginBottom: 12 },
+  platRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  platChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: "#242424" },
+  platChipActive: { backgroundColor: "#FF7A00" },
+  platText: { color: "#aaa", fontSize: 12, fontWeight: "700" },
+  platTextActive: { color: "#000" },
+  genBtn: { backgroundColor: "#FF7A00", borderRadius: 12, paddingVertical: 13, alignItems: "center" },
+  genText: { color: "#000", fontWeight: "900", fontSize: 14 },
+  draft: { marginTop: 14, backgroundColor: "#0f0f0f", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#2a2a2a" },
+  draftTitle: { color: "#fff", fontSize: 15, fontWeight: "800", marginBottom: 8 },
+  draftDesc: { color: "#ccc", fontSize: 13, lineHeight: 19, marginBottom: 8 },
+  draftPrice: { color: "#FF7A00", fontSize: 15, fontWeight: "900", marginBottom: 10 },
+  tip: { color: "#999", fontSize: 12, lineHeight: 18 },
+  copyBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#fff", borderRadius: 10, paddingVertical: 11, marginTop: 12 },
+  copyText: { color: "#000", fontWeight: "800", fontSize: 13 },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0e0e0e", padding: 16 },
