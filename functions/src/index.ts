@@ -297,4 +297,5 @@ export { getPrintfulProducts } from "./getPrintfulProducts";export { fetchImpact
 export { explainDeal } from "./explainDeal";
 export { parseSearch } from "./parseSearch";
 export { generateListing } from "./generateListing";
+export { estimateResale } from "./estimateResale";
 export { expireManualDeals } from "./expireManualDeals";
