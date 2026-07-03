@@ -9,6 +9,8 @@ import {
   Alert,
 } from "react-native";
 import { analyzeFlip } from "../services/analyzeFlip";
+import { functions } from "../firebaseConfig";
+import { httpsCallable } from "firebase/functions";
 import FlipItResultScreen from "./FlipItResultScreen";
 
 const PARSE_ENDPOINT =
@@ -58,7 +60,7 @@ export default function FlipLinkScreen() {
     }
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     const buy = Number(buyPrice);
 
     if (!title || !buy || Number.isNaN(buy)) {
@@ -66,28 +68,42 @@ export default function FlipLinkScreen() {
       return;
     }
 
+    setLoading(true);
+    // Get a conservative AI resale estimate (replaces the old hardcoded buy*1.4)
+    let resaleMid = Math.round(buy * 1.4); // fallback only if estimate fails
+    let estimate: any = null;
+    try {
+      const call = httpsCallable(functions, "estimateResale");
+      const res: any = await call({ title, condition: "Used - Good", buyPrice: buy });
+      estimate = res.data?.estimate ?? null;
+      if (estimate?.mid && Number(estimate.mid) > 0) resaleMid = Number(estimate.mid);
+    } catch (e) {
+      // fall back to conservative default silently
+    }
+    setLoading(false);
+
+    const demand = estimate?.confidence === "high" ? "HIGH" : estimate?.confidence === "low" ? "LOW" : "MEDIUM";
+
     const flip = analyzeFlip({
       userId: "demo-user",
       title,
       buyPrice: buy,
-      priceHistory: [
-  { date: Date.now(), price: buy }
-],
-
-platformInputs: {
-  amazon: {
-    resalePrice: Math.round(buy * 1.4),
-    buyPrice: buy,
-    estimatedFees: Math.round(buy * 0.15),
-    demand: "MEDIUM",
-  },
-},
-      demand: "MEDIUM",
+      priceHistory: [{ date: Date.now(), price: buy }],
+      platformInputs: {
+        ebay: {
+          resalePrice: resaleMid,
+          buyPrice: buy,
+          estimatedFees: Math.round(resaleMid * 0.13),
+          demand,
+        },
+      },
+      demand,
       dealOrigin: "MANUAL",
       source: "LINK",
     });
 
-    setResult(flip);
+    // attach the estimate so the result screen can show "AI estimate — verify"
+    setResult({ ...flip, resaleEstimate: estimate });
   };
 
   if (result) {

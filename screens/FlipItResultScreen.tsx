@@ -286,6 +286,25 @@ Best Platform: ${flip.bestPlatform}
         <Text>Break Even: ${flip.breakEvenPrice}</Text>
       </View>
 
+      {(flip as any).resaleEstimate && (
+        <View style={est.box}>
+          <Text style={est.head}>
+            AI-estimated resale: ${(flip as any).resaleEstimate.low}–${(flip as any).resaleEstimate.high}
+          </Text>
+          <Text style={est.rationale}>{(flip as any).resaleEstimate.rationale}</Text>
+          <Text style={est.warn}>
+            ⚠️ Estimate only ({(flip as any).resaleEstimate.confidence} confidence). Verify with real sold listings before buying.
+          </Text>
+          <TouchableOpacity
+            onPress={() => Linking.openURL(
+              "https://www.ebay.com/sch/i.html?_nkw=" + encodeURIComponent(flip.title || "") + "&LH_Sold=1&LH_Complete=1"
+            )}
+          >
+            <Text style={est.link}>Check eBay sold listings →</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Best Platform</Text>
         <Text>{flip.bestPlatform}</Text>
@@ -335,6 +354,14 @@ Best Platform: ${flip.bestPlatform}
 }
 
 /* ───────────────────────────── */
+
+const est = StyleSheet.create({
+  box: { backgroundColor: "#1a1400", borderRadius: 12, padding: 14, margin: 12, borderWidth: 1, borderColor: "rgba(255,180,0,0.35)" },
+  head: { color: "#FFB400", fontSize: 15, fontWeight: "900" },
+  rationale: { color: "#ccc", fontSize: 12, marginTop: 6, lineHeight: 17 },
+  warn: { color: "#FFB400", fontSize: 12, fontWeight: "700", marginTop: 8 },
+  link: { color: "#4da3ff", fontSize: 13, fontWeight: "800", marginTop: 10 },
+});
 
 const sell = StyleSheet.create({
   card: { backgroundColor: "#141414", borderRadius: 14, padding: 16, margin: 12, borderWidth: 1, borderColor: "rgba(255,122,0,0.3)" },
