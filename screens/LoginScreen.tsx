@@ -21,8 +21,8 @@ export default function LoginScreen() {
 
   // After a successful sign-in, return the user to browsing.
   const dismiss = () => {
-    if (navigation.canGoBack()) navigation.goBack();
-    else navigation.navigate("MainTabs");
+    // Reset so Login is removed from history — back/swipe cannot return here once signed in.
+    navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
   };
 
   const [email, setEmail] = useState("");
