@@ -1,5 +1,6 @@
 // flashradar/App.tsx
 import * as Notifications from 'expo-notifications';
+import { Platform } from "react-native";
 import * as Location from "expo-location";
 import Purchases from 'react-native-purchases';
 import firebase from "firebase/compat/app";
@@ -51,7 +52,7 @@ Notifications.setNotificationHandler({
 });
 
 try {
-  Purchases.configure({  apiKey: 'appl_UziJXOhRXKINbzrFMAQWFBcPziu'  });
+  Purchases.configure({ apiKey: Platform.OS === "android" ? "goog_iquOFwaWGHIwFIqLWOsQzibmABE" : "appl_UziJXOhRXKINbzrFMAQWFBcPziu" });
 } catch (e) {
   console.log("[RevenueCat] Skipping in simulator/Expo Go");
 }
