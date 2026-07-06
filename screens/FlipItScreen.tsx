@@ -89,6 +89,8 @@ export default function FlipItScreen() {
       priceHistory: [{ date: Date.now(), price: buy }],
       platformInputs: {
         ebay: { resalePrice: resaleMid, buyPrice: buy, estimatedFees: Math.round(resaleMid * 0.13), demand },
+        facebook: { resalePrice: resaleMid, buyPrice: buy, estimatedFees: 0, demand },
+        mercari: { resalePrice: resaleMid, buyPrice: buy, estimatedFees: Math.round(resaleMid * 0.10), demand },
       },
       demand,
       dealOrigin: "MANUAL",

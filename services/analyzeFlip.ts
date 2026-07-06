@@ -33,18 +33,42 @@ export function analyzeFlip(input: AnalyzeFlipInput) {
     source,
   } = input;
 
-  // Fallback resale estimate if no history
-  const avgResalePrice =
-    priceHistory.length > 0
-      ? Math.round(
-          priceHistory.reduce((sum, p) => sum + p.price, 0) /
-            priceHistory.length
-        )
-      : Math.round(buyPrice * 1.4);
+  // Use the resale price passed in platformInputs (from estimateResale).
+  // Rank all provided platforms by net profit and pick the best.
+  const platformKeys = Object.keys(platformInputs || {});
+  let best = { platform: "eBay", resalePrice: Math.round(buyPrice * 1.4), estimatedFees: 0, netProfit: -Infinity };
 
-  const estimatedFees = Math.round(avgResalePrice * 0.15);
-  const netProfit = avgResalePrice - buyPrice - estimatedFees;
-  const roi = Math.round((netProfit / buyPrice) * 100);
+  const prettyName = (k: string) => {
+    const map: Record<string, string> = {
+      ebay: "eBay", facebook: "Facebook Marketplace", fb: "Facebook Marketplace",
+      mercari: "Mercari", offerup: "OfferUp", amazon: "Amazon",
+    };
+    return map[k.toLowerCase()] || k;
+  };
+
+  for (const key of platformKeys) {
+    const pi = platformInputs[key] || {};
+    const resale = Number(pi.resalePrice) || 0;
+    if (resale <= 0) continue;
+    const fees = Number(pi.estimatedFees) || Math.round(resale * 0.13);
+    const shipping = Number(pi.estimatedShipping) || 0;
+    const net = resale - buyPrice - fees - shipping;
+    if (net > best.netProfit) {
+      best = { platform: prettyName(key), resalePrice: resale, estimatedFees: fees, netProfit: net };
+    }
+  }
+
+  // Fallback if nothing valid was passed
+  if (best.netProfit === -Infinity) {
+    const resale = Math.round(buyPrice * 1.4);
+    const fees = Math.round(resale * 0.13);
+    best = { platform: "eBay", resalePrice: resale, estimatedFees: fees, netProfit: resale - buyPrice - fees };
+  }
+
+  const avgResalePrice = best.resalePrice;
+  const estimatedFees = best.estimatedFees;
+  const netProfit = best.netProfit;
+  const roi = buyPrice > 0 ? Math.round((netProfit / buyPrice) * 100) : 0;
 
   // ✅ Correct, type-safe verdict & confidence
   const verdict: FlipVerdict = getFlipVerdict(netProfit, roi);
@@ -63,7 +87,7 @@ export function analyzeFlip(input: AnalyzeFlipInput) {
     source,
     priceTrendingDown: false,
     breakEvenPrice: buyPrice + estimatedFees,
-    bestPlatform: "Amazon",
+    bestPlatform: best.platform,
     platformInputs,
   };
 }
