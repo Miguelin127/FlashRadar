@@ -1,4 +1,5 @@
 import Purchases, { PurchasesPackage } from "react-native-purchases";
+import { Platform } from "react-native";
 import { db, auth } from "../firebaseConfig";
 
 export async function initializePurchases() {
@@ -22,7 +23,13 @@ export async function purchaseSubscription(productId: string): Promise<boolean> 
   try {
     const offerings = await Purchases.getOfferings();
     const packages = offerings.current?.availablePackages ?? [];
-    const pkg = packages.find(p => p.product.identifier === productId);
+    // Match by package type (rc_monthly/rc_annual) — robust across platforms,
+    // since Android product IDs carry a ":base-plan" suffix that won't match raw productId.
+    const wantMonthly = productId.includes("monthly");
+    const pkg =
+      packages.find(p => p.identifier === (wantMonthly ? "$rc_monthly" : "$rc_annual")) ||
+      packages.find(p => p.product.identifier === productId) ||
+      packages.find(p => p.product.identifier.startsWith(productId));
     if (!pkg) throw new Error("Product not found: " + productId);
 
     const { customerInfo } = await Purchases.purchasePackage(pkg);
@@ -35,7 +42,7 @@ export async function purchaseSubscription(productId: string): Promise<boolean> 
           isPremium: true,
           subscriptionStatus: "active",
           subscriptionProductId: productId,
-          platform: "ios",
+          platform: Platform.OS,
         }, { merge: true });
       }
     }
