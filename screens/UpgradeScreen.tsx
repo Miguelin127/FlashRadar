@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, Alert, Dimensions, Linking,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -165,9 +166,10 @@ export default function UpgradeScreen() {
     try {
       setLoading(true);
       await initializePurchases();
+      const isAndroid = Platform.OS === "android";
       const productId = plan === "monthly"
-        ? "com.miguelin1.flashradarapp.premium.monthly"
-        : "com.miguelin1.flashradarapp.premium.yearly";
+        ? (isAndroid ? "flashradarapp.premium.monthly" : "com.miguelin1.flashradarapp.premium.monthly")
+        : (isAndroid ? "flashradarapp.premium.yearly" : "com.miguelin1.flashradarapp.premium.yearly");
       const success = await purchaseSubscription(productId);
       if (success) {
         Alert.alert("Welcome to Premium!", "You now have full access to FlashRadar.");

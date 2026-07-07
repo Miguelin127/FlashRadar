@@ -29,18 +29,11 @@
     }
   },
   "hosting": {
-    "site": "flashradarapp",
-    "public": "public",
+    "public": "public-legal",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
     ]
   }
 }
