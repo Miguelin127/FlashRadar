@@ -273,7 +273,7 @@ export default function UpgradeScreen() {
             </>
           )}
         </TouchableOpacity>
-        <Text style={styles.ctaSub}>Cancel anytime · Billed through Apple</Text>
+        <Text style={styles.ctaSub}>Cancel anytime · Billed through {Platform.OS === "android" ? "Google Play" : "Apple"}</Text>
         <TouchableOpacity onPress={handleRestore} style={{ marginTop: 4 }}>
           <Text style={{ color: colors.subtext, fontSize: 12, textAlign: "center", textDecorationLine: "underline" }}>
             Restore Purchases
