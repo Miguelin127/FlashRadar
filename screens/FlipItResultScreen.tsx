@@ -13,6 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { FlipItem, getFlipExplanation } from "../utils";
+import { useTheme } from "../context/ThemeContext";
 import { useNavigation } from "@react-navigation/native";
 import { useUser } from "../context/UserContext";
 import { functions } from "../firebaseConfig";
@@ -131,6 +132,7 @@ function confidenceBadge(value?: number) {
 
 export default function FlipItResultScreen(props: any) {
   const flip = props?.flip ?? props?.route?.params?.flip;
+  const { colors } = useTheme();
   if (!flip) {
     return (
       <View style={styles.container}>
@@ -216,7 +218,7 @@ Best Platform: ${flip.bestPlatform}
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.verdictCard}>
         <View style={styles.scoreRow}>
           <Text style={styles.scoreLabel}>Flip Score</Text>
@@ -281,10 +283,10 @@ Best Platform: ${flip.bestPlatform}
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Profit Summary</Text>
-        <Text style={{ color: "#ddd", fontSize: 14, marginTop: 2 }}>Buy Price: ${flip.buyPrice}</Text>
-        <Text style={{ color: "#ddd", fontSize: 14, marginTop: 2 }}>Avg Resale: ${flip.avgResalePrice}</Text>
-        <Text style={{ color: "#ddd", fontSize: 14, marginTop: 2 }}>Net Profit: ${flip.netProfit}</Text>
-        <Text style={{ color: "#ddd", fontSize: 14, marginTop: 2 }}>Break Even: ${flip.breakEvenPrice}</Text>
+        <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Buy Price: ${flip.buyPrice}</Text>
+        <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Avg Resale: ${flip.avgResalePrice}</Text>
+        <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Net Profit: ${flip.netProfit}</Text>
+        <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Break Even: ${flip.breakEvenPrice}</Text>
       </View>
 
       {(flip as any).resaleEstimate && (
@@ -308,7 +310,7 @@ Best Platform: ${flip.bestPlatform}
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Best Platform</Text>
-        <Text style={{ color: "#ddd", fontSize: 15, fontWeight: "700" }}>{flip.bestPlatform}</Text>
+        <Text style={{ color: colors.text, fontSize: 15, fontWeight: "700" }}>{flip.bestPlatform}</Text>
       </View>
 
       {/* ── SELL IT: AI Listing Generator ── */}
