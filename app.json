@@ -80,6 +80,12 @@
           "iosGoogleMapsApiKey": "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc",
           "androidGoogleMapsApiKey": "AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc"
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "FlashRadar uses the camera to scan product barcodes for price lookup and flip analysis."
+        }
       ]
     ],
     "scheme": "flashradar"
