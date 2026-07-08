@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigation } from "@react-navigation/native";
+import { useUser } from "../context/UserContext";
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Image, Animated, Easing, Linking,
@@ -34,6 +36,8 @@ const buildAmazonSearchQuery = (product: ScannedItem): string => {
 };
 
 export default function FlipScannerScreen() {
+  const navigation = useNavigation<any>();
+  const { isPremium } = useUser();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [product, setProduct] = useState<ScannedItem | null>(null);
@@ -79,6 +83,18 @@ export default function FlipScannerScreen() {
       });
   };
 
+  const checkScanLimit = async (uid: string): Promise<boolean> => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const ref = db.collection("users").doc(uid).collection("usage").doc(`scans-${today}`);
+      const snap = await ref.get();
+      const count = snap.exists ? (snap.data()?.count ?? 0) : 0;
+      if (count >= 3) return false;
+      await ref.set({ count: count + 1, updatedAt: Date.now() }, { merge: true });
+      return true;
+    } catch { return true; }
+  };
+
   const handleBarcodeScanned = async ({ data }: BarcodeScanningResult) => {
     if (scanned) return;
     setScanned(true);
@@ -88,6 +104,14 @@ export default function FlipScannerScreen() {
       const user = firebase.auth().currentUser;
       if (!user) {
         showToast("Please log in");
+        setScanned(false);
+        setLoading(false);
+        return;
+      }
+
+      const allowed = isPremium ? true : await checkScanLimit(user.uid);
+      if (!allowed) {
+        showToast("3 free scans used today — upgrade for unlimited");
         setScanned(false);
         setLoading(false);
         return;
@@ -177,6 +201,17 @@ export default function FlipScannerScreen() {
           <View style={styles.card}>
             <Image source={{ uri: product.image }} style={styles.image} />
             <Text style={styles.productTitle}>{product.title}</Text>
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, { backgroundColor: "#00C853" }]}
+              onPress={async () => {
+                await saveScanToUser(product);
+                navigation.navigate("FlipIt", { prefillTitle: product.title });
+              }}
+            >
+              <Ionicons name="trending-up-outline" size={18} color="#000" />
+              <Text style={styles.primaryText}>Analyze Flip</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.primaryBtn}

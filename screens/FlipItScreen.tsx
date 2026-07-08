@@ -32,7 +32,7 @@ import type { RootStackParamList } from "../navigation/RootNavigator";
 const PARSE_ENDPOINT =
   "https://us-central1-flashradar-71c93.cloudfunctions.net/parseProduct";
 
-export default function FlipItScreen() {
+export default function FlipItScreen({ route }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { isPremium } = useUser();
@@ -61,6 +61,12 @@ export default function FlipItScreen() {
   const [pCondition, setPCondition] = useState("Used - Good");
   const [showFields, setShowFields] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+
+  // Prefill from barcode scanner
+  useEffect(() => {
+    const pf = route?.params?.prefillTitle;
+    if (pf) { setPTitle(String(pf).slice(0, 200)); setShowFields(true); }
+  }, [route?.params?.prefillTitle]);
 
   // Unified analyzer — every input path (link/manual) ends here.
   const analyzeAndShow = async () => {
@@ -200,7 +206,7 @@ export default function FlipItScreen() {
         {/* ───── ACTION CARDS ───── */}
         <View style={styles.row}>
           <Pressable
-            onPress={() => requirePremium(() => navigation.navigate("FlipScanner"))}
+            onPress={() => navigation.navigate("FlipScanner")}
             style={[
               styles.card,
               {
