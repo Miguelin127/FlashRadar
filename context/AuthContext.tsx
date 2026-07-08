@@ -18,7 +18,7 @@ WebBrowser.maybeCompleteAuthSession();
 // ── Google OAuth client IDs ─────────────────────────────────────────────────
 // Get these from Google Cloud Console → OAuth 2.0 Client IDs
 const GOOGLE_IOS_CLIENT_ID = "2868928124-g7ha6o9jvfj9ul9dectbn24ksmlol7q5.apps.googleusercontent.com";
-const GOOGLE_ANDROID_CLIENT_ID = "2868928124-t06eluv2f4cm4o7dfpthd7ltj1j8m5ik.apps.googleusercontent.com";
+const GOOGLE_ANDROID_CLIENT_ID = "2868928124-66q9ulho0utbk5q4huvpud7tfn3a8g7d.apps.googleusercontent.com";
 const GOOGLE_WEB_CLIENT_ID = "2868928124-mc285lh7neu7iul1vespr2k5jo8uteok.apps.googleusercontent.com";
 
 export const ADMIN_EMAILS = new Set([
