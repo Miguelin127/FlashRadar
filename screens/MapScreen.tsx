@@ -428,7 +428,7 @@ function StoreDealRow({ deal, dark, onPress }: {
 
 /* ─── Main Screen ────────────────────────────────────────────── */
 
-const RADIUS_DEFAULT = 10; // miles; adjustable
+const RADIUS_DEFAULT = 25; // miles; adjustable
 
 function distanceMiles(
   a: { latitude: number; longitude: number },
