@@ -219,7 +219,7 @@ Best Platform: ${flip.bestPlatform}
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.verdictCard}>
+      <View style={[styles.verdictCard, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.accent + "55" }]}>
         <View style={styles.scoreRow}>
           <Text style={styles.scoreLabel}>Flip Score</Text>
           <Text style={styles.scoreValue}>{flipScore}/100</Text>
@@ -281,7 +281,7 @@ Best Platform: ${flip.bestPlatform}
         </View>
       )}
 
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.accent + "4D" }]}>
         <Text style={styles.sectionTitle}>Profit Summary</Text>
         <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Buy Price: ${flip.buyPrice}</Text>
         <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Avg Resale: ${flip.avgResalePrice}</Text>
@@ -308,7 +308,7 @@ Best Platform: ${flip.bestPlatform}
         </View>
       )}
 
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.accent + "4D" }]}>
         <Text style={styles.sectionTitle}>Best Platform</Text>
         <Text style={{ color: colors.text, fontSize: 15, fontWeight: "700" }}>{flip.bestPlatform}</Text>
       </View>
