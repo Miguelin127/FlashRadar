@@ -120,12 +120,23 @@ export default function FlipScannerScreen() {
       let title = "Unknown Product";
       let image = "https://via.placeholder.com/300x300.png?text=No+Image";
 
+      // Primary: UPCItemDB (general products)
       try {
-        const res = await axios.get(`https://world.openfoodfacts.org/api/v0/product/${data}.json`);
-        const p = res.data?.product;
-        if (p?.product_name) title = p.product_name;
-        if (p?.image_url) image = p.image_url;
+        const res = await axios.get(`https://api.upcitemdb.com/prod/trial/lookup?upc=${data}`, { timeout: 6000 });
+        const item = res.data?.items?.[0];
+        if (item?.title) title = item.title;
+        if (item?.images?.[0]) image = item.images[0];
       } catch {}
+
+      // Fallback: OpenFoodFacts (groceries)
+      if (title === "Unknown Product") {
+        try {
+          const res = await axios.get(`https://world.openfoodfacts.org/api/v0/product/${data}.json`, { timeout: 6000 });
+          const p = res.data?.product;
+          if (p?.product_name) title = p.product_name;
+          if (p?.image_url) image = p.image_url;
+        } catch {}
+      }
 
       const foundProduct: ScannedItem = {
         id: `${Date.now()}`,
@@ -206,7 +217,7 @@ export default function FlipScannerScreen() {
               style={[styles.primaryBtn, { backgroundColor: "#00C853" }]}
               onPress={async () => {
                 await saveScanToUser(product);
-                navigation.navigate("FlipIt", { prefillTitle: product.title });
+                navigation.navigate("MainTabs", { screen: "FlipIt", params: { prefillTitle: product.title } });
               }}
             >
               <Ionicons name="trending-up-outline" size={18} color="#000" />
