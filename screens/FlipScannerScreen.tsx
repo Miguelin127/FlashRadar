@@ -14,7 +14,8 @@ import * as Haptics from "expo-haptics";
 import SafeAreaWrapper from "../components/SafeAreaWrapper";
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
-import { db } from "../firebaseConfig";
+import { db, functions } from "../firebaseConfig";
+import { httpsCallable } from "firebase/functions";
 import { ScannedItem } from "../types/ScannedItem";
 
 // ── Correct affiliate tag ──────────────────────────────────────────────────
@@ -95,6 +96,8 @@ export default function FlipScannerScreen() {
     } catch { return true; }
   };
 
+  const [intel, setIntel] = useState<any>(null);
+
   const handleBarcodeScanned = async ({ data }: BarcodeScanningResult) => {
     if (scanned) return;
     setScanned(true);
@@ -150,6 +153,15 @@ export default function FlipScannerScreen() {
       };
 
       setProduct(foundProduct);
+
+      // Background: check FlashRadar deals for this product
+      if (title !== "Unknown Product") {
+        try {
+          const call = httpsCallable(functions, "scanIntel");
+          const res: any = await call({ title });
+          setIntel(res.data ?? null);
+        } catch { setIntel(null); }
+      }
       await triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
       Animated.timing(successAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
     } catch (err) {
@@ -213,6 +225,17 @@ export default function FlipScannerScreen() {
             <Image source={{ uri: product.image }} style={styles.image} />
             <Text style={styles.productTitle}>{product.title}</Text>
 
+            {intel?.match && (
+              <TouchableOpacity
+                style={{ backgroundColor: "#1a1400", borderRadius: 10, borderWidth: 1, borderColor: "#FF7A00", padding: 10, marginTop: 10, width: "100%" }}
+                onPress={() => intel.match.affiliateUrl && Linking.openURL(intel.match.affiliateUrl)}
+              >
+                <Text style={{ color: "#FF7A00", fontWeight: "800", fontSize: 13 }}>🎯 Found in FlashRadar</Text>
+                <Text style={{ color: "#fff", fontSize: 13, marginTop: 3 }} numberOfLines={1}>{intel.match.title}</Text>
+                <Text style={{ color: "#00FF7F", fontWeight: "800", fontSize: 15, marginTop: 2 }}>{"$" + intel.match.price + (intel.match.discountPercent ? " (" + intel.match.discountPercent + "% off)" : "") + " at " + intel.match.store}</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[styles.primaryBtn, { backgroundColor: "#00C853" }]}
               onPress={async () => {
@@ -239,7 +262,7 @@ export default function FlipScannerScreen() {
 
             <TouchableOpacity
               style={styles.scanAgain}
-              onPress={() => { setScanned(false); setProduct(null); successAnim.setValue(0); }}
+              onPress={() => { setScanned(false); setProduct(null); setIntel(null); successAnim.setValue(0); }}
             >
               <Ionicons name="scan-outline" size={20} color="#fff" />
               <Text style={styles.scanText}>Scan Again</Text>
