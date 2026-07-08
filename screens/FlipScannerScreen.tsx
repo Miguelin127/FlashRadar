@@ -169,7 +169,7 @@ export default function FlipScannerScreen() {
     <SafeAreaWrapper style={styles.container}>
       {!scanned && (
         <CameraView
-          style={StyleSheet.absoluteFillObject}
+          style={{ flex: 1, width: "100%" }}
           facing="back"
           flash={flash ? "on" : "off"}
           onBarcodeScanned={handleBarcodeScanned}
