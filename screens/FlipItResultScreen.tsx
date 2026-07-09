@@ -182,7 +182,7 @@ export default function FlipItResultScreen(props: any) {
         title: flip.title,
         buyPrice: flip.buyPrice,
         avgResalePrice: flip.avgResalePrice,
-        condition: "Used - Good",
+        condition: flip.condition ?? "Used - Good",
         platform,
       });
       setListing(res.data?.draft ?? null);
@@ -234,7 +234,7 @@ Flip Result 🔥
 Verdict: ${flip.verdict}
 Flip Score: ${flipScore}/100
 Confidence: ${confidenceNumber}%
-Net Profit: $${flip.netProfit}
+Net Profit: $${Number(flip.netProfit).toFixed(2)}
 
 Best Platform: ${flip.bestPlatform}
       `.trim(),
@@ -242,7 +242,7 @@ Best Platform: ${flip.bestPlatform}
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 140 }}>
       <View style={[styles.verdictCard, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.accent + "55" }]}>
         <View style={styles.scoreRow}>
           <Text style={styles.scoreLabel}>Flip Score</Text>
@@ -318,7 +318,7 @@ Best Platform: ${flip.bestPlatform}
         <Text style={styles.sectionTitle}>Profit Summary</Text>
         <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Buy Price: ${flip.buyPrice}</Text>
         <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Avg Resale: ${flip.avgResalePrice}</Text>
-        <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Net Profit: ${flip.netProfit}</Text>
+        <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Net Profit: ${Number(flip.netProfit).toFixed(2)}</Text>
         <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Break Even: ${flip.breakEvenPrice}</Text>
       </View>
 

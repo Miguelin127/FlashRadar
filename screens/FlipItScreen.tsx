@@ -103,7 +103,7 @@ export default function FlipItScreen({ route }: any) {
       source: "LINK",
     });
     setAnalyzing(false);
-    navigation.navigate("FlipItResult", { flip: { ...flip, resaleEstimate: estimate } });
+    navigation.navigate("FlipItResult", { flip: { ...flip, condition: pCondition, resaleEstimate: estimate } });
   };
 
   /* ───────── LIVE FLIP PERFORMANCE ───────── */
