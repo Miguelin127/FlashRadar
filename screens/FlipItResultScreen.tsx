@@ -16,7 +16,8 @@ import { FlipItem, getFlipExplanation } from "../utils";
 import { useTheme } from "../context/ThemeContext";
 import { useNavigation } from "@react-navigation/native";
 import { useUser } from "../context/UserContext";
-import { functions } from "../firebaseConfig";
+import { functions, db, firebase } from "../firebaseConfig";
+import { useAuth } from "../context/AuthContext";
 import { httpsCallable } from "firebase/functions";
 let Clipboard: typeof import("expo-clipboard") | null = null;
 try { Clipboard = require("expo-clipboard"); } catch { Clipboard = null; }
@@ -142,6 +143,29 @@ export default function FlipItResultScreen(props: any) {
   }
 
   const flipScore = useMemo(() => computeFlipScore(flip), [flip]);
+  const { user } = useAuth();
+  const [saved, setSaved] = useState(false);
+
+  const saveToMyFlips = async () => {
+    if (!user) { Alert.alert("Log in", "Sign in to save flips."); return; }
+    if (saved) return;
+    try {
+      await db.collection("users").doc(user.uid).collection("flips").add({
+        title: flip.title ?? "Manual Flip",
+        buyPrice: Number(flip.buyPrice) || 0,
+        sellPrice: Number(flip.avgResalePrice) || 0,
+        source: flip.bestPlatform ?? flip.dealOrigin ?? "",
+        status: "inventory",
+        createdFrom: "flipit-result",
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      setSaved(true);
+      Alert.alert("Saved 📦", "Added to My Flips as In Inventory.");
+    } catch {
+      Alert.alert("Save failed", "Please try again.");
+    }
+  };
   const navigation = useNavigation<any>();
   const { isPremium } = useUser();
   const [platform, setPlatform] = useState("Facebook Marketplace");
@@ -263,6 +287,15 @@ Best Platform: ${flip.bestPlatform}
         >
           <Ionicons name="cart-outline" size={18} color="#fff" />
           <Text style={styles.primaryText}>Check Prices</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.primaryBtn, { backgroundColor: saved ? "#2ecc71" : "#3498db" }]}
+          onPress={saveToMyFlips}
+          disabled={saved}
+        >
+          <Ionicons name={saved ? "checkmark-circle-outline" : "archive-outline"} size={18} color="#fff" />
+          <Text style={styles.primaryText}>{saved ? "Saved to My Flips" : "Save to My Flips"}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.shareBtn} onPress={shareFlip}>
