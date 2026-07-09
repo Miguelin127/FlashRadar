@@ -66,8 +66,14 @@ export default function App() {
       } catch {}
     }, 500);
 
-    const unsub = auth.onAuthStateChanged((user) => {
-      if (user) captureAndSaveLocation(user.uid);
+    const unsub = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        captureAndSaveLocation(user.uid);
+        // Identify user to RevenueCat so billing events carry the Firebase UID
+        try { await Purchases.logIn(user.uid); } catch {}
+      } else {
+        try { await Purchases.logOut(); } catch {}
+      }
     });
 
     return () => {
