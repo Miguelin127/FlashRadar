@@ -12,6 +12,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { UserProvider } from "./context/UserContext";
 import RootNavigator from "./navigation/RootNavigator";
+import UpdatePrompt from "./components/UpdatePrompt";
 import { auth, db } from "./firebaseConfig";
 
 async function captureAndSaveLocation(uid: string) {
@@ -81,6 +82,7 @@ export default function App() {
         <AuthProvider>
           <UserProvider>
             <AppWithTheme />
+            <UpdatePrompt />
           </UserProvider>
         </AuthProvider>
       </ThemeProvider>
