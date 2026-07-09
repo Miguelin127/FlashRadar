@@ -27,6 +27,7 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState<"login" | "signup" | "google" | "apple" | null>(null);
   const [mode, setMode] = useState<"login" | "signup">("login");
 
@@ -115,14 +116,22 @@ export default function LoginScreen() {
             value={email}
             onChangeText={setEmail}
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#888"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+          <View style={{ position: "relative" }}>
+            <TextInput
+              style={[styles.input, { paddingRight: 48 }]}
+              placeholder="Password"
+              placeholderTextColor="#888"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <TouchableOpacity
+              style={{ position: "absolute", right: 14, top: 0, bottom: 0, justifyContent: "center" }}
+              onPress={() => setShowPassword((v) => !v)}
+            >
+              <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#888" />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity style={styles.btn} onPress={handleEmail} disabled={!!loading}>
             {loading === "login" || loading === "signup"
