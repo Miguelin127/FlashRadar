@@ -18,16 +18,20 @@ import { db, firebase } from "../firebaseConfig";
 type RoiTier = "GOOD" | "STRONG" | "FIRE" | null;
 type FlipStatus = "inventory" | "listed" | "sold" | "returned";
 
+type Sale = { price: number; soldAt: number }; // soldAt = epoch millis
+
 type Flip = {
   id: string;
   title?: string;
-  buyPrice?: number;
-  taxCost?: number;
-  shippingCost?: number;
-  feesCost?: number;
-  sellPrice?: number;      // target/listed price
-  soldPrice?: number;      // actual sale price
-  investedAmount?: number; // legacy field
+  buyPrice?: number;       // per unit
+  taxCost?: number;        // per unit
+  shippingCost?: number;   // per unit
+  feesCost?: number;       // per unit
+  sellPrice?: number;      // target per unit
+  soldPrice?: number;      // legacy single sold price
+  quantity?: number;       // units bought (default 1)
+  sales?: Sale[];          // per-unit sale records
+  investedAmount?: number; // legacy
   status?: FlipStatus;
   soldAt?: any;
   timestamp?: any;
@@ -63,45 +67,65 @@ export default function MyFlipsScreen() {
 
   const [flips, setFlips] = useState<Flip[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [sellingId, setSellingId] = useState<string | null>(null);
   const [buyInput, setBuyInput] = useState("");
   const [taxInput, setTaxInput] = useState("");
   const [shipInput, setShipInput] = useState("");
   const [feesInput, setFeesInput] = useState("");
   const [sellInput, setSellInput] = useState("");
-  const [soldInput, setSoldInput] = useState("");
+  const [qtyInput, setQtyInput] = useState("");
+  const [salePriceInput, setSalePriceInput] = useState("");
   const [sortMode, setSortMode] = useState<"timestamp" | "roi" | "profit">("timestamp");
   const [statusFilter, setStatusFilter] = useState<FlipStatus | "all">("all");
 
-  /* ───────── Derived numbers ───────── */
-  const statusOf = (f: Flip): FlipStatus => f.status ?? "inventory";
+  /* ───────── Derived ───────── */
+  const qtyOf = (f: Flip) => Math.max(1, Math.floor(f.quantity ?? 1));
 
-  // Total cash out the door: buy + tax + shipping + fees (legacy investedAmount fallback)
-  const getInvested = (f: Flip) => {
+  // Migrate legacy single soldPrice into sales view (read-only shim).
+  const salesOf = (f: Flip): Sale[] => {
+    if (f.sales && f.sales.length) return f.sales;
+    if (f.soldPrice !== undefined && (f.status === "sold")) {
+      return [{ price: f.soldPrice, soldAt: f.soldAt?.toMillis?.() ?? (f.soldAt?.seconds ? f.soldAt.seconds * 1000 : Date.now()) }];
+    }
+    return [];
+  };
+
+  const unitsSold = (f: Flip) => Math.min(salesOf(f).length, qtyOf(f));
+  const unitsLeft = (f: Flip) => qtyOf(f) - unitsSold(f);
+
+  const perUnitCost = (f: Flip) => {
     if (f.buyPrice !== undefined || f.taxCost !== undefined || f.shippingCost !== undefined || f.feesCost !== undefined) {
       return (f.buyPrice ?? 0) + (f.taxCost ?? 0) + (f.shippingCost ?? 0) + (f.feesCost ?? 0);
     }
-    return f.investedAmount ?? 0;
+    return (f.investedAmount ?? 0) / qtyOf(f);
   };
 
-  // Realized profit only counts when sold; otherwise projected from target sellPrice.
-  const effectiveSell = (f: Flip) =>
-    statusOf(f) === "sold" ? (f.soldPrice ?? f.sellPrice ?? 0) : (f.sellPrice ?? 0);
+  const totalInvested = (f: Flip) => perUnitCost(f) * qtyOf(f);
+  const revenueSoFar = (f: Flip) => salesOf(f).reduce((sum, s) => sum + (s.price || 0), 0);
 
-  const calcProfit = (f: Flip) => {
-    if (statusOf(f) === "returned") return 0;
-    return effectiveSell(f) - getInvested(f);
+  const statusOf = (f: Flip): FlipStatus => {
+    if (f.status === "returned") return "returned";
+    if (qtyOf(f) > 0 && unitsSold(f) >= qtyOf(f)) return "sold";
+    return f.status === "sold" ? "sold" : (f.status ?? "inventory");
   };
+
+  // Realized: revenue from sold units minus their share of cost.
+  const realizedProfit = (f: Flip) =>
+    statusOf(f) === "returned" ? 0 : revenueSoFar(f) - perUnitCost(f) * unitsSold(f);
+
+  // Projected: remaining units at target price.
+  const projectedProfit = (f: Flip) =>
+    statusOf(f) === "returned" ? 0 : unitsLeft(f) * ((f.sellPrice ?? 0) - perUnitCost(f));
+
+  const combinedProfit = (f: Flip) => realizedProfit(f) + projectedProfit(f);
 
   const calcROI = (f: Flip) => {
-    const invested = getInvested(f);
-    if (invested <= 0) return 0;
-    return (calcProfit(f) / invested) * 100;
+    const inv = totalInvested(f);
+    if (inv <= 0) return 0;
+    return (combinedProfit(f) / inv) * 100;
   };
 
   const TARGET_ROI = 30;
-  const targetSellFor = (invested: number, roiPercent: number) =>
-    invested > 0 ? invested * (1 + roiPercent / 100) : 0;
-
   const roiTierFor = (roi: number): RoiTier => {
     if (roi >= 75) return "FIRE";
     if (roi >= 50) return "STRONG";
@@ -149,19 +173,15 @@ export default function MyFlipsScreen() {
     flips.forEach((f) => {
       const st = statusOf(f);
       counts[st]++;
-      const profit = calcProfit(f);
-      if (st === "sold") {
-        realized += profit;
-        let ts = 0;
-        const t = f.soldAt ?? f.timestamp;
-        if (t?.toMillis) ts = t.toMillis();
-        else if (t?.seconds) ts = t.seconds * 1000;
-        if (now - ts < 86400000) today += profit;
-        if (now - ts < 7 * 86400000) week += profit;
-      } else if (st !== "returned") {
-        projected += profit;
-        invested += getInvested(f);
-      }
+      if (st === "returned") return;
+      realized += realizedProfit(f);
+      projected += projectedProfit(f);
+      invested += perUnitCost(f) * unitsLeft(f); // cash still tied up in unsold units
+      salesOf(f).forEach((s) => {
+        const unitProfit = (s.price || 0) - perUnitCost(f);
+        if (now - s.soldAt < 86400000) today += unitProfit;
+        if (now - s.soldAt < 7 * 86400000) week += unitProfit;
+      });
     });
     return { realized, projected, today, week, invested, counts };
   }, [flips]);
@@ -173,15 +193,14 @@ export default function MyFlipsScreen() {
 
   const exportCSV = async () => {
     if (!flips.length || !BASE_DIR) return;
-    const header = "Title,Status,Buy,Tax,Shipping,Fees,Invested,Target Sell,Sold Price,Profit,ROI %,Source,Timestamp\n";
+    const header = "Title,Status,Qty,Sold Units,Per-Unit Cost,Total Invested,Revenue,Realized Profit,Projected Profit,ROI %,Source,Timestamp\n";
     const rows = flips.map((f) => {
-      const invested = getInvested(f);
-      const profit = calcProfit(f);
-      const roi = invested > 0 ? ((profit / invested) * 100).toFixed(1) : "0";
+      const inv = totalInvested(f);
+      const roi = inv > 0 ? ((combinedProfit(f) / inv) * 100).toFixed(1) : "0";
       let ts = "";
       if (f.timestamp?.toMillis) ts = new Date(f.timestamp.toMillis()).toISOString();
       else if (f.timestamp?.seconds) ts = new Date(f.timestamp.seconds * 1000).toISOString();
-      return `"${(f.title || "Manual Flip").replace(/"/g, '""')}",${statusOf(f)},${f.buyPrice ?? 0},${f.taxCost ?? 0},${f.shippingCost ?? 0},${f.feesCost ?? 0},${invested},${f.sellPrice ?? 0},${f.soldPrice ?? ""},${profit.toFixed(2)},${roi},"${f.source || ""}",${ts}`;
+      return `"${(f.title || "Manual Flip").replace(/"/g, '""')}",${statusOf(f)},${qtyOf(f)},${unitsSold(f)},${perUnitCost(f).toFixed(2)},${inv.toFixed(2)},${revenueSoFar(f).toFixed(2)},${realizedProfit(f).toFixed(2)},${projectedProfit(f).toFixed(2)},${roi},"${f.source || ""}",${ts}`;
     }).join("\n");
     const fileUri = `${BASE_DIR}my_flips.csv`;
     await FileSystem.writeAsStringAsync(fileUri, header + rows);
@@ -191,15 +210,16 @@ export default function MyFlipsScreen() {
   const exportPDF = async () => {
     if (!flips.length) return;
     const rows = flips.map((f) => {
-      const invested = getInvested(f);
-      const profit = calcProfit(f);
-      const roi = invested > 0 ? ((profit / invested) * 100).toFixed(1) : "0";
+      const inv = totalInvested(f);
+      const roi = inv > 0 ? ((combinedProfit(f) / inv) * 100).toFixed(1) : "0";
       const st = STATUS_META[statusOf(f)];
+      const profit = realizedProfit(f);
       return `<tr>
         <td>${(f.title || "Manual Flip").replace(/</g, "&lt;")}</td>
         <td>${st.emoji} ${st.label}</td>
-        <td>$${invested.toFixed(2)}</td>
-        <td>$${effectiveSell(f).toFixed(2)}</td>
+        <td>${unitsSold(f)}/${qtyOf(f)}</td>
+        <td>$${inv.toFixed(2)}</td>
+        <td>$${revenueSoFar(f).toFixed(2)}</td>
         <td style="color:${profit >= 0 ? "#2ecc71" : "#e74c3c"}">$${profit.toFixed(2)}</td>
         <td>${roi}%</td>
       </tr>`;
@@ -207,10 +227,10 @@ export default function MyFlipsScreen() {
     const html = `<html><body style="font-family:-apple-system;padding:24px;">
       <h1>FlashRadar – My Flips</h1>
       <p><strong>Realized Profit:</strong> $${stats.realized.toFixed(2)}<br/>
-      <strong>Projected (open items):</strong> $${stats.projected.toFixed(2)}<br/>
+      <strong>Projected (open units):</strong> $${stats.projected.toFixed(2)}<br/>
       <strong>Cash in Inventory:</strong> $${stats.invested.toFixed(2)}</p>
       <table width="100%" border="1" cellspacing="0" cellpadding="8">
-        <thead><tr><th>Title</th><th>Status</th><th>Invested</th><th>Sell</th><th>Profit</th><th>ROI</th></tr></thead>
+        <thead><tr><th>Title</th><th>Status</th><th>Sold</th><th>Invested</th><th>Revenue</th><th>Realized</th><th>ROI</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></body></html>`;
     const { uri } = await Print.printToFileAsync({ html });
@@ -228,31 +248,69 @@ export default function MyFlipsScreen() {
 
   const setStatus = async (flip: Flip, status: FlipStatus) => {
     if (!user) return;
-    const update: any = { status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-    if (status === "sold") {
-      update.soldAt = firebase.firestore.FieldValue.serverTimestamp();
-      // If no soldPrice recorded yet, prompt via edit mode instead of guessing.
-      if (flip.soldPrice === undefined) {
-        openEditor(flip);
-      }
+    await flipRef(flip.id).update({
+      status,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  };
+
+  // ── Record one unit sold at a (possibly negotiated) price ──
+  const recordSale = async (flip: Flip) => {
+    if (!user) return;
+    const price = Number(salePriceInput);
+    if (Number.isNaN(price) || price < 0) {
+      Alert.alert("Invalid price", "Enter the price this unit sold for.");
+      return;
     }
+    const newSales: Sale[] = [...salesOf(flip), { price, soldAt: Date.now() }];
+    const soldOut = newSales.length >= qtyOf(flip);
+
+    const update: any = {
+      sales: newSales,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    if (soldOut) {
+      update.status = "sold";
+      update.soldAt = firebase.firestore.FieldValue.serverTimestamp();
+    }
+
     await flipRef(flip.id).update(update);
+    setSellingId(null);
+    setSalePriceInput("");
+
+    const profit = price - perUnitCost(flip);
+    if (soldOut) {
+      Alert.alert("🎉 Sold Out!", `All ${qtyOf(flip)} units sold. This unit: ${profit >= 0 ? "+" : ""}$${profit.toFixed(2)}`);
+    }
+  };
+
+  const undoLastSale = async (flip: Flip) => {
+    if (!user) return;
+    const sales = salesOf(flip);
+    if (!sales.length) return;
+    const newSales = sales.slice(0, -1);
+    await flipRef(flip.id).update({
+      sales: newSales,
+      status: flip.status === "sold" ? "listed" : flip.status ?? "inventory",
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
   };
 
   const openEditor = (flip: Flip) => {
+    setSellingId(null);
     setEditingId(flip.id);
-    setBuyInput(flip.buyPrice !== undefined ? String(flip.buyPrice) : String(flip.investedAmount ?? ""));
+    setBuyInput(flip.buyPrice !== undefined ? String(flip.buyPrice) : "");
     setTaxInput(flip.taxCost !== undefined ? String(flip.taxCost) : "");
     setShipInput(flip.shippingCost !== undefined ? String(flip.shippingCost) : "");
     setFeesInput(flip.feesCost !== undefined ? String(flip.feesCost) : "");
     setSellInput(flip.sellPrice !== undefined ? String(flip.sellPrice) : "");
-    setSoldInput(flip.soldPrice !== undefined ? String(flip.soldPrice) : "");
+    setQtyInput(String(qtyOf(flip)));
   };
 
   const closeEditor = () => {
     setEditingId(null);
     setBuyInput(""); setTaxInput(""); setShipInput("");
-    setFeesInput(""); setSellInput(""); setSoldInput("");
+    setFeesInput(""); setSellInput(""); setQtyInput("");
   };
 
   const saveCosts = async (flip: Flip) => {
@@ -260,40 +318,41 @@ export default function MyFlipsScreen() {
     const num = (v: string) => (v.trim() === "" ? 0 : Number(v));
     const buy = num(buyInput), tax = num(taxInput), ship = num(shipInput), fees = num(feesInput);
     const sell = num(sellInput);
-    const sold = soldInput.trim() === "" ? undefined : Number(soldInput);
+    const qty = Math.max(1, Math.floor(Number(qtyInput) || 1));
 
-    if ([buy, tax, ship, fees, sell].some(Number.isNaN) || (sold !== undefined && Number.isNaN(sold))) {
+    if ([buy, tax, ship, fees, sell].some(Number.isNaN)) {
       Alert.alert("Invalid price", "Enter valid numbers");
       return;
     }
+    if (qty < salesOf(flip).length) {
+      Alert.alert("Quantity too low", `You already recorded ${salesOf(flip).length} sales.`);
+      return;
+    }
 
-    const invested = buy + tax + ship + fees;
-    const finalSell = sold ?? sell;
-    const roi = invested > 0 ? ((finalSell - invested) / invested) * 100 : 0;
+    const perUnit = buy + tax + ship + fees;
+    const roi = perUnit > 0 ? ((sell - perUnit) / perUnit) * 100 : 0;
     const tier = roiTierFor(roi);
     const becameFire = tier === "FIRE" && flip.roiTier !== "FIRE";
 
-    const update: any = {
+    await flipRef(flip.id).update({
       buyPrice: buy,
       taxCost: tax,
       shippingCost: ship,
       feesCost: fees,
       sellPrice: sell,
-      investedAmount: invested, // keep legacy field in sync
+      quantity: qty,
+      investedAmount: perUnit * qty, // legacy sync
       roiTier: tier,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    };
-    if (sold !== undefined) update.soldPrice = sold;
-
-    await flipRef(flip.id).update(update);
+    });
     closeEditor();
-    if (becameFire) Alert.alert("🔥 FIRE Flip!", `${flip.title || "Flip"} hit 75%+ ROI`);
+    if (becameFire) Alert.alert("🔥 FIRE Flip!", `${flip.title || "Flip"} hit 75%+ ROI per unit`);
   };
 
   /* ───────── Sorting + Filtering ───────── */
   const visibleFlips = useMemo(() => {
     let list = statusFilter === "all" ? [...flips] : flips.filter((f) => statusOf(f) === statusFilter);
-    if (sortMode === "profit") return list.sort((a, b) => calcProfit(b) - calcProfit(a));
+    if (sortMode === "profit") return list.sort((a, b) => combinedProfit(b) - combinedProfit(a));
     if (sortMode === "roi") return list.sort((a, b) => calcROI(b) - calcROI(a));
     return list;
   }, [flips, sortMode, statusFilter]);
@@ -350,17 +409,21 @@ export default function MyFlipsScreen() {
         {visibleFlips.map((flip) => {
           const st = statusOf(flip);
           const stMeta = STATUS_META[st];
-          const invested = getInvested(flip);
-          const profit = calcProfit(flip);
-          const roi = invested > 0 ? (profit / invested) * 100 : 0;
-          const badge = badgeFor(profit, roi);
+          const qty = qtyOf(flip);
+          const sold = unitsSold(flip);
+          const left = unitsLeft(flip);
+          const invested = totalInvested(flip);
+          const realized = realizedProfit(flip);
+          const projected = projectedProfit(flip);
+          const roi = calcROI(flip);
+          const badge = badgeFor(realized + projected, roi);
           const roiTierBadge = roiBadge(roi);
-          const targetSell = targetSellFor(invested, TARGET_ROI);
+          const sales = salesOf(flip);
 
           return (
             <Swipeable
               key={flip.id}
-              enabled={editingId !== flip.id}
+              enabled={editingId !== flip.id && sellingId !== flip.id}
               renderRightActions={() => (
                 <View style={styles.deleteAction}>
                   <Text style={styles.deleteText}>Delete</Text>
@@ -377,33 +440,80 @@ export default function MyFlipsScreen() {
                   </View>
                 </View>
 
-                <Text style={{ color: stMeta.color, fontWeight: "800", marginTop: 2 }}>{stMeta.emoji} {stMeta.label}{flip.source ? `  •  from ${flip.source}` : ""}</Text>
+                <Text style={{ color: stMeta.color, fontWeight: "800", marginTop: 2 }}>
+                  {stMeta.emoji} {stMeta.label}
+                  {qty > 1 ? `  •  ${sold}/${qty} sold` : ""}
+                  {flip.source ? `  •  from ${flip.source}` : ""}
+                </Text>
 
                 <Text style={{ color: textSecondary, marginTop: 4 }}>
-                  Invested ${invested.toFixed(2)} → {st === "sold" ? `Sold $${(flip.soldPrice ?? flip.sellPrice ?? 0).toFixed(2)}` : `Target $${(flip.sellPrice ?? 0).toFixed(2)}`}
+                  {qty > 1
+                    ? `${qty} × $${perUnitCost(flip).toFixed(2)} = $${invested.toFixed(2)} invested  •  Target $${(flip.sellPrice ?? 0).toFixed(2)}/unit`
+                    : `Invested $${invested.toFixed(2)}  •  Target $${(flip.sellPrice ?? 0).toFixed(2)}`}
                 </Text>
-                {st !== "returned" && (
-                  <Text style={{ color: profit >= 0 ? green : red, fontWeight: "900" }}>
-                    {st === "sold" ? "Profit" : "Projected"} ${profit.toFixed(2)} • ROI {roi.toFixed(1)}%
+
+                {sold > 0 && (
+                  <Text style={{ color: green, fontWeight: "900" }}>
+                    Realized ${realized.toFixed(2)} from {sold} sale{sold > 1 ? "s" : ""} (${revenueSoFar(flip).toFixed(2)} revenue)
                   </Text>
                 )}
-                {st !== "sold" && st !== "returned" && invested > 0 && (
-                  <Text style={[styles.targetLine, { color: green }]}>
-                    🎯 Target @ {TARGET_ROI}% → Sell ${targetSell.toFixed(2)}
+                {left > 0 && st !== "returned" && (
+                  <Text style={{ color: accent, fontWeight: "800" }}>
+                    Projected +${projected.toFixed(2)} on {left} remaining
+                  </Text>
+                )}
+                {st !== "returned" && (
+                  <Text style={{ color: (realized + projected) >= 0 ? green : red, fontWeight: "900" }}>
+                    Total {(realized + projected) >= 0 ? "+" : ""}${(realized + projected).toFixed(2)} • ROI {roi.toFixed(1)}%
                   </Text>
                 )}
 
-                {/* Status advance buttons */}
-                {editingId !== flip.id && (
+                {/* Individual sales list */}
+                {sales.length > 0 && (
+                  <View style={{ marginTop: 6 }}>
+                    {sales.map((s, i) => (
+                      <Text key={i} style={{ color: textSecondary, fontSize: 12 }}>
+                        💰 Unit {i + 1}: ${s.price.toFixed(2)} — {new Date(s.soldAt).toLocaleDateString()}
+                      </Text>
+                    ))}
+                    <Pressable onPress={() => undoLastSale(flip)}>
+                      <Text style={{ color: red, fontSize: 12, marginTop: 2 }}>Undo last sale</Text>
+                    </Pressable>
+                  </View>
+                )}
+
+                {/* Record Sale inline form */}
+                {sellingId === flip.id ? (
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={{ color: textPrimary, fontWeight: "800" }}>Unit {sold + 1} of {qty} — sold for:</Text>
+                    <TextInput
+                      value={salePriceInput}
+                      onChangeText={setSalePriceInput}
+                      keyboardType="numeric"
+                      placeholder={flip.sellPrice ? `Target was $${flip.sellPrice}` : "Sale price"}
+                      placeholderTextColor={textSecondary}
+                      style={[styles.input, { color: textPrimary, borderColor: green }]}
+                      autoFocus
+                    />
+                    <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
+                      <Pressable style={[styles.saveBtn, { flex: 1, backgroundColor: green, marginTop: 0 }]} onPress={() => recordSale(flip)}>
+                        <Text style={styles.saveText}>Record Sale</Text>
+                      </Pressable>
+                      <Pressable style={[styles.saveBtn, { flex: 1, backgroundColor: "#555", marginTop: 0 }]} onPress={() => { setSellingId(null); setSalePriceInput(""); }}>
+                        <Text style={styles.saveText}>Cancel</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : editingId !== flip.id && (
                   <View style={{ flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                    {left > 0 && st !== "returned" && (
+                      <Pressable style={[styles.statusBtn, { backgroundColor: green }]} onPress={() => { setEditingId(null); setSellingId(flip.id); setSalePriceInput(flip.sellPrice ? String(flip.sellPrice) : ""); }}>
+                        <Text style={styles.statusBtnText}>💰 Record Sale{qty > 1 ? ` (${left} left)` : ""}</Text>
+                      </Pressable>
+                    )}
                     {st === "inventory" && (
                       <Pressable style={[styles.statusBtn, { backgroundColor: STATUS_META.listed.color }]} onPress={() => setStatus(flip, "listed")}>
                         <Text style={styles.statusBtnText}>🏷 Mark Listed</Text>
-                      </Pressable>
-                    )}
-                    {(st === "inventory" || st === "listed") && (
-                      <Pressable style={[styles.statusBtn, { backgroundColor: STATUS_META.sold.color }]} onPress={() => setStatus(flip, "sold")}>
-                        <Text style={styles.statusBtnText}>💰 Mark Sold</Text>
                       </Pressable>
                     )}
                     {st === "sold" && (
@@ -422,15 +532,17 @@ export default function MyFlipsScreen() {
                 {editingId === flip.id ? (
                   <>
                     <View style={{ flexDirection: "row", gap: 8 }}>
-                      <TextInput value={buyInput} onChangeText={setBuyInput} keyboardType="numeric" placeholder="Buy price" placeholderTextColor={textSecondary} style={[styles.input, styles.inputHalf, { color: textPrimary, borderColor: accent }]} />
-                      <TextInput value={taxInput} onChangeText={setTaxInput} keyboardType="numeric" placeholder="Tax" placeholderTextColor={textSecondary} style={[styles.input, styles.inputHalf, { color: textPrimary, borderColor: accent }]} />
+                      <TextInput value={qtyInput} onChangeText={setQtyInput} keyboardType="numeric" placeholder="Qty" placeholderTextColor={textSecondary} style={[styles.input, { color: textPrimary, borderColor: accent, width: 80 }]} />
+                      <TextInput value={buyInput} onChangeText={setBuyInput} keyboardType="numeric" placeholder="Buy price / unit" placeholderTextColor={textSecondary} style={[styles.input, styles.inputHalf, { color: textPrimary, borderColor: accent }]} />
                     </View>
                     <View style={{ flexDirection: "row", gap: 8 }}>
-                      <TextInput value={shipInput} onChangeText={setShipInput} keyboardType="numeric" placeholder="Shipping" placeholderTextColor={textSecondary} style={[styles.input, styles.inputHalf, { color: textPrimary, borderColor: accent }]} />
-                      <TextInput value={feesInput} onChangeText={setFeesInput} keyboardType="numeric" placeholder="Fees" placeholderTextColor={textSecondary} style={[styles.input, styles.inputHalf, { color: textPrimary, borderColor: accent }]} />
+                      <TextInput value={taxInput} onChangeText={setTaxInput} keyboardType="numeric" placeholder="Tax / unit" placeholderTextColor={textSecondary} style={[styles.input, styles.inputHalf, { color: textPrimary, borderColor: accent }]} />
+                      <TextInput value={shipInput} onChangeText={setShipInput} keyboardType="numeric" placeholder="Shipping / unit" placeholderTextColor={textSecondary} style={[styles.input, styles.inputHalf, { color: textPrimary, borderColor: accent }]} />
                     </View>
-                    <TextInput value={sellInput} onChangeText={setSellInput} keyboardType="numeric" placeholder="Target sell price" placeholderTextColor={textSecondary} style={[styles.input, { color: textPrimary, borderColor: accent }]} />
-                    <TextInput value={soldInput} onChangeText={setSoldInput} keyboardType="numeric" placeholder="Actual sold price (when sold)" placeholderTextColor={textSecondary} style={[styles.input, { color: textPrimary, borderColor: green }]} />
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <TextInput value={feesInput} onChangeText={setFeesInput} keyboardType="numeric" placeholder="Fees / unit" placeholderTextColor={textSecondary} style={[styles.input, styles.inputHalf, { color: textPrimary, borderColor: accent }]} />
+                      <TextInput value={sellInput} onChangeText={setSellInput} keyboardType="numeric" placeholder="Target sell / unit" placeholderTextColor={textSecondary} style={[styles.input, styles.inputHalf, { color: textPrimary, borderColor: accent }]} />
+                    </View>
                     <Pressable style={styles.saveBtn} onPress={() => saveCosts(flip)}>
                       <Text style={styles.saveText}>Save</Text>
                     </Pressable>
@@ -438,9 +550,9 @@ export default function MyFlipsScreen() {
                       <Text style={[styles.editText, { marginTop: 10 }]}>Cancel</Text>
                     </Pressable>
                   </>
-                ) : (
+                ) : sellingId !== flip.id && (
                   <Pressable onPress={() => openEditor(flip)}>
-                    <Text style={styles.editText}>Edit Costs & Prices</Text>
+                    <Text style={styles.editText}>Edit Qty, Costs & Target</Text>
                   </Pressable>
                 )}
               </View>
@@ -466,8 +578,7 @@ const styles = StyleSheet.create({
   deleteAction: { backgroundColor: "#e74c3c", justifyContent: "center", alignItems: "center", width: 90, borderRadius: 14, marginBottom: 12 },
   deleteText: { color: "#fff", fontWeight: "900" },
   editText: { color: "#FF8C00", fontWeight: "800", marginTop: 8 },
-  targetLine: { marginTop: 6, fontWeight: "800" },
-  input: { borderWidth: 1, borderRadius: 10, padding: 10, marginTop: 8, flex: undefined },
+  input: { borderWidth: 1, borderRadius: 10, padding: 10, marginTop: 8 },
   inputHalf: { flex: 1 },
   saveBtn: { backgroundColor: "#FF8C00", paddingVertical: 10, borderRadius: 10, marginTop: 8, alignItems: "center" },
   saveText: { color: "#fff", fontWeight: "900" },
