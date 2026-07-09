@@ -10,13 +10,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { useUser } from "../context/UserContext";
 import { useTheme } from "../context/ThemeContext";
+import { useNavigation } from "@react-navigation/native";
 import { db, firebase } from "../firebaseConfig";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
-type CreatorTier = "bronze" | "silver" | "gold" | "elite";
+type CreatorTier = "bronze" | "silver" | "gold" | "platinum" | "elite";
 
 type CreatorData = {
   username: string;
@@ -45,12 +46,34 @@ type Campaign = {
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TIER_CONFIG: Record<CreatorTier, { label: string; color: string; icon: string }> = {
-  bronze: { label: "Bronze Creator", color: "#cd7f32", icon: "medal-outline" },
-  silver: { label: "Silver Creator", color: "#C0C0C0", icon: "medal-outline" },
-  gold:   { label: "Gold Creator",   color: "#FFD700", icon: "star-outline" },
-  elite:  { label: "Elite Creator",  color: "#FF7A00", icon: "flash-outline" },
+const TIER_CONFIG: Record<CreatorTier, { label: string; color: string; icon: string; emoji: string; min: number; perk: string }> = {
+  bronze:   { label: "Bronze Creator",   color: "#cd7f32", icon: "medal-outline", emoji: "🥉", min: 5,   perk: "Creator dashboard access" },
+  silver:   { label: "Silver Creator",   color: "#C0C0C0", icon: "medal-outline", emoji: "🥈", min: 20,  perk: "Faster payouts" },
+  gold:     { label: "Gold Creator",     color: "#FFD700", icon: "star-outline",  emoji: "🥇", min: 35,  perk: "Higher commission rate" },
+  platinum: { label: "Platinum Creator", color: "#8ab6d6", icon: "diamond-outline", emoji: "💎", min: 50,  perk: "Priority support + bonuses" },
+  elite:    { label: "Elite Creator",    color: "#FF7A00", icon: "flash-outline", emoji: "🔥", min: 100, perk: "Top commission + early campaigns" },
 };
+
+const TIER_ORDER: CreatorTier[] = ["bronze", "silver", "gold", "platinum", "elite"];
+
+// Earn tier from referral count (never manual).
+function tierForReferrals(refs: number): CreatorTier {
+  let earned: CreatorTier = "bronze";
+  for (const t of TIER_ORDER) if (refs >= TIER_CONFIG[t].min) earned = t;
+  return refs < TIER_CONFIG.bronze.min ? "bronze" : earned;
+}
+
+// Next tier + progress toward it. Returns null next if at Elite.
+function tierProgress(refs: number): { next: CreatorTier | null; needed: number; pct: number } {
+  const idx = TIER_ORDER.indexOf(tierForReferrals(refs));
+  const next = idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : null;
+  if (!next) return { next: null, needed: 0, pct: 1 };
+  const floor = TIER_CONFIG[TIER_ORDER[idx]].min;
+  const ceil = TIER_CONFIG[next].min;
+  const span = ceil - floor;
+  const pct = span > 0 ? Math.min(1, Math.max(0, (refs - floor) / span)) : 1;
+  return { next, needed: Math.max(0, ceil - refs), pct };
+}
 
 function conversionRate(clicks: number, conversions: number): string {
   if (!clicks) return "0.0%";
@@ -123,6 +146,7 @@ export default function CreatorDashboard() {
   const { isPremium } = useUser();
   const { colors, theme } = useTheme();
   const dark = theme === "dark";
+  const navigation = useNavigation<any>();
 
   const [creatorData, setCreatorData] = useState<CreatorData | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -141,7 +165,7 @@ export default function CreatorDashboard() {
       // Build creator profile — merge Firestore data with defaults
       const profile: CreatorData = {
         username: userData?.username || user.email?.split("@")[0] || "Creator",
-        tier: userData?.creatorTier || "bronze",
+        tier: tierForReferrals(userData?.referralsCount || 0),
         clicks: userData?.totalClicks || 0,
         earnings: userData?.earnings || 0,
         referralsCount: userData?.referralsCount || 0,
@@ -215,6 +239,25 @@ export default function CreatorDashboard() {
     }
   };
 
+  // ── Premium gate ──────────────────────────────────────────────────────────
+  if (!isPremium) {
+    return (
+      <SafeAreaView style={[styles.center, { backgroundColor: colors.background, padding: 28 }]}>
+        <Text style={{ fontSize: 44, marginBottom: 12 }}>🚀</Text>
+        <Text style={{ color: colors.text, fontSize: 22, fontWeight: "900", marginBottom: 8, textAlign: "center" }}>Creator Hub</Text>
+        <Text style={{ color: dark ? "#aaa" : "#666", fontSize: 15, textAlign: "center", lineHeight: 22, marginBottom: 24 }}>
+          Unlock the Creator dashboard to earn commissions, share your referral link, climb creator tiers, and request payouts.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: "#FF7A00", borderRadius: 14, paddingVertical: 15, paddingHorizontal: 40 }}
+          onPress={() => (navigation as any).navigate("Upgrade")}
+        >
+          <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>Unlock Creator (Premium)</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -233,6 +276,7 @@ export default function CreatorDashboard() {
   }
 
   const tier = TIER_CONFIG[creatorData.tier];
+  const progress = tierProgress(creatorData.referralsCount);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
@@ -260,6 +304,29 @@ export default function CreatorDashboard() {
             <Text style={styles.earningsValue}>${creatorData.earnings.toFixed(2)}</Text>
             <Text style={styles.earningsLabel}>Earned</Text>
           </View>
+        </View>
+
+        {/* ── TIER PROGRESS ──────────────────────────────────────────────── */}
+        <View style={[styles.section, { backgroundColor: dark ? "#1a1a1a" : "#fff" }]}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <Text style={[styles.sectionTitle, { color: dark ? "#fff" : "#111", marginBottom: 0 }]}>
+              {tier.emoji} {tier.label}
+            </Text>
+            <Text style={{ color: "#888", fontSize: 12, fontWeight: "700" }}>{creatorData.referralsCount} referrals</Text>
+          </View>
+          <View style={{ height: 10, borderRadius: 6, backgroundColor: dark ? "#0f0f0f" : "#eee", overflow: "hidden" }}>
+            <View style={{ height: "100%", width: (progress.pct * 100) + "%", backgroundColor: tier.color, borderRadius: 6 }} />
+          </View>
+          {progress.next ? (
+            <Text style={{ color: dark ? "#aaa" : "#666", fontSize: 13, marginTop: 8 }}>
+              {progress.needed} more {progress.needed === 1 ? "referral" : "referrals"} → {TIER_CONFIG[progress.next].emoji} {TIER_CONFIG[progress.next].label}
+              {"  •  unlocks "}{TIER_CONFIG[progress.next].perk}
+            </Text>
+          ) : (
+            <Text style={{ color: "#FF7A00", fontSize: 13, marginTop: 8, fontWeight: "800" }}>
+              🔥 Max tier reached — you're an Elite Creator!
+            </Text>
+          )}
         </View>
 
         {/* ── STATS ROW ──────────────────────────────────────────────────── */}
