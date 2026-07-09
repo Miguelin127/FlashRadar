@@ -322,7 +322,7 @@ Best Platform: ${flip.bestPlatform}
         <Text style={{ color: colors.text, fontSize: 14, marginTop: 2 }}>Break Even: ${flip.breakEvenPrice}</Text>
       </View>
 
-      {(flip as any).resaleEstimate && (
+      {(flip as any).resaleEstimate && ((flip as any).resaleEstimate.high > 0) && (
         <View style={est.box}>
           <Text style={est.head}>
             AI-estimated resale: ${(flip as any).resaleEstimate.low}–${(flip as any).resaleEstimate.high}
