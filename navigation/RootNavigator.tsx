@@ -13,6 +13,7 @@ import PremiumIntroScreen from "../screens/PremiumIntroScreen";
 import ReferralScreen from "../screens/ReferralScreen";
 import LoginScreen from "../screens/LoginScreen";
 import MyFlipsScreen from "../screens/MyFlipsScreen";
+import CartBuilderScreen from "../screens/CartBuilderScreen";
 import UpgradeScreen from "../screens/UpgradeScreen";
 import AdminPostDealScreen from "../screens/AdminPostDealScreen";
 
@@ -52,6 +53,7 @@ export default function RootNavigator() {
       <Stack.Screen name="FlipHistory" component={FlipHistoryScreen} />
       <Stack.Screen name="FlipItResult" component={FlipItResultScreen as any} />
       <Stack.Screen name="MyFlips" component={MyFlipsScreen} />
+      <Stack.Screen name="CartBuilder" component={CartBuilderScreen} />
       <Stack.Screen name="PremiumIntro" component={PremiumIntroScreen} />
       <Stack.Screen name="Referral" component={ReferralScreen} />
       <Stack.Screen name="Upgrade" component={UpgradeScreen} />

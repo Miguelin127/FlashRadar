@@ -556,6 +556,23 @@ export default function ExploreScreen() {
         </Text>
       </View>
 
+      {/* ── AI CART BUILDER ── */}
+      <TouchableOpacity
+        style={{
+          marginHorizontal: 16, marginBottom: 10, borderRadius: 14,
+          backgroundColor: "#1a1400", borderWidth: 1, borderColor: "#FF7A00",
+          paddingVertical: 12, paddingHorizontal: 16,
+          flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        }}
+        onPress={() => navigation.navigate("CartBuilder")}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: "#FF7A00", fontWeight: "900", fontSize: 15 }}>✨ AI Cart Builder</Text>
+          <Text style={{ color: "#bbb", fontSize: 12, marginTop: 2 }}>Tell me what you need — I'll build the perfect cart</Text>
+        </View>
+        <Text style={{ color: "#FF7A00", fontSize: 20, fontWeight: "900" }}>→</Text>
+      </TouchableOpacity>
+
       {/* ── DEAL LIST ── */}
       <FlatList
         ref={listRef}
