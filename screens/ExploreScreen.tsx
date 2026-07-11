@@ -197,8 +197,11 @@ export default function ExploreScreen() {
         if (parsed.sortBy) setSort(parsed.sortBy);
         if (parsed.storeHint) {
           const hint = String(parsed.storeHint).toLowerCase();
-          const match = storeOptions.find((so) => so.toLowerCase().includes(hint) || hint.includes(so.toLowerCase()));
-          setStoreFilter(match || "all");
+          const match = storeOptions.find((so) =>
+            so.key.includes(hint) || hint.includes(so.key) ||
+            so.label.toLowerCase().includes(hint) || hint.includes(so.label.toLowerCase())
+          );
+          setStoreFilter(match ? match.key : "all");
         }
       }
     } catch (e) {
@@ -240,15 +243,20 @@ export default function ExploreScreen() {
   /* ── Store list derived from actual deals ── */
   const storeOptions = useMemo(() => {
     const counts = new Map<string, number>();
+    const labels = new Map<string, string>();
     for (const d of rawDeals) {
       const key = (d.storeKey || d.store || "").toLowerCase();
       if (!key) continue;
       counts.set(key, (counts.get(key) ?? 0) + 1);
+      // Prefer the prettiest label seen for this key (real store name over slug)
+      const label = (d.store || "").trim();
+      if (label && (!labels.has(key) || label.length > (labels.get(key) || "").length === false)) {
+        if (!labels.has(key)) labels.set(key, label);
+      }
     }
-    // Sort by count desc so the biggest stores show first
     return Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1])
-      .map(([key]) => key);
+      .map(([key]) => ({ key, label: labels.get(key) || key }));
   }, [rawDeals]);
 
   /* ── Filter + Sort ── */
@@ -516,11 +524,11 @@ export default function ExploreScreen() {
 
         {openPanel === "stores" && (
           <View style={[styles.panel, { backgroundColor: dark ? "#141414" : "#f7f7f7" }]}>
-            {["all", ...storeOptions].map((s) => (
-              <TouchableOpacity key={"store-" + s} onPress={() => { setStoreFilter(s); setOpenPanel(null); }}
-                style={[styles.panelChip, { backgroundColor: storeFilter === s ? ACCENT : dark ? "#242424" : "#fff" }]}>
-                <Text style={[styles.panelChipText, { color: storeFilter === s ? "#000" : dark ? "#ddd" : "#333" }]}>
-                  {s === "all" ? "🏬 All Stores" : prettyStore(s)}
+            {[{ key: "all", label: "🏬 All Stores" }, ...storeOptions].map((so) => (
+              <TouchableOpacity key={"store-" + so.key} onPress={() => { setStoreFilter(so.key); setOpenPanel(null); }}
+                style={[styles.panelChip, { backgroundColor: storeFilter === so.key ? ACCENT : dark ? "#242424" : "#fff" }]}>
+                <Text style={[styles.panelChipText, { color: storeFilter === so.key ? "#000" : dark ? "#ddd" : "#333" }]}>
+                  {so.label}
                 </Text>
               </TouchableOpacity>
             ))}
