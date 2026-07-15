@@ -702,16 +702,10 @@ export default function MapScreen() {
       <SafeAreaView style={styles.topOverlay} pointerEvents="box-none">
         <View style={styles.modeToggle}>
           <TouchableOpacity
-            style={[styles.modeBtn, viewMode === "stores" && styles.modeBtnActive]}
+            style={[styles.modeBtn, styles.modeBtnActive]}
             onPress={() => { setViewMode("stores"); setSelectedStore(null); setSelectedId(null); }}
           >
-            <Text style={[styles.modeBtnText, viewMode === "stores" && { color: "#000" }]}>🏬 Stores</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.modeBtn, viewMode === "deals" && styles.modeBtnActive]}
-            onPress={() => { setViewMode("deals"); setSelectedStore(null); setSelectedId(null); }}
-          >
-            <Text style={[styles.modeBtnText, viewMode === "deals" && { color: "#000" }]}>🔥 Deals</Text>
+            <Text style={[styles.modeBtnText, { color: "#000" }]}>🏬 Stores</Text>
           </TouchableOpacity>
         </View>
 
