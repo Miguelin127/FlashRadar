@@ -167,10 +167,9 @@ async function fetchNearbyStores(
             seen.add(place.id);
 
             // Match deals from deals_instore by proximity
-            const storeDeals = matchDealsByProximity(
-              deals,
-              place.location.latitude,
-              place.location.longitude
+            // Match deals by store name instead of proximity
+            const storeDeals = deals.filter(d => 
+              d.store && d.store.toLowerCase().includes(storeName.toLowerCase())
             );
 
             results.push({
@@ -394,8 +393,8 @@ function StoreDealRow({ deal, dark, onPress }: {
       {deal.imageUrl ? (
         <Image source={{ uri: deal.imageUrl }} style={styles.dealThumb} />
       ) : (
-        <View style={[styles.dealThumb, styles.dealThumbFallback]}>
-          <Text style={{ fontSize: 22 }}>{getStoreEmoji(deal.store || "")}</Text>
+        <View style={[styles.dealThumb, styles.dealThumbFallback, { backgroundColor: ACCENT + '22' }]}>
+          <Text style={{ fontSize: 24 }}>{getStoreEmoji(deal.store || "")}</Text>
         </View>
       )}
       <View style={{ flex: 1, padding: 10 }}>
