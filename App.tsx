@@ -10,6 +10,7 @@ import { NavigationContainer, DarkTheme, DefaultTheme } from "@react-navigation/
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
+import { LanguageProvider } from "./context/LanguageContext";
 import { UserProvider } from "./context/UserContext";
 import RootNavigator from "./navigation/RootNavigator";
 import UpdatePrompt from "./components/UpdatePrompt";
@@ -84,14 +85,16 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <AuthProvider>
-          <UserProvider>
-            <AppWithTheme />
-            <UpdatePrompt />
-          </UserProvider>
-        </AuthProvider>
-      </ThemeProvider>
+      <LanguageProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <UserProvider>
+              <AppWithTheme />
+              <UpdatePrompt />
+            </UserProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </LanguageProvider>
     </GestureHandlerRootView>
   );
 }

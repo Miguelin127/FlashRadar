@@ -9,6 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import { useUser } from "../context/UserContext";
@@ -23,6 +24,7 @@ interface NotificationItem {
 
 export default function SettingsScreen() {
   const { colors, toggleTheme, darkMode } = useTheme();
+  const { language, setLanguage } = useLanguage();
   const { user, isAdmin } = useAuth();
   const navigation = useNavigation<any>();
   const { isPremium, subscriptionStatus } = useUser();
@@ -220,6 +222,34 @@ export default function SettingsScreen() {
         <View style={styles.toggleRow}>
           <Text style={[styles.toggleText, { color: colors.text }]}>Dark Mode</Text>
           <TogglePill value={darkMode} onToggle={() => toggleTheme()} />
+        </View>
+
+        <View style={styles.toggleRow}>
+          <Text style={[styles.toggleText, { color: colors.text }]}>Language</Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => setLanguage("en")}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
+                backgroundColor: language === "en" ? "#FF7A00" : (darkMode ? "rgba(255,255,255,0.10)" : "#F2F2F2"),
+              }}
+            >
+              <Text style={{ color: language === "en" ? "#FFF" : colors.text, fontWeight: "600", fontSize: 13 }}>EN</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setLanguage("es")}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
+                backgroundColor: language === "es" ? "#FF7A00" : (darkMode ? "rgba(255,255,255,0.10)" : "#F2F2F2"),
+              }}
+            >
+              <Text style={{ color: language === "es" ? "#FFF" : colors.text, fontWeight: "600", fontSize: 13 }}>ES</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity style={styles.button} onPress={handleInviteFriends}>
