@@ -170,7 +170,7 @@ export const strings: Record<Language, Record<string, any>> = {
       enterManually: 'o ingresa manualmente →',
       analyzeFlip: 'Analizar volteador',
       pasteLink: 'Pega enlace de producto',
-      performance: 'Tu desempeño de volteador',
+      performance: 'Tu rendimiento en operaciones de compraventa rápida (flips)',
       condNew: 'Nuevo',
       condLikeNew: 'Como nuevo',
       condUsedGood: 'Usado - Bueno',
@@ -181,6 +181,8 @@ export const strings: Record<Language, Record<string, any>> = {
       liveSavedFlips: 'Reventas Guardadas',
       evaluateDeal: 'Evaluar oferta',
       analyzeFlip: 'Analizar volteo',
+      totalFlips: 'Total de operaciones',
+      totalProfit: 'Total de ganancias',
     },
   },
 };
