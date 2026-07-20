@@ -138,6 +138,7 @@ export const strings: Record<Language, Record<string, any>> = {
       platinumPerk: 'Priority support + bonuses',
       elitePerk: 'Top commission + early campaigns',
       unlocks: 'unlocks',
+      moreToUnlock: 'more to unlock',
     },
   },
   es: {
@@ -279,6 +280,7 @@ export const strings: Record<Language, Record<string, any>> = {
       platinumPerk: 'Soporte prioritario + bonificaciones',
       elitePerk: 'Comisión superior + campañas tempranas',
       unlocks: 'desbloquea',
+      moreToUnlock: 'más para desbloquear',
     },
   },
 };

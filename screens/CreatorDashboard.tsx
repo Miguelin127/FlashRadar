@@ -390,7 +390,7 @@ export default function CreatorDashboard() {
           >
             <Ionicons name="wallet-outline" size={18} color="#fff" />
             <Text style={styles.payoutBtnText}>
-              {creatorData.pendingPayout >= 10 ? t.creator.requestPayout : `$${(10 - creatorData.pendingPayout).toFixed(2)} more to unlock`}
+              {creatorData.pendingPayout >= 10 ? t.creator.requestPayout : `$${(10 - creatorData.pendingPayout).toFixed(2)} ${t.creator.moreToUnlock}`}
             </Text>
           </TouchableOpacity>
         </View>
