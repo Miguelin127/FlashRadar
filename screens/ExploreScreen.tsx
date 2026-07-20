@@ -8,6 +8,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
+import { useLanguage } from "../context/LanguageContext";
+import { getStrings } from "../utils/strings";
 
 import { db, functions } from "../firebaseConfig";
 import { httpsCallable } from "firebase/functions";
