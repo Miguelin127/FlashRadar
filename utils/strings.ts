@@ -50,6 +50,15 @@ export const strings: Record<Language, Record<string, any>> = {
       code: '🏷 Code',
       allStores: '🏬 All Stores',
     },
+    radar: {
+      scanning: 'SCANNING RADAR...',
+      silence: 'RADAR SILENCE',
+      noSignals: 'No signals on this frequency right now.',
+      locationOn: 'Location ON',
+      eliteFrequencies: '🔒 Elite Frequencies Locked',
+      grab: 'GRAB',
+      justIn: 'JUST IN',
+    },
   },
   es: {
     auth: {
@@ -99,6 +108,15 @@ export const strings: Record<Language, Record<string, any>> = {
       lightning: '⚡ Relámpago',
       code: '🏷 Código',
       allStores: '🏬 Todas las tiendas',
+    },
+    radar: {
+      scanning: 'ESCANEANDO RADAR...',
+      silence: 'SILENCIO DE RADAR',
+      noSignals: 'Sin señales en esta frecuencia ahora mismo.',
+      locationOn: 'Ubicación ACTIVADA',
+      eliteFrequencies: '🔒 Frecuencias Élite Bloqueadas',
+      grab: 'AGARRAR',
+      justIn: 'RECIÉN LLEGADO',
     },
   },
 };

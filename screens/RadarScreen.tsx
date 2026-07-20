@@ -12,6 +12,8 @@ import * as Location from "expo-location";
 import { useNavigation } from "@react-navigation/native";
 import { auth, db } from "../firebaseConfig";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
+import { getStrings } from "../utils/strings";
 import { useUser } from "../context/UserContext";
 import DealCard from "../components/DealCard";
 
@@ -249,8 +251,8 @@ const pill = StyleSheet.create({
 
 /* ─── Deal Ping Card (compact urgent card) ───────────────────── */
 
-function PingCard({ deal, onPress, onOpen, dark }: {
-  deal: Deal; onPress: () => void; onOpen: () => void; dark: boolean;
+function PingCard({ deal, onPress, onOpen, dark, t }: {
+  deal: Deal; onPress: () => void; onOpen: () => void; dark: boolean; t: any;
 }) {
   const isJustIn = (() => {
     const ms = deal.publishedAt?.seconds
@@ -327,7 +329,7 @@ function PingCard({ deal, onPress, onOpen, dark }: {
 
       {/* Right: Grab Deal */}
       <TouchableOpacity style={ping.grabBtn} onPress={onOpen}>
-        <Text style={ping.grabTxt}>GRAB</Text>
+        <Text style={ping.grabTxt}>{t.radar.grab}</Text>
         <Ionicons name="arrow-forward" size={12} color="#000" />
       </TouchableOpacity>
     </TouchableOpacity>
@@ -363,6 +365,8 @@ const ping = StyleSheet.create({
 /* ─── Main Screen ────────────────────────────────────────────── */
 
 export default function RadarScreen() {
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(true);
@@ -538,7 +542,7 @@ export default function RadarScreen() {
               {location && (
                 <View style={styles.locationBadge}>
                   <Ionicons name="location-outline" size={11} color={ACCENT} />
-                  <Text style={styles.locationBadgeText}>Location ON</Text>
+                  <Text style={styles.locationBadgeText}>{t.radar.locationOn}</Text>
                 </View>
               )}
             </View>
@@ -594,8 +598,8 @@ export default function RadarScreen() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="wifi-outline" size={40} color="#444" />
-            <Text style={styles.emptyTitle}>RADAR SILENCE</Text>
-            <Text style={styles.emptySub}>No signals on this frequency right now.</Text>
+            <Text style={styles.emptyTitle}>{t.radar.silence}</Text>
+            <Text style={styles.emptySub}>{t.radar.noSignals}</Text>
           </View>
         }
         ListFooterComponent={
@@ -606,7 +610,7 @@ export default function RadarScreen() {
             >
               <Ionicons name="lock-closed-outline" size={18} color="#fff" />
               <View style={{ flex: 1 }}>
-                <Text style={styles.unlockTitle}>🔒 Elite Frequencies Locked</Text>
+                <Text style={styles.unlockTitle}>{t.radar.eliteFrequencies}</Text>
                 <Text style={styles.unlockSub}>
                   Upgrade to unlock {deals.length - FREE_LIMIT}+ more signals
                 </Text>
@@ -619,6 +623,7 @@ export default function RadarScreen() {
           <PingCard
             deal={item}
             dark={dark}
+            t={t}
             onPress={() => navigation.navigate("DealDetail", { deal: item })}
             onOpen={() => openDeal(item)}
           />
