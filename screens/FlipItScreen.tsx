@@ -72,8 +72,8 @@ export default function FlipItScreen({ route }: any) {
   const analyzeAndShow = async () => {
     const title = pTitle.trim();
     const buy = Number(pBuyPrice);
-    if (!title) { Alert.alert("Missing product", "Enter a product name."); return; }
-    if (!buy || Number.isNaN(buy) || buy <= 0) { Alert.alert("Missing price", "Enter a valid buy price."); return; }
+    if (!title) { Alert.alert(t.flipit.missingProduct, t.flipit.enterProductName); return; }
+    if (!buy || Number.isNaN(buy) || buy <= 0) { Alert.alert(t.flipit.missingPrice, t.flipit.enterValidPrice); return; }
 
     setAnalyzing(true);
     let resaleMid = Math.round(buy * 1.4); // conservative fallback
@@ -156,7 +156,7 @@ export default function FlipItScreen({ route }: any) {
   /* ───────── EVALUATE DEAL ───────── */
   const evaluateDeal = async () => {
     if (!dealUrl.trim() || !dealUrl.startsWith("http")) {
-      Alert.alert("Invalid link", "Paste a valid product URL (Amazon, Target, Home Depot, Walmart, etc.).");
+      Alert.alert(t.flipit.invalidLink, t.flipit.invalidUrl);
       return;
     }
     setAnalyzing(true);
@@ -173,13 +173,13 @@ export default function FlipItScreen({ route }: any) {
       setShowFields(true);
       setAnalyzing(false);
       if (!data?.price) {
-        Alert.alert("Almost there", "We got the product name — just confirm the buy price below, then Analyze.");
+        Alert.alert(t.flipit.almostThere, t.flipit.confirmBuyPrice);
       }
     } catch (err) {
       // Even on total failure, let them enter manually.
       setShowFields(true);
       setAnalyzing(false);
-      Alert.alert("Enter details", "Couldn't read that link — enter the product name and price below.");
+      Alert.alert(t.flipit.enterDetails, t.flipit.couldntReadLink);
     }
   };
 
