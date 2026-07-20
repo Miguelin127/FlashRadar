@@ -19,6 +19,8 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
+import { getStrings } from "../utils/strings";
 import { useAuth } from "../context/AuthContext";
 import { useUser } from "../context/UserContext";
 import { firebase, db, functions } from "../firebaseConfig";
@@ -33,6 +35,8 @@ const PARSE_ENDPOINT =
   "https://us-central1-flashradar-71c93.cloudfunctions.net/parseProduct";
 
 export default function FlipItScreen({ route }: any) {
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const { colors } = useTheme();
   const { user } = useAuth();
   const { isPremium } = useUser();
@@ -217,12 +221,8 @@ export default function FlipItScreen({ route }: any) {
             ]}
           >
             <Ionicons name="barcode-outline" size={28} color={colors.accent} />
-            <Text style={[styles.cardTitle, { color: textPrimary }]}>
-              Scan Barcode
-            </Text>
-            <Text style={[styles.cardSub, { color: textSecondary }]}>
-              Check resale value
-            </Text>
+            <Text style={[styles.cardTitle, { color: textPrimary }]}>{t.flipit.scanBarcode}</Text>
+            <Text style={[styles.cardSub, { color: textSecondary }]}>{t.flipit.checkResale}</Text>
           </Pressable>
 
           <Pressable
@@ -237,12 +237,8 @@ export default function FlipItScreen({ route }: any) {
             ]}
           >
             <Ionicons name="time-outline" size={28} color={colors.accent} />
-            <Text style={[styles.cardTitle, { color: textPrimary }]}>
-              My Flips
-            </Text>
-            <Text style={[styles.cardSub, { color: textSecondary }]}>
-              Live saved flips
-            </Text>
+            <Text style={[styles.cardTitle, { color: textPrimary }]}>{t.flipit.myFlips}</Text>
+            <Text style={[styles.cardSub, { color: textSecondary }]}>{t.flipit.liveSavedFlips}</Text>
           </Pressable>
         </View>
 
@@ -260,7 +256,7 @@ export default function FlipItScreen({ route }: any) {
           <TextInput
             value={dealUrl}
             onChangeText={setDealUrl}
-            placeholder="https://amazon.com/product..."
+            placeholder={t.flipit.urlPlaceholder}
             placeholderTextColor={textSecondary}
             style={[
               styles.input,
@@ -277,7 +273,7 @@ export default function FlipItScreen({ route }: any) {
             onPress={() => requirePremium(evaluateDeal)}
             style={styles.evalBtn}
           >
-            <Text style={styles.evalText}>{analyzing ? "Working…" : "Evaluate Deal"}</Text>
+            <Text style={styles.evalText}>{analyzing ? t.flipit.working : t.flipit.evaluateDeal}</Text>
           </Pressable>
 
           {!showFields && (
@@ -291,28 +287,33 @@ export default function FlipItScreen({ route }: any) {
               <TextInput
                 value={pTitle}
                 onChangeText={setPTitle}
-                placeholder="Product name"
+                placeholder={t.flipit.namePlaceholder}
                 placeholderTextColor={textSecondary}
                 style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textPrimary }]}
               />
               <TextInput
                 value={pBuyPrice}
                 onChangeText={setPBuyPrice}
-                placeholder="Buy price ($)"
+                placeholder={t.flipit.pricePlaceholder}
                 keyboardType="decimal-pad"
                 placeholderTextColor={textSecondary}
                 style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textPrimary, marginTop: 10 }]}
               />
               <View style={styles.condRow}>
-                {["New", "Like New", "Used - Good", "Used - Fair"].map((c) => (
-                  <TouchableOpacity key={c} onPress={() => setPCondition(c)}
-                    style={[styles.condChip, { borderColor: inputBorder }, pCondition === c && styles.condChipActive]}>
-                    <Text style={[styles.condText, { color: pCondition === c ? "#000" : textSecondary }]}>{c}</Text>
+                {[
+                  { label: "New", key: t.flipit.condNew },
+                  { label: "Like New", key: t.flipit.condLikeNew },
+                  { label: "Used - Good", key: t.flipit.condUsedGood },
+                  { label: "Used - Fair", key: t.flipit.condUsedFair }
+                ].map((item) => (
+                  <TouchableOpacity key={item.label} onPress={() => setPCondition(item.label)}
+                    style={[styles.condChip, { borderColor: inputBorder }, pCondition === item.label && styles.condChipActive]}>
+                    <Text style={[styles.condText, { color: pCondition === item.label ? "#000" : textSecondary }]}>{item.key}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
               <Pressable onPress={() => requirePremium(analyzeAndShow)} style={[styles.evalBtn, { marginTop: 12 }]} disabled={analyzing}>
-                {analyzing ? <ActivityIndicator color="#fff" /> : <Text style={styles.evalText}>Analyze Flip</Text>}
+                {analyzing ? <ActivityIndicator color="#fff" /> : <Text style={styles.evalText}>{t.flipit.analyzeFlip}</Text>}
               </Pressable>
             </View>
           )}
@@ -325,28 +326,11 @@ export default function FlipItScreen({ route }: any) {
             { backgroundColor: cardBg, borderColor: cardBorder },
           ]}
         >
-          <Text style={[styles.analyticsTitle, { color: textPrimary }]}>
-            Your Flip Performance
-          </Text>
+          <Text style={[styles.analyticsTitle, { color: textPrimary }]}>{t.flipit.performance}</Text>
 
-          <Text style={[styles.metric, { color: textSecondary }]}>
-            Total Flips:{" "}
-            <Text style={{ color: textPrimary, fontWeight: "800" }}>
-              {totalFlips}
-            </Text>
-          </Text>
+          <Text style={[styles.metric, { color: textSecondary }]}>{t.flipit.totalFlips}:{" "}<Text style={{ color: textPrimary, fontWeight: "800" }}>{totalFlips}</Text></Text>
 
-          <Text style={[styles.metric, { color: textSecondary }]}>
-            Total Profit:{" "}
-            <Text
-              style={{
-                fontWeight: "800",
-                color: totalProfit >= 0 ? "#2ecc71" : "#e74c3c",
-              }}
-            >
-              ${totalProfit.toFixed(2)}
-            </Text>
-          </Text>
+          <Text style={[styles.metric, { color: textSecondary }]}>{t.flipit.totalProfit}:{" "}<Text style={{ fontWeight: "800", color: totalProfit >= 0 ? "#2ecc71" : "#e74c3c" }}>${totalProfit.toFixed(2)}</Text></Text>
         </View>
       </ScrollView>
     </SafeAreaView>
