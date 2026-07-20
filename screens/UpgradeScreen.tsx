@@ -10,6 +10,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
+import { getStrings } from "../utils/strings";
 import { useNavigation } from "@react-navigation/native";
 import { initializePurchases, getProducts, purchaseSubscription, restorePurchases } from "../utils/purchases";
 
@@ -35,68 +37,68 @@ type FreeFeature = {
 /* ─── Data ───────────────────────────────────────────────────── */
 
 const FREE_FEATURES: FreeFeature[] = [
-  { label: "Walmart deals", included: true },
-  { label: "Target deals", included: true },
-  { label: "Home Depot deals", included: true },
-  { label: "Basic deal feed", included: true },
-  { label: "Save favorites", included: true },
-  { label: "Amazon deals", included: false },
-  { label: "Best Buy & Costco", included: false },
-  { label: "Sam's Club & Lowe's", included: false },
-  { label: "Rare Finds network", included: false },
-  { label: "Flip It mode", included: false },
-  { label: "Priority alerts", included: false },
-  { label: "Advanced filters", included: false },
+  { label: "walmartDeals", included: true },
+  { label: "targetDeals", included: true },
+  { label: "homeDepotDeals", included: true },
+  { label: "basicDealFeed", included: true },
+  { label: "saveFavorites", included: true },
+  { label: "amazonDeals", included: false },
+  { label: "bestBuyCostco", included: false },
+  { label: "samsClubLowes", included: false },
+  { label: "rareFinds", included: false },
+  { label: "flipMode", included: false },
+  { label: "priorityAlerts", included: false },
+  { label: "advancedFilters", included: false },
 ];
 
 const PREMIUM_FEATURES: PremiumFeature[] = [
   {
     icon: "storefront-outline",
-    label: "All stores unlocked",
-    sub: "Amazon, Best Buy, Costco, Sam's Club, Lowe's + more",
+    label: "allStoresUnlocked",
+    sub: "allStoresDesc",
     color: ACCENT,
   },
   {
     icon: "diamond-outline",
-    label: "Rare Finds network",
-    sub: "Hidden clearance, limited inventory, collectibles",
+    label: "rareFinds",
+    sub: "rareFindsDesc",
     color: "#a855f7",
   },
   {
     icon: "trending-up-outline",
-    label: "Flip It mode",
-    sub: "Resale profit estimates, eBay comparisons, ROI scoring",
+    label: "flipMode",
+    sub: "flipModeDesc",
     color: "#22c55e",
   },
   {
     icon: "flash-outline",
-    label: "Priority alerts",
-    sub: "Get notified before free users — first mover advantage",
+    label: "priorityAlerts",
+    sub: "priorityAlertsDesc",
     color: "#eab308",
   },
   {
     icon: "options-outline",
-    label: "Advanced filters",
-    sub: "Filter by ROI, rarity, radius, profit potential",
+    label: "advancedFilters",
+    sub: "advancedFiltersDesc",
     color: "#3b82f6",
   },
   {
     icon: "map-outline",
-    label: "Expanded radar radius",
-    sub: "Search deals beyond your local area",
+    label: "expandedRadar",
+    sub: "expandedRadarDesc",
     color: "#ec4899",
   },
   {
     icon: "bar-chart-outline",
-    label: "Creator dashboard",
-    sub: "Referral tracking, earnings, campaign analytics",
+    label: "creatorDash",
+    sub: "creatorDashDesc",
     color: ACCENT,
   },
 ];
 
 /* ─── Sub-components ─────────────────────────────────────────── */
 
-function CompareRow({ label, included }: FreeFeature) {
+function CompareRow({ label, included, t }: FreeFeature & { t: any }) {
   const { colors } = useTheme();
   return (
     <View style={cr.row}>
@@ -106,7 +108,7 @@ function CompareRow({ label, included }: FreeFeature) {
         color={included ? "#22c55e" : "#444"}
       />
       <Text style={[cr.label, { color: included ? colors.text : colors.subtext }]}>
-        {label}
+        {t.upgrade[label]}
       </Text>
     </View>
   );
@@ -117,7 +119,7 @@ const cr = StyleSheet.create({
   label: { fontSize: 13, fontWeight: "600" },
 });
 
-function FeatureCard({ icon, label, sub, color }: PremiumFeature) {
+function FeatureCard({ icon, label, sub, color, t }: PremiumFeature & { t: any }) {
   const { colors } = useTheme();
   return (
     <View style={[fc.card, { backgroundColor: colors.card, borderColor: color + "33" }]}>
@@ -125,8 +127,8 @@ function FeatureCard({ icon, label, sub, color }: PremiumFeature) {
         <Ionicons name={icon} size={20} color={color} />
       </View>
       <View style={fc.text}>
-        <Text style={[fc.label, { color: colors.text }]}>{label}</Text>
-        <Text style={[fc.sub, { color: colors.subtext }]}>{sub}</Text>
+        <Text style={[fc.label, { color: colors.text }]}>{t.upgrade[label]}</Text>
+        <Text style={[fc.sub, { color: colors.subtext }]}>{t.upgrade[sub]}</Text>
       </View>
     </View>
   );
@@ -150,6 +152,8 @@ const fc = StyleSheet.create({
 /* ─── Main Screen ────────────────────────────────────────────── */
 
 export default function UpgradeScreen() {
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const { colors } = useTheme();
   const [plan, setPlan] = useState<"monthly" | "yearly">("yearly");
   const [loading, setLoading] = useState(false);
@@ -160,7 +164,7 @@ export default function UpgradeScreen() {
 
   const handleUpgrade = async () => {
     if (!user?.uid) {
-      Alert.alert("Sign in required", "Please sign in to upgrade.");
+      Alert.alert(t.upgrade.signInRequired, t.upgrade.pleaseSignIn);
       return;
     }
     try {
@@ -172,7 +176,7 @@ export default function UpgradeScreen() {
         : (isAndroid ? "flashradarapp.premium.yearly" : "com.miguelin1.flashradarapp.premium.yearly");
       const success = await purchaseSubscription(productId);
       if (success) {
-        Alert.alert("Welcome to Premium!", "You now have full access to FlashRadar.");
+        Alert.alert(t.upgrade.welcomePremium, t.upgrade.premiumAccess);
         navigation.goBack();
       }
     } catch (e: any) {
@@ -188,7 +192,7 @@ export default function UpgradeScreen() {
       await initializePurchases();
       const restored = await restorePurchases();
       if (restored) {
-        Alert.alert("Restored!", "Your premium subscription has been restored.");
+        Alert.alert(t.upgrade.restored, t.upgrade.subscriptionRestored);
         navigation.goBack();
       } else {
         Alert.alert("Nothing to restore", "No previous purchases found.");
@@ -216,10 +220,10 @@ export default function UpgradeScreen() {
           <View style={styles.heroIcon}>
             <Ionicons name="flash" size={28} color={ACCENT} />
           </View>
-          <Text style={styles.heroTag}>FLASHRADAR PREMIUM</Text>
-          <Text style={[styles.heroTitle, { color: colors.text }]}>Get the{"\n"}full radar.</Text>
+          <Text style={styles.heroTag}>{t.upgrade.premium}</Text>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>{t.upgrade.fullRadar}</Text>
           <Text style={[styles.heroSub, { color: colors.subtext }]}>
-            Unlock every store, every rare find, and every flip opportunity.
+            {t.upgrade.unlockEvery}
           </Text>
         </View>
 
@@ -230,7 +234,7 @@ export default function UpgradeScreen() {
             style={[styles.planBtn, { backgroundColor: colors.card }, plan === "monthly" && styles.planBtnActive]}
           >
             <Text style={[styles.planBtnLabel, { color: colors.subtext }, plan === "monthly" && { color: "#000" }]}>
-              Monthly
+              {t.upgrade.monthly}
             </Text>
             <Text style={[styles.planBtnPrice, { color: colors.text }, plan === "monthly" && { color: "#000" }]}>
               $6.99/mo
@@ -245,7 +249,7 @@ export default function UpgradeScreen() {
               <Text style={styles.savingsBadgeText}>SAVE {savings}%</Text>
             </View>
             <Text style={[styles.planBtnLabel, { color: colors.subtext }, plan === "yearly" && { color: "#000" }]}>
-              Yearly
+              {t.upgrade.yearly}
             </Text>
             <Text style={[styles.planBtnPrice, { color: colors.text }, plan === "yearly" && { color: "#000" }]}>
               $69.99/yr
@@ -268,29 +272,29 @@ export default function UpgradeScreen() {
             <>
               <Ionicons name="flash" size={18} color="#000" />
               <Text style={styles.ctaBtnText}>
-                Unlock Premium — {plan === "monthly" ? "$6.99/mo" : "$69.99/yr"}
+                {t.upgrade.unlockPremium} — {plan === "monthly" ? "$6.99" + t.upgrade.perMonth : "$69.99" + t.upgrade.perYear}
               </Text>
             </>
           )}
         </TouchableOpacity>
-        <Text style={styles.ctaSub}>Cancel anytime · Billed through {Platform.OS === "android" ? "Google Play" : "Apple"}</Text>
+        <Text style={styles.ctaSub}>{t.upgrade.cancelAnytime} {Platform.OS === "android" ? "Google Play" : "Apple"}</Text>
         <TouchableOpacity onPress={handleRestore} style={{ marginTop: 4 }}>
           <Text style={{ color: colors.subtext, fontSize: 12, textAlign: "center", textDecorationLine: "underline" }}>
-            Restore Purchases
+            {t.upgrade.restorePurchases}
           </Text>
         </TouchableOpacity>
 
         {/* ── Features ── */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>What you unlock</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.upgrade.whatUnlock}</Text>
         {PREMIUM_FEATURES.map((f) => (
-          <FeatureCard key={f.label} {...f} />
+          <FeatureCard key={f.label} {...f} t={t} />
         ))}
 
         {/* ── Free vs Premium ── */}
         <View style={[styles.compareWrap, { backgroundColor: colors.card }]}>
-          <Text style={[styles.compareColTitle, { color: colors.subtext }]}>What's included in Free</Text>
+          <Text style={[styles.compareColTitle, { color: colors.subtext }]}>{t.upgrade.freeIncluded}</Text>
           {FREE_FEATURES.map((f) => (
-            <CompareRow key={f.label} {...f} />
+            <CompareRow key={f.label} {...f} t={t} />
           ))}
         </View>
 
@@ -300,7 +304,7 @@ export default function UpgradeScreen() {
             "Found a $40 Pokémon card lot at Target clearance.{"\n"}
             Sold for $210 on eBay. FlashRadar paid for itself in one flip."
           </Text>
-          <Text style={styles.proofAuthor}>— Early FlashRadar user</Text>
+          <Text style={styles.proofAuthor}>{t.upgrade.socialProofAuthor}</Text>
         </View>
 
         {/* ── Second CTA ── */}
@@ -313,25 +317,25 @@ export default function UpgradeScreen() {
             <ActivityIndicator color="#000" />
           ) : (
             <Text style={styles.ctaBtnText}>
-              Get Premium — {plan === "monthly" ? "$6.99/month" : "$69.99/year"}
+              {t.upgrade.getPremiumBtn} — {plan === "monthly" ? "$6.99/month" : "$69.99/year"}
             </Text>
           )}
         </TouchableOpacity>
 <Text style={[styles.legalText, { color: colors.subtext }]}>
-          Subscription auto-renews. Cancel anytime in Settings → Manage Subscription.
-          By subscribing you agree to our{" "}
+          {t.upgrade.autoRenew}
+          {" "}{t.upgrade.agreeTerms}{" "}
           <Text
             style={{ textDecorationLine: "underline", color: "#ff6b00" }}
             onPress={() => Linking.openURL("https://flashradarapp.com/terms.html")}
           >
-            Terms of Use (EULA)
+            {t.upgrade.termsLink}
           </Text>
-          {" "}and{" "}
+          {" "}{t.upgrade.and}{" "}
           <Text
             style={{ textDecorationLine: "underline", color: "#ff6b00" }}
             onPress={() => Linking.openURL("https://flashradarapp.com/privacy.html")}
           >
-            Privacy Policy
+            {t.upgrade.privacyLink}
           </Text>
           .
         </Text>
