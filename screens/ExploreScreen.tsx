@@ -463,17 +463,17 @@ export default function ExploreScreen() {
         {/* Free / All tier toggle (free users only) */}
         {!isPremium && (
           <View style={styles.tierToggle}>
-            {(["free", "all"] as const).map((t) => (
+            {(["free", "all"] as const).map((tierVal) => (
               <TouchableOpacity
-                key={tier}
-                onPress={() => setTierFilter(tier)}
+                key={tierVal}
+                onPress={() => setTierFilter(tierVal)}
                 style={[
                   styles.tierBtn,
-                  { backgroundColor: tierFilter === tier ? ACCENT : dark ? "#1a1a1a" : "#eee" },
+                  { backgroundColor: tierFilter === tierVal ? ACCENT : dark ? "#1a1a1a" : "#eee" },
                 ]}
               >
-                <Text style={[styles.tierBtnText, { color: tierFilter === tier ? "#000" : dark ? "#aaa" : "#555" }]}>
-                  {tier === "free" ? t.explore.free : t.explore.allDeals}
+                <Text style={[styles.tierBtnText, { color: tierFilter === tierVal ? "#000" : dark ? "#aaa" : "#555" }]}>
+                  {tierVal === "free" ? t.explore.free : t.explore.allDeals}
                 </Text>
               </TouchableOpacity>
             ))}
