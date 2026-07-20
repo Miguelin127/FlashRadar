@@ -12,6 +12,8 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as AppleAuthentication from "expo-apple-authentication";
+import { useLanguage } from "../context/LanguageContext";
+import { getStrings } from "../utils/strings";
 
 const ACCENT = "#FF7A00";
 const ADMIN_EMAIL = "miguelx.x127@gmail.com";
