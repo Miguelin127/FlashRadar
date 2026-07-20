@@ -150,6 +150,11 @@ export const strings: Record<Language, Record<string, any>> = {
       noDealsStore: 'No deals at this store',
       checkBackLater: 'Check back later for new deals',
     },
+    favorites: {
+      title: 'Saved Deals',
+      noFavorites: 'No favorites yet.',
+      exploreDeal: 'Explore Deals',
+    },
   },
   es: {
     auth: {
@@ -301,6 +306,11 @@ export const strings: Record<Language, Record<string, any>> = {
       storesNearYou: 'Tiendas cerca de ti',
       noDealsStore: 'Sin ofertas en esta tienda',
       checkBackLater: 'Vuelve más tarde para nuevas ofertas',
+    },
+    favorites: {
+      title: 'Ofertas Guardadas',
+      noFavorites: 'Sin favoritos aún.',
+      exploreDeal: 'Explorar Ofertas',
     },
   },
 };

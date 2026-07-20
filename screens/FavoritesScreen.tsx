@@ -12,6 +12,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import DealCard from "../components/DealCard";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
+import { getStrings } from "../utils/strings";
 import { useUser } from "../context/UserContext";
 import { isStoreLocked } from "../constants/premiumStores";
 import { StatusBar } from "expo-status-bar";
@@ -163,12 +165,12 @@ export default function FavoritesScreen() {
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
         <StatusBar style={theme === "dark" ? "light" : "dark"} translucent />
         <Ionicons name="heart-outline" size={64} color={colors.text} />
-        <Text style={[styles.empty, { color: colors.text }]}>No favorites yet.</Text>
+        <Text style={[styles.empty, { color: colors.text }]}>{t.favorites.noFavorites}</Text>
         <TouchableOpacity
           style={[styles.exploreButton, { backgroundColor: "#FF6600" }]}
           onPress={() => navigation.navigate("Explore" as never)}
         >
-          <Text style={styles.exploreText}>Explore Deals</Text>
+          <Text style={styles.exploreText}>{t.favorites.exploreDeal}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
