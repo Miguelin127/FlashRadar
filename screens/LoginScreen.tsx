@@ -20,6 +20,8 @@ const ADMIN_EMAIL = "miguelx.x127@gmail.com";
 
 export default function LoginScreen() {
   const { signIn, signUp, signInWithGoogle, signInWithApple } = useAuth();
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const navigation = useNavigation<any>();
 
   // After a successful sign-in, return the user to browsing.
@@ -84,7 +86,7 @@ export default function LoginScreen() {
             <Image source={require("../assets/icon.png")} style={styles.logo} resizeMode="contain" />
           </View>
           <Text style={styles.title}>FlashRadar</Text>
-          <Text style={styles.subtitle}>Detect deals before everyone else</Text>
+          <Text style={styles.subtitle}>{t.auth.subtitle}</Text>
 
           {/* Google */}
           <TouchableOpacity style={styles.socialBtn} onPress={handleGoogle} disabled={!!loading}>
@@ -92,7 +94,7 @@ export default function LoginScreen() {
               ? <ActivityIndicator color="#fff" />
               : <>
                   <Ionicons name="logo-google" size={20} color="#fff" />
-                  <Text style={styles.socialBtnText}>Continue with Google</Text>
+                  <Text style={styles.socialBtnText}>{t.auth.google}</Text>
                 </>
             }
           </TouchableOpacity>
@@ -111,14 +113,14 @@ export default function LoginScreen() {
           {/* Divider */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
+            <Text style={styles.dividerText}>{t.auth.or}</Text>
             <View style={styles.dividerLine} />
           </View>
 
           {/* Email / Password */}
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder={t.auth.email}
             placeholderTextColor="#888"
             autoCapitalize="none"
             keyboardType="email-address"
@@ -128,7 +130,7 @@ export default function LoginScreen() {
           <View style={{ position: "relative" }}>
             <TextInput
               style={[styles.input, { paddingRight: 48 }]}
-              placeholder="Password"
+              placeholder={t.auth.password}
               placeholderTextColor="#888"
               secureTextEntry={!showPassword}
               value={password}
@@ -145,7 +147,7 @@ export default function LoginScreen() {
           {mode === "signup" && (
             <TextInput
               style={styles.input}
-              placeholder="Referral code (optional)"
+              placeholder={t.auth.referralCode}
               placeholderTextColor="#888"
               autoCapitalize="characters"
               autoCorrect={false}
