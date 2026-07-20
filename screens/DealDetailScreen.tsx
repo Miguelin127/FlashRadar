@@ -15,6 +15,8 @@ import { Deal } from "../components/DealCard";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useUser } from "../context/UserContext";
+import { useLanguage } from "../context/LanguageContext";
+import { getStrings } from "../utils/strings";
 import { functions } from "../firebaseConfig";
 import { httpsCallable } from "firebase/functions";
 
@@ -68,6 +70,8 @@ export default function DealDetailScreen({ route }: Props) {
   const { user } = useAuth();
   const { colors } = useTheme();
   const { isPremium } = useUser();
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const [aiExplain, setAiExplain] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState(true);
 
@@ -212,8 +216,7 @@ export default function DealDetailScreen({ route }: Props) {
 
           {/* DESCRIPTION */}
           <Text style={[styles.description, { color: colors.subtext }]}>
-            This deal is live and may sell out quickly. Pricing and availability
-            can change at any time.
+            {t.deals.disclaimer}
           </Text>
 
           {/* AI DEAL ANALYSIS */}

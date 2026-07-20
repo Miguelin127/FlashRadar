@@ -34,6 +34,8 @@ export const strings: Record<Language, Record<string, any>> = {
       whyThisDeal: 'Why this deal?',
       analyzingDeal: 'Analyzing deal…',
       unlockFlipAnalysis: 'Unlock flip analysis with Premium',
+      flipPotential: 'Flip potential:',
+      disclaimer: 'This deal is live and may sell out quickly. Pricing and availability can change at any time.',
     },
   },
   es: {
@@ -69,6 +71,8 @@ export const strings: Record<Language, Record<string, any>> = {
       whyThisDeal: '¿Por qué esta oferta?',
       analyzingDeal: 'Analizando oferta…',
       unlockFlipAnalysis: 'Desbloquea análisis de volteador con Premium',
+      flipPotential: 'Potencial de volteador:',
+      disclaimer: 'Esta oferta está activa y puede agotarse rápidamente. El precio y la disponibilidad pueden cambiar en cualquier momento.',
     },
   },
 };
