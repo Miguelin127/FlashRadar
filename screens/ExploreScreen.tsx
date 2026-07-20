@@ -145,6 +145,8 @@ function prettyStore(key: string): string {
 /* ─── Screen ─────────────────────────────────────────────────── */
 
 export default function ExploreScreen() {
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const [rawDeals, setRawDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -409,7 +411,7 @@ export default function ExploreScreen() {
       {/* ── HEADER ── */}
       <View style={[styles.header, { backgroundColor: colors.background }]}>
         <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: dark ? "#fff" : "#111" }]}>Explore Deals</Text>
+          <Text style={[styles.title, { color: dark ? "#fff" : "#111" }]}>{t.explore.title}</Text>
           <TouchableOpacity
             onPress={() => setGridMode((v) => !v)}
             style={[styles.layoutBtn, { backgroundColor: dark ? "#1a1a1a" : "#eee" }]}
@@ -422,7 +424,7 @@ export default function ExploreScreen() {
         <View style={[styles.searchBox, { backgroundColor: dark ? "#1a1a1a" : "#f0f0f0" }]}>
           <Ionicons name="search-outline" size={15} color="#888" />
           <TextInput
-            placeholder="Search deals or stores..."
+            placeholder={t.explore.search}
             placeholderTextColor="#888"
             value={search}
             onChangeText={setSearch}
@@ -452,7 +454,7 @@ export default function ExploreScreen() {
           >
             <Ionicons name="lock-closed-outline" size={13} color={ACCENT} />
             <Text style={styles.premiumBannerText}>
-              🔒 {isAdmin ? `${lockedCount} ` : ""}premium deals locked — Tap to unlock
+              🔒 {isAdmin ? `${lockedCount} ` : ""}{t.explore.premiumLocked}
             </Text>
             <Ionicons name="chevron-forward" size={13} color="#888" />
           </TouchableOpacity>
@@ -471,7 +473,7 @@ export default function ExploreScreen() {
                 ]}
               >
                 <Text style={[styles.tierBtnText, { color: tierFilter === t ? "#000" : dark ? "#aaa" : "#555" }]}>
-                  {t === "free" ? "Free" : "All Deals"}
+                  {t === "free" ? t.explore.free : t.explore.allDeals}
                 </Text>
               </TouchableOpacity>
             ))}
