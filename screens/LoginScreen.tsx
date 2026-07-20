@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     gap: 10, marginBottom: 10,
   },
   socialBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  appleBtn: { width: "100%", height: 52, marginBottom: 10 },
+  appleBtn: { width: "100%", height: 52, marginBottom: 10, borderRadius: 12, backgroundColor: "#fff", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
 
   divider: { flexDirection: "row", alignItems: "center", width: "100%", marginVertical: 16, gap: 10 },
   dividerLine: { flex: 1, height: 1, backgroundColor: "#222" },
