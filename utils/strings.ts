@@ -19,6 +19,8 @@ export const strings: Record<Language, Record<string, any>> = {
       subtitle: 'Detect deals before everyone else',
       or: 'or',
       referralCode: 'Referral code (optional)',
+      toggleLogin: "Don't have an account? ",
+      toggleSignup: 'Already have an account? ',
     },
     common: {
       ok: 'OK',
@@ -43,6 +45,8 @@ export const strings: Record<Language, Record<string, any>> = {
       subtitle: 'Detecta ofertas antes que todos',
       or: 'o',
       referralCode: 'Código de referencia (opcional)',
+      toggleLogin: '¿No tienes cuenta? ',
+      toggleSignup: '¿Ya tienes cuenta? ',
     },
     common: {
       ok: 'OK',

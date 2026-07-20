@@ -166,7 +166,7 @@ export default function LoginScreen() {
           {/* Toggle login/signup */}
           <TouchableOpacity onPress={() => setMode(m => m === "login" ? "signup" : "login")}>
             <Text style={styles.toggleText}>
-              {mode === "login" ? "Don't have an account? " : "Already have an account? "}
+              {mode === "login" ? t.auth.toggleLogin : t.auth.toggleSignup}
               <Text style={{ color: ACCENT, fontWeight: "800" }}>
                 {mode === "login" ? "Sign Up" : "Login"}
               </Text>
