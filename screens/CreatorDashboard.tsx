@@ -294,7 +294,7 @@ export default function CreatorDashboard() {
         <View style={[styles.header, { backgroundColor: dark ? "#1a1a1a" : "#fff" }]}>
           <View style={styles.headerLeft}>
             <Text style={[styles.greeting, { color: dark ? "#aaa" : "#666" }]}>
-              Welcome back 👋
+              {t.creator.welcome} 👋
             </Text>
             <Text style={[styles.username, { color: dark ? "#fff" : "#111" }]}>
               {creatorData.username}
@@ -306,7 +306,7 @@ export default function CreatorDashboard() {
           </View>
           <View style={[styles.earningsBadge, { backgroundColor: "#FF7A00" + "22" }]}>
             <Text style={styles.earningsValue}>${creatorData.earnings.toFixed(2)}</Text>
-            <Text style={styles.earningsLabel}>Earned</Text>
+            <Text style={styles.earningsLabel}>{t.creator.earned}</Text>
           </View>
         </View>
 
@@ -314,7 +314,7 @@ export default function CreatorDashboard() {
         <View style={[styles.section, { backgroundColor: dark ? "#1a1a1a" : "#fff" }]}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <Text style={[styles.sectionTitle, { color: dark ? "#fff" : "#111", marginBottom: 0 }]}>
-              {tier.emoji} {tier.label}
+              {tier.emoji} {t.creator[creatorData.tier.toLowerCase()]}
             </Text>
             <Text style={{ color: "#888", fontSize: 12, fontWeight: "700" }}>{creatorData.referralsCount} referrals</Text>
           </View>
@@ -323,8 +323,8 @@ export default function CreatorDashboard() {
           </View>
           {progress.next ? (
             <Text style={{ color: dark ? "#aaa" : "#666", fontSize: 13, marginTop: 8 }}>
-              {progress.needed} more {progress.needed === 1 ? "referral" : "referrals"} → {TIER_CONFIG[progress.next].emoji} {TIER_CONFIG[progress.next].label}
-              {"  •  unlocks "}{TIER_CONFIG[progress.next].perk}
+              {progress.needed} {progress.needed === 1 ? t.creator.referral : t.creator.referrals} → {TIER_CONFIG[progress.next].emoji} {t.creator[progress.next]}
+              {"  •  " + t.creator.unlocks + " "}{t.creator[`${progress.next}Perk`]}
             </Text>
           ) : (
             <Text style={{ color: "#FF7A00", fontSize: 13, marginTop: 8, fontWeight: "800" }}>
@@ -335,18 +335,18 @@ export default function CreatorDashboard() {
 
         {/* ── STATS ROW ──────────────────────────────────────────────────── */}
         <View style={styles.statsRow}>
-          <StatCard label="Clicks" value={creatorData.clicks.toLocaleString()} icon="analytics-outline" color="#FF7A00" dark={dark} />
-          <StatCard label="Referrals" value={String(creatorData.referralsCount)} icon="people-outline" color="#2ecc71" dark={dark} />
+          <StatCard label={t.creator.clicks} value={creatorData.clicks.toLocaleString()} icon="analytics-outline" color="#FF7A00" dark={dark} />
+          <StatCard label={t.creator.referrals} value={String(creatorData.referralsCount)} icon="people-outline" color="#2ecc71" dark={dark} />
         </View>
         <View style={styles.statsRow}>
-          <StatCard label="Conversion" value={conversionRate(creatorData.clicks, creatorData.conversions)} icon="trending-up-outline" color="#3498db" dark={dark} />
-          <StatCard label="Campaigns" value={String(creatorData.activeCampaigns)} icon="megaphone-outline" color="#9b59b6" dark={dark} />
+          <StatCard label={t.creator.conversion} value={conversionRate(creatorData.clicks, creatorData.conversions)} icon="trending-up-outline" color="#3498db" dark={dark} />
+          <StatCard label={t.creator.campaigns} value={String(creatorData.activeCampaigns)} icon="megaphone-outline" color="#9b59b6" dark={dark} />
         </View>
 
         {/* ── REFERRAL LINK GENERATOR ────────────────────────────────────── */}
         <View style={[styles.section, { backgroundColor: dark ? "#1a1a1a" : "#fff" }]}>
           <Text style={[styles.sectionTitle, { color: dark ? "#fff" : "#111" }]}>
-            🔗 Your Referral Link
+            🔗 {t.creator.referralLink}
           </Text>
           <View style={[styles.linkBox, { backgroundColor: dark ? "#0f0f0f" : "#f0f0f0" }]}>
             <Text style={[styles.linkText, { color: dark ? "#aaa" : "#555" }]} numberOfLines={1}>
@@ -356,11 +356,11 @@ export default function CreatorDashboard() {
           <View style={styles.linkActions}>
             <TouchableOpacity style={[styles.linkBtn, { backgroundColor: "#FF7A00" }]} onPress={copyLink}>
               <Ionicons name="copy-outline" size={16} color="#fff" />
-              <Text style={styles.linkBtnText}>Copy</Text>
+              <Text style={styles.linkBtnText}>{t.creator.copy}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.linkBtn, { backgroundColor: "#2ecc71" }]} onPress={shareLink}>
               <Ionicons name="share-social-outline" size={16} color="#fff" />
-              <Text style={styles.linkBtnText}>Share</Text>
+              <Text style={styles.linkBtnText}>{t.creator.share}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -368,19 +368,19 @@ export default function CreatorDashboard() {
         {/* ── EARNINGS & PAYOUTS ─────────────────────────────────────────── */}
         <View style={[styles.section, { backgroundColor: dark ? "#1a1a1a" : "#fff" }]}>
           <Text style={[styles.sectionTitle, { color: dark ? "#fff" : "#111" }]}>
-            💰 Earnings & Payouts
+            💰 {t.creator.earningsPayouts}
           </Text>
           <View style={styles.earningsRow}>
             <View style={styles.earningsItem}>
               <Text style={styles.earningsNum}>${creatorData.lifetimeEarnings.toFixed(2)}</Text>
-              <Text style={styles.earningsMeta}>Lifetime</Text>
+              <Text style={styles.earningsMeta}>{t.creator.lifetime}</Text>
             </View>
             <View style={styles.earningsDivider} />
             <View style={styles.earningsItem}>
               <Text style={[styles.earningsNum, { color: "#2ecc71" }]}>
                 ${creatorData.pendingPayout.toFixed(2)}
               </Text>
-              <Text style={styles.earningsMeta}>Pending</Text>
+              <Text style={styles.earningsMeta}>{t.creator.pending}</Text>
             </View>
           </View>
           <TouchableOpacity
@@ -398,14 +398,14 @@ export default function CreatorDashboard() {
         {/* ── CAMPAIGNS ──────────────────────────────────────────────────── */}
         <View style={[styles.section, { backgroundColor: dark ? "#1a1a1a" : "#fff" }]}>
           <Text style={[styles.sectionTitle, { color: dark ? "#fff" : "#111" }]}>
-            📊 Your Campaigns
+            📊 {t.creator.yourCampaigns}
           </Text>
           {campaigns.length === 0 ? (
             <View style={styles.emptyCampaigns}>
               <Ionicons name="megaphone-outline" size={40} color="#555" />
-              <Text style={styles.emptyText}>No campaigns yet.</Text>
+              <Text style={styles.emptyText}>{t.creator.noCampaigns}</Text>
               <Text style={styles.emptySubText}>
-                Create your first campaign to start tracking performance.
+                {t.creator.createFirst}
               </Text>
             </View>
           ) : (
@@ -416,7 +416,7 @@ export default function CreatorDashboard() {
         {/* ── PROMO TOOLS ────────────────────────────────────────────────── */}
         <View style={[styles.section, { backgroundColor: dark ? "#1a1a1a" : "#fff" }]}>
           <Text style={[styles.sectionTitle, { color: dark ? "#fff" : "#111" }]}>
-            🚀 Promo Tools
+            🚀 {t.creator.promoTools}
           </Text>
           {[
             { icon: "logo-tiktok", label: t.creator.shareTiktok, color: "#010101" },
