@@ -4,6 +4,8 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useUser } from "../context/UserContext";
+import { useLanguage } from "../context/LanguageContext";
+import { getStrings } from "../utils/strings";
 
 import RadarScreen from "../screens/RadarScreen";
 import ExploreScreen from "../screens/ExploreScreen";
@@ -26,9 +28,8 @@ export type RootTabParamList = {
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
 export default function BottomTabsNavigator() {
-  // ── Premium from context — no extra Firestore listener needed ────────────
-  // Previously opened its own onSnapshot for premium status on every tab
-  // render. Now uses the shared UserContext which is already live.
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const { isPremium, loading } = useUser();
 
   if (loading) return null;
@@ -59,24 +60,24 @@ export default function BottomTabsNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Radar" component={RadarScreen} />
-      <Tab.Screen name="Explore" component={ExploreScreen} />
-      <Tab.Screen name="Favorites" component={FavoritesScreen} />
-      <Tab.Screen name="Map" component={MapScreen} />
-      <Tab.Screen name="FlipIt" component={FlipItScreen} />
+      <Tab.Screen name="Radar" component={RadarScreen} options={{ title: t.tabs.radar }} />
+      <Tab.Screen name="Explore" component={ExploreScreen} options={{ title: t.tabs.explore }} />
+      <Tab.Screen name="Favorites" component={FavoritesScreen} options={{ title: t.tabs.favorites }} />
+      <Tab.Screen name="Map" component={MapScreen} options={{ title: t.tabs.map }} />
+      <Tab.Screen name="FlipIt" component={FlipItScreen} options={{ title: t.tabs.flipit }} />
       {isPremium && (
         <Tab.Screen
           name="Creator"
           component={CreatorDashboard}
           options={{
-            title: "Creator",
+            title: t.tabs.creator,
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="bar-chart-outline" size={size} color={color} />
             ),
           }}
         />
       )}
-      <Tab.Screen name="Settings" component={SettingsScreen} />
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t.tabs.settings }} />
     </Tab.Navigator>
   );
 }

@@ -155,6 +155,15 @@ export const strings: Record<Language, Record<string, any>> = {
       noFavorites: 'No favorites yet.',
       exploreDeal: 'Explore Deals',
     },
+    tabs: {
+      radar: 'Radar',
+      explore: 'Explore',
+      favorites: 'Favorites',
+      map: 'Map',
+      flipit: 'FlipIt',
+      creator: 'Creator',
+      settings: 'Settings',
+    },
   },
   es: {
     auth: {
@@ -311,6 +320,15 @@ export const strings: Record<Language, Record<string, any>> = {
       title: 'Ofertas Guardadas',
       noFavorites: 'Sin favoritos aún.',
       exploreDeal: 'Explorar Ofertas',
+    },
+    tabs: {
+      radar: 'Radar',
+      explore: 'Explorar',
+      favorites: 'Favoritos',
+      map: 'Mapa',
+      flipit: 'FlipIt',
+      creator: 'Creador',
+      settings: 'Ajustes',
     },
   },
 };
