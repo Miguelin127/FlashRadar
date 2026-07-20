@@ -23,6 +23,7 @@ type Deal = {
   id: string;
   title: string;
   store: string;
+  storeKey?: string;
   price: number;
   image?: string | null;
   imageUrl?: string | null;
@@ -60,6 +61,8 @@ function distanceMiles(
 }
 
 export default function FavoritesScreen() {
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const [favorites, setFavorites] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -163,7 +166,7 @@ export default function FavoritesScreen() {
   if (favorites.length === 0) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <StatusBar style={theme === "dark" ? "light" : "dark"} translucent />
+        <StatusBar style={theme === "dark" ? "light" : "dark"} />
         <Ionicons name="heart-outline" size={64} color={colors.text} />
         <Text style={[styles.empty, { color: colors.text }]}>{t.favorites.noFavorites}</Text>
         <TouchableOpacity
@@ -178,7 +181,7 @@ export default function FavoritesScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={theme === "dark" ? "light" : "dark"} translucent />
+      <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <View style={styles.headerRow}>
         <Text style={[styles.header, { color: "#FF6600" }]}>❤️ Favorites</Text>
         <TouchableOpacity style={styles.clearBtn} onPress={clearAll}>
