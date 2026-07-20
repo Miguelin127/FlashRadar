@@ -185,7 +185,7 @@ export default function DealDetailScreen({ route }: Props) {
                 ${currentPrice.toFixed(2)}
               </Text>
             ) : (
-              <Text style={styles.priceUnavailable}>See deal</Text>
+              <Text style={styles.priceUnavailable}>{t.deals.seeDeal}</Text>
             )}
 
             {oldPrice && discountPercent && (
@@ -221,11 +221,11 @@ export default function DealDetailScreen({ route }: Props) {
             <View style={[aiCard.wrap, { backgroundColor: colors.card }]}>
               <View style={aiCard.head}>
                 <Ionicons name="sparkles" size={15} color="#FF7A00" />
-                <Text style={[aiCard.headText, { color: colors.text }]}>Why this deal?</Text>
+                <Text style={[aiCard.headText, { color: colors.text }]}>{t.deals.whyThisDeal}</Text>
               </View>
 
               {aiLoading ? (
-                <Text style={[aiCard.loading, { color: colors.subtext }]}>Analyzing deal…</Text>
+                <Text style={[aiCard.loading, { color: colors.subtext }]}>{t.deals.analyzingDeal}</Text>
               ) : aiExplain ? (
                 <>
                   {(() => {
@@ -259,7 +259,7 @@ export default function DealDetailScreen({ route }: Props) {
                     ) : (
                       <TouchableOpacity style={aiCard.flipLocked} onPress={() => navigation.navigate("Upgrade")}>
                         <Ionicons name="lock-closed" size={13} color="#FF7A00" />
-                        <Text style={aiCard.flipLockedText}>Unlock flip analysis with Premium</Text>
+                        <Text style={aiCard.flipLockedText}>{t.deals.unlockFlipAnalysis}</Text>
                         <Ionicons name="chevron-forward" size={13} color="#FF7A00" />
                       </TouchableOpacity>
                     )
@@ -275,7 +275,7 @@ export default function DealDetailScreen({ route }: Props) {
               style={styles.openBtn}
               onPress={() => Linking.openURL(dealUrl)}
             >
-              <Text style={styles.openText}>Get Deal</Text>
+              <Text style={styles.openText}>{t.deals.getDeal}</Text>
             </TouchableOpacity>
           )}
 

@@ -28,6 +28,13 @@ export const strings: Record<Language, Record<string, any>> = {
       ok: 'OK',
       cancel: 'Cancel',
     },
+    deals: {
+      seeDeal: 'See deal',
+      getDeal: 'Get Deal',
+      whyThisDeal: 'Why this deal?',
+      analyzingDeal: 'Analyzing deal…',
+      unlockFlipAnalysis: 'Unlock flip analysis with Premium',
+    },
   },
   es: {
     auth: {
@@ -55,6 +62,13 @@ export const strings: Record<Language, Record<string, any>> = {
     common: {
       ok: 'OK',
       cancel: 'Cancelar',
+    },
+    deals: {
+      seeDeal: 'Ver oferta',
+      getDeal: 'Obtener oferta',
+      whyThisDeal: '¿Por qué esta oferta?',
+      analyzingDeal: 'Analizando oferta…',
+      unlockFlipAnalysis: 'Desbloquea análisis de volteador con Premium',
     },
   },
 };
