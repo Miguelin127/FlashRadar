@@ -12,6 +12,8 @@ import * as Location from "expo-location";
 import { db } from "../firebaseConfig";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
+import { getStrings } from "../utils/strings";
 import { isStoreLockedByName } from "../constants/premiumStores";
 import { useUser } from "../context/UserContext";
 
@@ -444,6 +446,8 @@ function distanceMiles(
 }
 
 export default function MapScreen() {
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const [instoreDeals, setInstoreDeals] = useState<Deal[]>([]);
   const [nearbyStores, setNearbyStores] = useState<NearbyStore[]>([]);
   const [loading, setLoading] = useState(true);
@@ -704,7 +708,7 @@ export default function MapScreen() {
             style={[styles.modeBtn, styles.modeBtnActive]}
             onPress={() => { setViewMode("stores"); setSelectedStore(null); setSelectedId(null); }}
           >
-            <Text style={[styles.modeBtnText, { color: "#000" }]}>🏬 Stores</Text>
+            <Text style={[styles.modeBtnText, { color: "#000" }]}>🏬 {t.map.stores}</Text>
           </TouchableOpacity>
         </View>
 
@@ -740,7 +744,7 @@ export default function MapScreen() {
             : <Ionicons name="search-outline" size={14} color="#fff" />
           }
           <Text style={styles.searchAreaText}>
-            {loadingStores ? "Searching..." : "Search this area"}
+            {loadingStores ? t.map.searching : t.map.searchArea}
           </Text>
         </TouchableOpacity>
       )}
@@ -773,9 +777,9 @@ export default function MapScreen() {
                 {selectedStore
                   ? selectedStore.deals.length > 0
                     ? `${selectedStore.deals.length} Deals Here`
-                    : "No active deals"
+                    : t.map.noDeals
                   : viewMode === "stores"
-                    ? `${nearbyStores.length} Stores Near You`
+                    ? `${nearbyStores.length} ${t.map.storesNearYou}`
                     : `${filteredDeals.length} Deals Near You`}
               </Text>
             </View>
@@ -808,8 +812,8 @@ export default function MapScreen() {
             ListEmptyComponent={
               <View style={styles.emptySheet}>
                 <Ionicons name="pricetag-outline" size={36} color="#444" />
-                <Text style={styles.emptySheetText}>No deals at this store</Text>
-                <Text style={styles.emptySheetSub}>Check back later for new deals</Text>
+                <Text style={styles.emptySheetText}>{t.map.noDealsStore}</Text>
+                <Text style={styles.emptySheetSub}>{t.map.checkBackLater}</Text>
               </View>
             }
             renderItem={({ item }) => (
@@ -826,7 +830,7 @@ export default function MapScreen() {
               <View style={styles.emptySheet}>
                 <Ionicons name="storefront-outline" size={36} color="#444" />
                 <Text style={styles.emptySheetText}>No stores found</Text>
-                <Text style={styles.emptySheetSub}>Move the map and tap "Search this area"</Text>
+                <Text style={styles.emptySheetSub}>{t.map.moveMap}</Text>
               </View>
             }
             renderItem={({ item }) => (

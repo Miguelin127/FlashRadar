@@ -140,6 +140,16 @@ export const strings: Record<Language, Record<string, any>> = {
       unlocks: 'unlocks',
       moreToUnlock: 'more to unlock',
     },
+    map: {
+      searching: 'Searching...',
+      searchArea: 'Search this area',
+      noDeals: 'No active deals',
+      moveMap: 'Move the map and tap "Search this area"',
+      stores: 'Stores',
+      storesNearYou: 'Stores Near You',
+      noDealsStore: 'No deals at this store',
+      checkBackLater: 'Check back later for new deals',
+    },
   },
   es: {
     auth: {
@@ -281,6 +291,16 @@ export const strings: Record<Language, Record<string, any>> = {
       elitePerk: 'Comisión superior + campañas tempranas',
       unlocks: 'desbloquea',
       moreToUnlock: 'más para desbloquear',
+    },
+    map: {
+      searching: 'Buscando...',
+      searchArea: 'Buscar en esta área',
+      noDeals: 'Sin ofertas activas',
+      moveMap: 'Mueve el mapa y toca "Buscar en esta área"',
+      stores: 'Tiendas',
+      storesNearYou: 'Tiendas cerca de ti',
+      noDealsStore: 'Sin ofertas en esta tienda',
+      checkBackLater: 'Vuelve más tarde para nuevas ofertas',
     },
   },
 };
