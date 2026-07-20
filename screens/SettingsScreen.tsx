@@ -10,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
+import { getStrings } from "../utils/strings";
 import { useAuth } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import { useUser } from "../context/UserContext";
@@ -25,6 +26,7 @@ interface NotificationItem {
 export default function SettingsScreen() {
   const { colors, toggleTheme, darkMode } = useTheme();
   const { language, setLanguage } = useLanguage();
+  const t = getStrings(language);
   const { user, isAdmin } = useAuth();
   const navigation = useNavigation<any>();
   const { isPremium, subscriptionStatus } = useUser();
@@ -91,7 +93,7 @@ export default function SettingsScreen() {
   };
 
   const handleLogout = async () => {
-    Alert.alert("Log out", "Are you sure?", [
+    Alert.alert(t.settings.logout, t.settings.logoutConfirm, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Log out",
@@ -106,8 +108,8 @@ export default function SettingsScreen() {
 
   const handleDeleteAccount = async () => {
     Alert.alert(
-      "Delete Account",
-      "This will permanently delete your account and all data. This cannot be undone.",
+      t.settings.deleteAccount,
+      t.settings.deleteConfirm,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -115,8 +117,8 @@ export default function SettingsScreen() {
           style: "destructive",
           onPress: () => {
             Alert.alert(
-              "Are you absolutely sure?",
-              "Your deals, saved items, and premium access will be permanently removed.",
+              t.settings.deleteAccount,
+              t.settings.deleteConfirm2,
               [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -177,12 +179,12 @@ export default function SettingsScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={[styles.header, { color: colors.accent }]}>
-          <Ionicons name="settings" size={18} color={colors.accent} /> Settings
+          <Ionicons name="settings" size={18} color={colors.accent} /> {t.settings.title}
         </Text>
 
         <View style={[styles.card, { borderColor: colors.accent }]}>
           <Text style={[styles.cardTitle, { color: colors.text }]}>
-            {isPremium ? "✅ Premium Active" : "Free Plan"}
+            {isPremium ? t.settings.premiumActive : t.settings.freePlan}
           </Text>
           {isPremium && subscriptionStatus && (
             <Text style={{ color: colors.text, marginTop: 4 }}>Status: {subscriptionStatus}</Text>
@@ -194,19 +196,19 @@ export default function SettingsScreen() {
 
         {!isPremium && (
           <TouchableOpacity style={styles.button} onPress={handleUpgrade}>
-            <Text style={styles.buttonText}>🔓 Unlock Premium Deals</Text>
+            <Text style={styles.buttonText}>{t.settings.unlockPremium}</Text>
           </TouchableOpacity>
         )}
 
         {isPremium && (
           <TouchableOpacity style={styles.button} onPress={handleManageSubscription}>
-            <Text style={styles.buttonText}>Manage Subscription</Text>
+            <Text style={styles.buttonText}>{t.settings.manageSubscription}</Text>
           </TouchableOpacity>
         )}
 
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Alerts</Text>
-          {notifications.length === 0 && <Text style={{ color: "#777" }}>No notifications yet.</Text>}
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.settings.alerts}</Text>
+          {notifications.length === 0 && <Text style={{ color: "#777" }}>{t.settings.noNotifications}</Text>}
           {notifications.map((n) => (
             <TouchableOpacity key={n.id} onPress={() => markRead(n.id)} style={[styles.notification, !n.read && styles.unread]}>
               <Text style={{ color: colors.accent, fontWeight: "700" }}>{n.title}</Text>
@@ -216,16 +218,16 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.toggleRow}>
-          <Text style={[styles.toggleText, { color: colors.text }]}>Push Notifications</Text>
+          <Text style={[styles.toggleText, { color: colors.text }]}>{t.settings.pushNotifications}</Text>
           <TogglePill value={notificationsEnabled} onToggle={handleToggleNotifications} />
         </View>
         <View style={styles.toggleRow}>
-          <Text style={[styles.toggleText, { color: colors.text }]}>Dark Mode</Text>
+          <Text style={[styles.toggleText, { color: colors.text }]}>{t.settings.darkMode}</Text>
           <TogglePill value={darkMode} onToggle={() => toggleTheme()} />
         </View>
 
         <View style={styles.toggleRow}>
-          <Text style={[styles.toggleText, { color: colors.text }]}>Language</Text>
+          <Text style={[styles.toggleText, { color: colors.text }]}>{t.settings.language}</Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TouchableOpacity
               onPress={() => setLanguage("en")}
@@ -253,7 +255,7 @@ export default function SettingsScreen() {
         </View>
 
         <TouchableOpacity style={styles.button} onPress={handleInviteFriends}>
-          <Text style={styles.buttonText}>Invite Friends</Text>
+          <Text style={styles.buttonText}>{t.settings.inviteFriends}</Text>
         </TouchableOpacity>
 
         {isAdmin && (
@@ -261,16 +263,16 @@ export default function SettingsScreen() {
             onPress={() => navigation.navigate("AdminPostDeal")}
             style={{ backgroundColor: "#FF7A00", padding: 14, borderRadius: 12, alignItems: "center", marginBottom: 10 }}
           >
-            <Text style={{ color: "#000", fontWeight: "900", fontSize: 15 }}>⚡ Post a Deal (Admin)</Text>
+            <Text style={{ color: "#000", fontWeight: "900", fontSize: 15 }}>{t.settings.postDeal}</Text>
           </TouchableOpacity>
         )}
 
         <TouchableOpacity style={styles.logout} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Log out</Text>
+          <Text style={styles.logoutText}>{t.settings.logout}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.deleteAccount} onPress={handleDeleteAccount}>
-          <Text style={styles.deleteAccountText}>Delete Account</Text>
+          <Text style={styles.deleteAccountText}>{t.settings.deleteAccount}</Text>
         </TouchableOpacity>
 
         {loading && <ActivityIndicator color={colors.accent} style={{ marginTop: 16 }} />}
