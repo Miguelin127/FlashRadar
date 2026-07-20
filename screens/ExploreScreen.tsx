@@ -465,15 +465,15 @@ export default function ExploreScreen() {
           <View style={styles.tierToggle}>
             {(["free", "all"] as const).map((t) => (
               <TouchableOpacity
-                key={t}
-                onPress={() => setTierFilter(t)}
+                key={tier}
+                onPress={() => setTierFilter(tier)}
                 style={[
                   styles.tierBtn,
-                  { backgroundColor: tierFilter === t ? ACCENT : dark ? "#1a1a1a" : "#eee" },
+                  { backgroundColor: tierFilter === tier ? ACCENT : dark ? "#1a1a1a" : "#eee" },
                 ]}
               >
-                <Text style={[styles.tierBtnText, { color: tierFilter === t ? "#000" : dark ? "#aaa" : "#555" }]}>
-                  {t === "free" ? t.explore.free : t.explore.allDeals}
+                <Text style={[styles.tierBtnText, { color: tierFilter === tier ? "#000" : dark ? "#aaa" : "#555" }]}>
+                  {tier === "free" ? t.explore.free : t.explore.allDeals}
                 </Text>
               </TouchableOpacity>
             ))}
