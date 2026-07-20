@@ -10,6 +10,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { useUser } from "../context/UserContext";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
+import { getStrings } from "../utils/strings";
 import { useNavigation } from "@react-navigation/native";
 import { db, firebase } from "../firebaseConfig";
 
@@ -142,6 +144,8 @@ const campStyles = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function CreatorDashboard() {
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const { user } = useAuth();
   const { isPremium } = useUser();
   const { colors, theme } = useTheme();
@@ -386,7 +390,7 @@ export default function CreatorDashboard() {
           >
             <Ionicons name="wallet-outline" size={18} color="#fff" />
             <Text style={styles.payoutBtnText}>
-              {creatorData.pendingPayout >= 10 ? "Request Payout" : `$${(10 - creatorData.pendingPayout).toFixed(2)} more to unlock`}
+              {creatorData.pendingPayout >= 10 ? t.creator.requestPayout : `$${(10 - creatorData.pendingPayout).toFixed(2)} more to unlock`}
             </Text>
           </TouchableOpacity>
         </View>
@@ -415,10 +419,10 @@ export default function CreatorDashboard() {
             🚀 Promo Tools
           </Text>
           {[
-            { icon: "logo-tiktok", label: "Share to TikTok", color: "#010101" },
-            { icon: "logo-instagram", label: "Share to Instagram", color: "#E1306C" },
-            { icon: "logo-twitter", label: "Share to X / Twitter", color: "#1DA1F2" },
-            { icon: "share-outline", label: "Share Anywhere", color: "#FF7A00" },
+            { icon: "logo-tiktok", label: t.creator.shareTiktok, color: "#010101" },
+            { icon: "logo-instagram", label: t.creator.shareInstagram, color: "#E1306C" },
+            { icon: "logo-twitter", label: t.creator.shareTwitter, color: "#1DA1F2" },
+            { icon: "share-outline", label: t.creator.shareAnywhere, color: "#FF7A00" },
           ].map((item) => (
             <TouchableOpacity
               key={item.label}
