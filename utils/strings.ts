@@ -21,6 +21,8 @@ export const strings: Record<Language, Record<string, any>> = {
       referralCode: 'Referral code (optional)',
       toggleLogin: "Don't have an account? ",
       toggleSignup: 'Already have an account? ',
+      apple: 'Sign in with Apple',
+      appleES: 'Continuar con Apple',
     },
     common: {
       ok: 'OK',
@@ -47,6 +49,8 @@ export const strings: Record<Language, Record<string, any>> = {
       referralCode: 'Código de referencia (opcional)',
       toggleLogin: '¿No tienes cuenta? ',
       toggleSignup: '¿Ya tienes cuenta? ',
+      apple: 'Continuar con Apple',
+      appleES: 'Continuar con Apple',
     },
     common: {
       ok: 'OK',

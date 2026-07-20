@@ -101,13 +101,15 @@ export default function LoginScreen() {
 
           {/* Apple — iOS only */}
           {Platform.OS === "ios" && (
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-              cornerRadius={12}
-              style={styles.appleBtn}
-              onPress={handleApple}
-            />
+            <TouchableOpacity style={styles.appleBtn} onPress={handleApple} disabled={!!loading}>
+              {loading === "apple"
+                ? <ActivityIndicator color="#000" />
+                : <>
+                    <Ionicons name="logo-apple" size={20} color="#000" />
+                    <Text style={[styles.socialBtnText, { color: "#000" }]}>{t.auth.apple}</Text>
+                  </>
+              }
+            </TouchableOpacity>
           )}
 
           {/* Divider */}
