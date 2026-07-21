@@ -218,18 +218,22 @@ export default function ExploreScreen() {
   /* ── Load deals — force server fetch first, then live updates ── */
   useEffect(() => {
     // Force server fetch to bypass Firestore cache
-    db.collection("deals_live")
-      .orderBy("createdAt", "desc")
-      .limit(QUERY_LIMIT)
-      .get({ source: "server" })
-      .then((snap) => {
-        setRawDeals(snap.docs.map(mapDoc));
+    Promise.all([
+      db.collection("deals_live").orderBy("createdAt", "desc").limit(QUERY_LIMIT).get({ source: "server" }),
+      db.collection("deals_instore").orderBy("createdAt", "desc").limit(QUERY_LIMIT).get({ source: "server" }),
+    ])
+      .then(([snap1, snap2]) => {
+        const merged = [...snap1.docs, ...snap2.docs]
+          .map(mapDoc)
+          .sort((a, b) => (b.createdAt?.toDate?.().getTime() ?? 0) - (a.createdAt?.toDate?.().getTime() ?? 0))
+          .slice(0, QUERY_LIMIT);
+        setRawDeals(merged);
         setLoading(false);
       })
       .catch(() => setLoading(false));
 
     // Real-time listener for new deals
-    const unsub = db
+    const unsub1 = db
       .collection("deals_live")
       .orderBy("createdAt", "desc")
       .limit(QUERY_LIMIT)
@@ -241,7 +245,26 @@ export default function ExploreScreen() {
         },
         () => { setLoading(false); setRefreshing(false); }
       );
-    return () => unsub();
+    const unsub2 = db
+      .collection("deals_instore")
+      .orderBy("createdAt", "desc")
+      .limit(QUERY_LIMIT)
+      .onSnapshot(
+        (snap2) => {
+          setRawDeals((prev) => {
+            const merged = [...prev, ...snap2.docs.map(mapDoc)]
+              .reduce((m, d) => {
+                if (!m.find(x => x.id === d.id)) m.push(d);
+                return m;
+              }, [] as typeof prev)
+              .sort((a, b) => (b.createdAt?.toDate?.().getTime() ?? 0) - (a.createdAt?.toDate?.().getTime() ?? 0))
+              .slice(0, QUERY_LIMIT);
+            return merged;
+          });
+        },
+        () => {}
+      );
+    return () => { unsub1(); unsub2(); };
   }, []);
 
   /* ── Store list derived from actual deals ── */
