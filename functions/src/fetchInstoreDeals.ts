@@ -103,7 +103,7 @@ async function fetchWalmartDeals(): Promise<any[]> {
         `https://${RAPID_HOST}/search?keyword=${encodeURIComponent(kw)}`,
         { headers }
       );
-      if (res.status !== 200) { await sleep(300); continue; }
+      if (res.status !== 200) { await sleep(800); continue; }
       const json: any = await res.json();
       const results = json.results ?? [];
       for (const it of results) {
@@ -119,6 +119,7 @@ async function fetchWalmartDeals(): Promise<any[]> {
     await sleep(300);
   }
   console.log(`[InstoreDeals] Walmart raw items collected (deduped): ${allItems.length}`);
+  if (allItems.length > 0) console.log("[InstoreDeals] Sample Walmart item:", JSON.stringify(allItems[0], null, 2));
 
   return allItems.filter((item) => {
     const price = parsePrice(item.price);
@@ -193,6 +194,7 @@ export const fetchInstoreDeals = onRequest(
 
     for (const chain of STORE_CHAINS) {
       const deals = dealsByStore[chain.key] ?? [];
+      if (chain.key === "walmart") console.log(`[InstoreDeals] Processing ${deals.length} Walmart deals for distribution`);
       const stores = storeLocations[chain.key] ?? [];
 
       if (deals.length === 0 || stores.length === 0) continue;
@@ -206,7 +208,10 @@ export const fetchInstoreDeals = onRequest(
         const price = parsePrice(deal.price) ?? deal.price;
         const originalPrice = parsePrice(deal.originalPrice) ?? deal.originalPrice ?? null;
 
-        if (!price) continue;
+        if (!price) {
+          console.log(`[InstoreDeals] Skipped (no price): ${deal.title}`, { raw: deal.price });
+          continue;
+        }
 
         const discountPercent = deal.discountPercent ??
           (originalPrice && originalPrice > price
@@ -219,7 +224,10 @@ export const fetchInstoreDeals = onRequest(
         const ref = db.collection("deals_instore").doc(id);
 
         const wmTitle = deal.title ?? deal.name ?? "";
-        if (isBlockedContent(wmTitle)) continue;
+        if (isBlockedContent(wmTitle)) {
+          console.log(`[InstoreDeals] Blocked: ${wmTitle}`);
+          continue;
+        }
 
         batch.set(ref, {
           id,
@@ -249,7 +257,12 @@ export const fetchInstoreDeals = onRequest(
       }
     }
 
+    try {
     await batch.commit();
+  } catch (e) {
+    console.error("[InstoreDeals] Batch commit failed:", e);
+    throw e;
+  }
     console.log(`[InstoreDeals] Written ${written} in-store deals`);
     res.json({ success: true, written });
   }
