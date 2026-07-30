@@ -63,6 +63,7 @@ type Deal = {
   affiliateUrl?: string | null;
   merchantUrl?: string | null;
   url?: string | null;
+  resaleIntel?: { marketValue: number; profitPotential: number; roiPercent: number; demandLevel: string };
 };
 
 type NearbyStore = {
@@ -415,6 +416,11 @@ function StoreDealRow({ deal, dark, onPress }: {
           {deal.discountPercent ? (
             <View style={{ backgroundColor: color + "22", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
               <Text style={{ color, fontSize: 10, fontWeight: "900" }}>-{deal.discountPercent}%</Text>
+            </View>
+          ) : null}
+          {deal.resaleIntel?.roiPercent ? (
+            <View style={{ backgroundColor: "#10b981" + "22", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+              <Text style={{ color: "#10b981", fontSize: 10, fontWeight: "900" }}>📈 {deal.resaleIntel.roiPercent}% ROI</Text>
             </View>
           ) : null}
         </View>

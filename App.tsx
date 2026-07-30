@@ -53,10 +53,14 @@ Notifications.setNotificationHandler({
   }),
 });
 
-try {
-  Purchases.configure({ apiKey: Platform.OS === "android" ? "goog_iquOFwaWGHIwFIqLWOsQzibmABE" : "appl_UziJXOhRXKINbzrFMAQWFBcPziu" });
-} catch (e) {
-  console.log("[RevenueCat] Skipping in simulator/Expo Go");
+if (!__DEV__) {
+  try {
+    Purchases.configure({ apiKey: Platform.OS === "android" ? "goog_iquOFwaWGHIwFIqLWOsQzibmABE" : "appl_UziJXOhRXKINbzrFMAQWFBcPziu" });
+  } catch (e) {
+    console.log("[RevenueCat] Config failed:", e);
+  }
+} else {
+  console.log("[RevenueCat] Skipping in dev mode");
 }
 
 export default function App() {

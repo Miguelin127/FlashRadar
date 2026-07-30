@@ -88,7 +88,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
             data?.isPremium === true;
 
           setSubscriptionStatus(status);
-          setIsPremium(premiumActive);
+          setIsPremium(__DEV__ ? true : premiumActive);
           setTrialActive(trial);
           setTrialEndsAt(trialEnd);
           setLoading(false);

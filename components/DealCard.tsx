@@ -159,6 +159,11 @@ export default function DealCard({
         {(deal.discountPercent ?? 0) > 0 && !isExpired && (
           <View style={cs.discountTag}>
             <Text style={cs.discountTagText}>-{deal.discountPercent}%</Text>
+          {deal.resaleIntel?.roiPercent ? (
+            <View style={{ backgroundColor: "#10b981" + "22", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, marginLeft: 4 }}>
+              <Text style={{ color: "#10b981", fontSize: 11, fontWeight: "900" }}>📈 {deal.resaleIntel.roiPercent}% ROI</Text>
+            </View>
+          ) : null}
           </View>
         )}
 
