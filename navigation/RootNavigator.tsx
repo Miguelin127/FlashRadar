@@ -27,6 +27,7 @@ export type RootStackParamList = {
   FlipHistory: undefined;
   FlipItResult: { flip: any };
   MyFlips: undefined;
+  CartBuilder: undefined;
   PremiumIntro: undefined;
   Referral: undefined;
   Upgrade: undefined;

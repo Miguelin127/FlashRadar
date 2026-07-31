@@ -4,10 +4,14 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebaseConfig';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
+import { getStrings } from '../utils/strings';
 
 export default function TaxDashboardScreen() {
   const { isPremium } = useUser();
   const { darkMode } = useTheme();
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const [taxReport, setTaxReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [period, setPeriod] = useState('month'); // month, quarter, year

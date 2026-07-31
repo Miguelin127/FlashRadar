@@ -3,6 +3,7 @@
 import TaxDashboardScreen from './TaxDashboardScreen';
 import ReceiptScannerScreen from './ReceiptScannerScreen';
 import ReceiptHistoryScreen from './ReceiptHistoryScreen';
+import ExpenseDashboardScreen from './ExpenseDashboardScreen';
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -197,24 +198,29 @@ export default function FlipItScreen({ route }: any) {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       {/* Tab Selector */}
-      <View style={{flexDirection:'row',gap:10,paddingHorizontal:15,paddingVertical:10,borderBottomWidth:1,borderBottomColor:colors.border}}>
-        <TouchableOpacity onPress={()=>setFlipitTab('flips')} style={{paddingHorizontal:15,paddingVertical:8,backgroundColor:flipitTab==='flips'?'#FF7A00':'transparent',borderRadius:8}}>
-          <Text style={{color:flipitTab==='flips'?'#fff':colors.text,fontWeight:'bold'}}>My Flips</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{borderBottomWidth:1,borderBottomColor:'#ddd',maxHeight:50}}>
+      <View style={{flexDirection:'row',gap:5,paddingHorizontal:15,paddingVertical:8}}>
+        <TouchableOpacity onPress={()=>setFlipitTab('flips')} style={{minWidth:80,paddingHorizontal:12,paddingVertical:8,backgroundColor:flipitTab==='flips'?'#FF7A00':'transparent',borderRadius:8,alignItems:'center'}}>
+          <Text style={{color:flipitTab==='flips'?'#fff':colors.text,fontWeight:'bold'}}>{t.flipit?.myFlips || 'My Flips'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={()=>setFlipitTab('scanner')} style={{paddingHorizontal:15,paddingVertical:8,backgroundColor:flipitTab==='scanner'?'#FF7A00':'transparent',borderRadius:8}}>
-          <Text style={{color:flipitTab==='scanner'?'#fff':colors.text,fontWeight:'bold'}}>Scan</Text>
+        <TouchableOpacity onPress={()=>setFlipitTab('scanner')} style={{minWidth:70,paddingHorizontal:12,paddingVertical:8,backgroundColor:flipitTab==='scanner'?'#FF7A00':'transparent',borderRadius:8,alignItems:'center'}}>
+          <Text style={{color:flipitTab==='scanner'?'#fff':colors.text,fontWeight:'bold'}}>{t.flipit?.scan || 'Scan'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={()=>setFlipitTab('expenses')} style={{minWidth:70,paddingHorizontal:12,paddingVertical:8,backgroundColor:flipitTab==='expenses'?'#FF7A00':'transparent',borderRadius:8,alignItems:'center'}}>
+          <Text style={{color:flipitTab==='expenses'?'#fff':colors.text,fontWeight:'bold'}}>{t.flipit?.spend || 'Spend'}</Text>
         </TouchableOpacity>
         {isPremium && (
-        <TouchableOpacity onPress={()=>setFlipitTab('history')} style={{paddingHorizontal:15,paddingVertical:8,backgroundColor:flipitTab==='history'?'#FF7A00':'transparent',borderRadius:8}}>
-          <Text style={{color:flipitTab==='history'?'#fff':colors.text,fontWeight:'bold'}}>History</Text>
+        <TouchableOpacity onPress={()=>setFlipitTab('history')} style={{minWidth:80,paddingHorizontal:12,paddingVertical:8,backgroundColor:flipitTab==='history'?'#FF7A00':'transparent',borderRadius:8,alignItems:'center'}}>
+          <Text style={{color:flipitTab==='history'?'#fff':colors.text,fontWeight:'bold'}}>{t.flipit?.history || 'History'}</Text>
         </TouchableOpacity>
         )}
         {isPremium && (
-        <TouchableOpacity onPress={()=>setFlipitTab('tax')} style={{paddingHorizontal:15,paddingVertical:8,backgroundColor:flipitTab==='tax'?'#FF7A00':'transparent',borderRadius:8}}>
-          <Text style={{color:flipitTab==='tax'?'#fff':colors.text,fontWeight:'bold'}}>Tax Report</Text>
+        <TouchableOpacity onPress={()=>setFlipitTab('tax')} style={{minWidth:70,paddingHorizontal:12,paddingVertical:8,backgroundColor:flipitTab==='tax'?'#FF7A00':'transparent',borderRadius:8,alignItems:'center'}}>
+          <Text style={{color:flipitTab==='tax'?'#fff':colors.text,fontWeight:'bold'}}>{t.flipit?.tax || 'Tax'}</Text>
         </TouchableOpacity>
         )}
       </View>
+      </ScrollView>
 
       {flipitTab === 'flips' ? (
       <ScrollView
@@ -360,6 +366,8 @@ export default function FlipItScreen({ route }: any) {
       </ScrollView>
       ) : flipitTab === 'scanner' ? (
       <ReceiptScannerScreen />
+      ) : flipitTab === 'expenses' ? (
+      <ExpenseDashboardScreen />
       ) : flipitTab === 'history' ? (
       <ReceiptHistoryScreen />
       ) : (

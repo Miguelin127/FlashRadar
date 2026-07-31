@@ -68,7 +68,7 @@ export default function MapScreen() {
             distance: dist,
           };
         })
-        .filter((d: Deal) => d.distance <= radius)
+        .filter((d: Deal) => (d.distance || 0) <= radius)
         .sort((a: Deal, b: Deal) => (a.distance || 0) - (b.distance || 0));
 
       setDeals(dealsData);

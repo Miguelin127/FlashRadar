@@ -4,10 +4,14 @@ import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
+import { useLanguage } from '../context/LanguageContext';
+import { getStrings } from '../utils/strings';
 
 export default function ReceiptHistoryScreen() {
   const { user } = useAuth();
   const { isPremium } = useUser();
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const { colors } = useTheme();
   const [receipts, setReceipts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +80,7 @@ export default function ReceiptHistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+      <View style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: '#ddd' }}>
         <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 10 }}>
           Receipt History ({receipts.length})
         </Text>
@@ -90,14 +94,14 @@ export default function ReceiptHistoryScreen() {
             alignSelf: 'flex-start',
           }}
         >
-          <Text style={{ color: '#fff', fontWeight: 'bold' }}>📊 Export CSV</Text>
+          <Text style={{ color: '#fff', fontWeight: 'bold' }}>📊 {t.flipit?.exportCSV || 'Export CSV'}</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={{ flex: 1, padding: 15 }}>
         {receipts.length === 0 ? (
           <View style={{ alignItems: 'center', marginTop: 40 }}>
-            <Text style={{ color: colors.text, opacity: 0.7 }}>No receipts scanned yet</Text>
+            <Text style={{ color: colors.text, opacity: 0.7 }}>{t.flipit?.noReceiptsScanned || 'No receipts scanned yet'}</Text>
           </View>
         ) : (
           receipts.map((receipt) => (

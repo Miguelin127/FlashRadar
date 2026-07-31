@@ -4,10 +4,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebaseConfig';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
+import { getStrings } from '../utils/strings';
 import { useUser } from '../context/UserContext';
 
 export default function ReceiptScannerScreen() {
   const { isPremium } = useUser();
+  const { language } = useLanguage();
+  const t = getStrings(language);
   const { colors } = useTheme();
   const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -94,7 +98,7 @@ export default function ReceiptScannerScreen() {
   if (!image) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, gap: 15 }}>
-        <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.text, marginBottom: 20 }}>Scan Receipt</Text>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.text, marginBottom: 20 }}>{t.flipit?.scanReceipt || 'Scan Receipt'}</Text>
         <TouchableOpacity
           onPress={takePhoto}
           style={{
@@ -104,7 +108,7 @@ export default function ReceiptScannerScreen() {
             borderRadius: 8,
           }}
         >
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>📷 Take Photo</Text>
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>📷 {t.flipit?.takePhoto || 'Take Photo'}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={pickImage}
@@ -115,7 +119,7 @@ export default function ReceiptScannerScreen() {
             borderRadius: 8,
           }}
         >
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>📁 Choose Photo</Text>
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>📁 {t.flipit?.choosePhoto || 'Choose Photo'}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -148,7 +152,7 @@ export default function ReceiptScannerScreen() {
               );
             }}
             style={{
-              borderColor: selectedItems.includes(i) ? '#FF7A00' : colors.border,
+              borderColor: selectedItems.includes(i) ? '#FF7A00' : '#ddd',
               borderWidth: selectedItems.includes(i) ? 2 : 1,
               borderRadius: 8,
               padding: 12,
@@ -188,7 +192,7 @@ export default function ReceiptScannerScreen() {
             setImage(null);
           }}
           style={{
-            backgroundColor: colors.border,
+            backgroundColor: '#ddd',
             paddingVertical: 12,
             borderRadius: 8,
             marginBottom: 30,

@@ -319,7 +319,7 @@ export default function CreatorDashboard() {
             <Text style={{ color: "#888", fontSize: 12, fontWeight: "700" }}>{creatorData.referralsCount} referrals</Text>
           </View>
           <View style={{ height: 10, borderRadius: 6, backgroundColor: dark ? "#0f0f0f" : "#eee", overflow: "hidden" }}>
-            <View style={{ height: "100%", width: (progress.pct * 100) + "%", backgroundColor: tier.color, borderRadius: 6 }} />
+            <View style={{ height: "100%", flex: progress.pct, backgroundColor: tier.color, borderRadius: 6 }} />
           </View>
           {progress.next ? (
             <Text style={{ color: dark ? "#aaa" : "#666", fontSize: 13, marginTop: 8 }}>

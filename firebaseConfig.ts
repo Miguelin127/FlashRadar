@@ -10,11 +10,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 declare const global: any;
 
+// @ts-ignore
+import * as base64 from 'base-64';
+
 if (!global.btoa) {
-  global.btoa = (input: string) => Buffer.from(input, "binary").toString("base64");
+  global.btoa = (input: string) => base64.encode(input);
 }
 if (!global.atob) {
-  global.atob = (input: string) => Buffer.from(input, "base64").toString("binary");
+  global.atob = (input: string) => base64.decode(input);
 }
 
 if (Platform.OS !== "web") {
@@ -26,7 +29,7 @@ if (Platform.OS !== "web") {
 }
 
 const firebaseConfig = {
-  apiKey: "AIzaSyB7gxV9ssBg7T8p0ttjfiFLzXi6w6dPkOs",
+  apiKey: "AIzaSyDgNZN6lY0Typ88fGu9N6QFnIH_fq8gbrc",
   authDomain: "flashradar-71c93.firebaseapp.com",
   projectId: "flashradar-71c93",
   storageBucket: "flashradar-71c93.appspot.com",
