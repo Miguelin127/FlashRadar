@@ -1,6 +1,8 @@
 // flashradar/screens/FlipItScreen.tsx
 
 import TaxDashboardScreen from './TaxDashboardScreen';
+import ReceiptScannerScreen from './ReceiptScannerScreen';
+import ReceiptHistoryScreen from './ReceiptHistoryScreen';
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -199,6 +201,14 @@ export default function FlipItScreen({ route }: any) {
         <TouchableOpacity onPress={()=>setFlipitTab('flips')} style={{paddingHorizontal:15,paddingVertical:8,backgroundColor:flipitTab==='flips'?'#FF7A00':'transparent',borderRadius:8}}>
           <Text style={{color:flipitTab==='flips'?'#fff':colors.text,fontWeight:'bold'}}>My Flips</Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={()=>setFlipitTab('scanner')} style={{paddingHorizontal:15,paddingVertical:8,backgroundColor:flipitTab==='scanner'?'#FF7A00':'transparent',borderRadius:8}}>
+          <Text style={{color:flipitTab==='scanner'?'#fff':colors.text,fontWeight:'bold'}}>Scan</Text>
+        </TouchableOpacity>
+        {isPremium && (
+        <TouchableOpacity onPress={()=>setFlipitTab('history')} style={{paddingHorizontal:15,paddingVertical:8,backgroundColor:flipitTab==='history'?'#FF7A00':'transparent',borderRadius:8}}>
+          <Text style={{color:flipitTab==='history'?'#fff':colors.text,fontWeight:'bold'}}>History</Text>
+        </TouchableOpacity>
+        )}
         {isPremium && (
         <TouchableOpacity onPress={()=>setFlipitTab('tax')} style={{paddingHorizontal:15,paddingVertical:8,backgroundColor:flipitTab==='tax'?'#FF7A00':'transparent',borderRadius:8}}>
           <Text style={{color:flipitTab==='tax'?'#fff':colors.text,fontWeight:'bold'}}>Tax Report</Text>
@@ -348,6 +358,10 @@ export default function FlipItScreen({ route }: any) {
           <Text style={[styles.metric, { color: textSecondary }]}>{t.flipit.totalProfit}:{" "}<Text style={{ fontWeight: "800", color: totalProfit >= 0 ? "#2ecc71" : "#e74c3c" }}>${totalProfit.toFixed(2)}</Text></Text>
         </View>
       </ScrollView>
+      ) : flipitTab === 'scanner' ? (
+      <ReceiptScannerScreen />
+      ) : flipitTab === 'history' ? (
+      <ReceiptHistoryScreen />
       ) : (
       <TaxDashboardScreen />
       )}
