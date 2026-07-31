@@ -66,16 +66,7 @@ export default function BottomTabsNavigator() {
       <Tab.Screen name="Map" component={MapScreen} options={{ title: t.tabs.map }} />
       <Tab.Screen name="FlipIt" component={FlipItScreen} options={{ title: t.tabs.flipit }} />
       {isPremium && (
-        <Tab.Screen
-          name="Creator"
-          component={CreatorDashboard}
-          options={{
-            title: t.tabs.creator,
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="bar-chart-outline" size={size} color={color} />
-            ),
-          }}
-        />
+        <Tab.Screen name="Creator" component={CreatorDashboard} options={{ title: t.tabs.creator }} />
       )}
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t.tabs.settings }} />
     </Tab.Navigator>

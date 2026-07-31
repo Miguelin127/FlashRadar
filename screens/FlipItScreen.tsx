@@ -1,5 +1,6 @@
 // flashradar/screens/FlipItScreen.tsx
 
+import TaxDashboardScreen from './TaxDashboardScreen';
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -39,6 +40,7 @@ export default function FlipItScreen({ route }: any) {
   const t = getStrings(language);
   const { colors } = useTheme();
   const { user } = useAuth();
+  const [flipitTab, setFlipitTab] = useState('flips');
   const { isPremium } = useUser();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -192,6 +194,19 @@ export default function FlipItScreen({ route }: any) {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      {/* Tab Selector */}
+      <View style={{flexDirection:'row',gap:10,paddingHorizontal:15,paddingVertical:10,borderBottomWidth:1,borderBottomColor:colors.border}}>
+        <TouchableOpacity onPress={()=>setFlipitTab('flips')} style={{paddingHorizontal:15,paddingVertical:8,backgroundColor:flipitTab==='flips'?'#FF7A00':'transparent',borderRadius:8}}>
+          <Text style={{color:flipitTab==='flips'?'#fff':colors.text,fontWeight:'bold'}}>My Flips</Text>
+        </TouchableOpacity>
+        {isPremium && (
+        <TouchableOpacity onPress={()=>setFlipitTab('tax')} style={{paddingHorizontal:15,paddingVertical:8,backgroundColor:flipitTab==='tax'?'#FF7A00':'transparent',borderRadius:8}}>
+          <Text style={{color:flipitTab==='tax'?'#fff':colors.text,fontWeight:'bold'}}>Tax Report</Text>
+        </TouchableOpacity>
+        )}
+      </View>
+
+      {flipitTab === 'flips' ? (
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={styles.scroll}
@@ -333,6 +348,9 @@ export default function FlipItScreen({ route }: any) {
           <Text style={[styles.metric, { color: textSecondary }]}>{t.flipit.totalProfit}:{" "}<Text style={{ fontWeight: "800", color: totalProfit >= 0 ? "#2ecc71" : "#e74c3c" }}>${totalProfit.toFixed(2)}</Text></Text>
         </View>
       </ScrollView>
+      ) : (
+      <TaxDashboardScreen />
+      )}
     </SafeAreaView>
   );
 }
