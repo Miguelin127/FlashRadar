@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput, Image, Linking } from 'react-native';
 import MapView, { Marker, Circle } from 'react-native-maps';
+// @ts-ignore
 import ClusteredMarker from 'react-native-maps-clustering';
 import * as Location from 'expo-location';
 import { db } from '../firebaseConfig';
@@ -92,7 +93,11 @@ export default function MapScreen() {
           };
         })
         .filter((d: any) => d !== null)
-        .sort((a: Deal, b: Deal) => (a.distance || 0) - (b.distance || 0));
+        .sort((a: any, b: any) => {
+          if (!a || !b) return 0;
+          return (a.distance || 0) - (b.distance || 0);
+        })
+        .filter((d: any) => d !== null) as Deal[];
 
       setDeals(dealsData);
       setLoading(false);
@@ -385,7 +390,7 @@ export default function MapScreen() {
               onPress={async () => {
                 const url = selectedDeal.productUrl;
                 if (!url) {
-                  Alert.alert('No Product URL', 'This deal doesn't have a direct link yet');
+                  Alert.alert('No Product URL', 'This deal does not have a direct link yet');
                   return;
                 }
                 
