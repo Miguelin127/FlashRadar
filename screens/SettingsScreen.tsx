@@ -276,6 +276,10 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         {loading && <ActivityIndicator color={colors.accent} style={{ marginTop: 16 }} />}
+
+        <View style={{ marginTop: 40, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#333', alignItems: 'center', paddingBottom: 20 }}>
+          <Text style={{ color: '#FF7A00', fontSize: 14, fontWeight: '700' }}>FlashRadar LLC</Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

@@ -388,10 +388,19 @@ export default function MapScreen() {
             <TouchableOpacity 
               style={{ flex: 1, backgroundColor: '#FF7A00', padding: 12, borderRadius: 8 }}
               onPress={async () => {
-                const url = selectedDeal.productUrl;
-                if (!url) {
-                  Alert.alert('No Product URL', 'This deal does not have a direct link yet');
-                  return;
+                let url = selectedDeal.productUrl;
+                
+                // Fallback: generate search URL if no direct product URL
+                if (!url || url === '') {
+                  const searchQuery = encodeURIComponent(selectedDeal.title);
+                  const store = selectedDeal.store;
+                  
+                  if (store === 'Target') url = `https://www.target.com/s?searchTerm=${searchQuery}`;
+                  else if (store === 'Walmart') url = `https://www.walmart.com/search?q=${searchQuery}`;
+                  else if (store === 'Best Buy') url = `https://www.bestbuy.com/site/searchpage.jsp?st=${searchQuery}`;
+                  else if (store === 'CVS') url = `https://www.cvs.com/search?q=${searchQuery}`;
+                  else if (store === 'Home Depot') url = `https://www.homedepot.com/s/${searchQuery}`;
+                  else url = `https://www.google.com/search?q=${searchQuery}+at+${store}`;
                 }
                 
                 const canOpen = await Linking.canOpenURL(url);
