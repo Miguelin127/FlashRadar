@@ -29,7 +29,7 @@ if (Platform.OS !== "web") {
 }
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDgNZN6lY0Typ88fGu9N6QFnIH_fq8gbrc",
+  apiKey: 'AIzaSyCKn73y--LsPxw5vJBknf8VURDWiO84ZME',
   authDomain: "flashradar-71c93.firebaseapp.com",
   projectId: "flashradar-71c93",
   storageBucket: "flashradar-71c93.appspot.com",
