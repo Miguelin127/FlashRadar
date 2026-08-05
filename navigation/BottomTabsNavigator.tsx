@@ -1,10 +1,11 @@
 // flashradar/navigation/BottomTabsNavigator.tsx
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useUser } from "../context/UserContext";
 import { useLanguage } from "../context/LanguageContext";
+import { firebase } from "../firebaseConfig";
 import { getStrings } from "../utils/strings";
 
 import RadarScreen from "../screens/RadarScreen";
@@ -31,6 +32,12 @@ export default function BottomTabsNavigator() {
   const { language } = useLanguage();
   const t = getStrings(language);
   const { isPremium, loading } = useUser();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const user = firebase.auth().currentUser;
+    setIsAdmin(user?.email === 'miguelx.x127@gmail.com');
+  }, []);
 
   if (loading) return null;
 
@@ -63,7 +70,7 @@ export default function BottomTabsNavigator() {
       <Tab.Screen name="Radar" component={RadarScreen} options={{ title: t.tabs.radar }} />
       <Tab.Screen name="Explore" component={ExploreScreen} options={{ title: t.tabs.explore }} />
       <Tab.Screen name="Favorites" component={FavoritesScreen} options={{ title: t.tabs.favorites }} />
-      <Tab.Screen name="Map" component={MapScreen} options={{ title: t.tabs.map }} />
+      {isAdmin ? <Tab.Screen name="Map" component={MapScreen} options={{ title: t.tabs.map }} /> : null}
       <Tab.Screen name="FlipIt" component={FlipItScreen} options={{ title: t.tabs.flipit }} />
       {isPremium && (
         <Tab.Screen name="Creator" component={CreatorDashboard} options={{ title: t.tabs.creator }} />

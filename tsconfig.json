@@ -19,8 +19,6 @@
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,
-
-    // ✅ Correct type roots and types
     "typeRoots": [
       "./types",
       "./node_modules/@types"
@@ -28,7 +26,6 @@
     "types": [
       "react"
     ],
-
     "baseUrl": ".",
     "paths": {
       "@/*": [

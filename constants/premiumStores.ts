@@ -9,7 +9,7 @@ export const PREMIUM_STORES = [
   "bestchoice", "satechi", "hiby", "philips", "ebay",
 ];
 
-export const FREE_DEAL_LIMIT = 400; // Free users see max this many; premium unlimited
+export const FREE_DEAL_LIMIT = 500; // Free users see max this many; premium unlimited
 
 export function isStoreLocked(storeKey: string | undefined, isPremium: boolean): boolean {
   if (isPremium) return false;
