@@ -14,7 +14,7 @@ import FavoritesScreen from "../screens/FavoritesScreen";
 import MapScreen from "../screens/MapScreen";
 import FlipItScreen from "../screens/FlipItScreen";
 import CreatorDashboard from "../screens/CreatorDashboard";
-import AIAssistantScreen from '../screens/AIAssistantScreen';
+import ShoppingIntelligenceScreen from '../screens/ShoppingIntelligenceScreen';
 import SettingsScreen from "../screens/SettingsScreen";
 
 export type RootTabParamList = {
@@ -24,7 +24,7 @@ export type RootTabParamList = {
   Map: undefined;
   FlipIt: undefined;
   Creator: undefined;
-  AI: undefined;
+  Shopping: undefined;
   Settings: undefined;
 };
 
@@ -63,7 +63,7 @@ export default function BottomTabsNavigator() {
             case "Map": iconName = "map-outline"; break;
             case "FlipIt": iconName = "rocket-outline"; break;
             case "Creator": iconName = "bar-chart-outline"; break;
-            case "AI": iconName = "sparkles"; break;
+            case "Shopping": iconName = "analytics"; break;
             case "Settings": iconName = "settings-outline"; break;
           }
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -73,12 +73,6 @@ export default function BottomTabsNavigator() {
       <Tab.Screen name="Radar" component={RadarScreen} options={{ title: t.tabs.radar }} />
       <Tab.Screen name="Explore" component={ExploreScreen} options={{ title: t.tabs.explore }} />
       <Tab.Screen name="Favorites" component={FavoritesScreen} options={{ title: t.tabs.favorites }} />
-      {isAdmin ? <Tab.Screen name="Map" component={MapScreen} options={{ title: t.tabs.map }} /> : null}
-      <Tab.Screen name="AI" component={AIAssistantScreen} options={{ title: 'AI Assistant' }} />
-      <Tab.Screen name="FlipIt" component={FlipItScreen} options={{ title: t.tabs.flipit }} />
-      {isPremium && (
-        <Tab.Screen name="Creator" component={CreatorDashboard} options={{ title: t.tabs.creator }} />
-      )}
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t.tabs.settings }} />
     </Tab.Navigator>
   );
