@@ -31,6 +31,22 @@ interface Deal {
 const GOOGLE_PLACES_API_KEY = 'AIzaSyCKn73y--LsPxw5vJBknf8VURDWiO84ZME';
 const STORE_TYPES = ['Walmart', 'Target', 'Best Buy', 'CVS', 'Walgreens', 'Home Depot', 'Costco'];
 
+const FALLBACK_STORES: { [key: string]: { lat: number; lng: number; address: string }[] } = {
+  'Walmart': [
+    { lat: 41.9094, lng: -87.7123, address: '4650 W North Ave, Chicago, IL 60639' },
+    { lat: 41.6945, lng: -87.6234, address: '10900 S Doty Ave, Chicago, IL 60628' },
+  ],
+  'Target': [
+    { lat: 41.8847, lng: -87.6191, address: '830 N State St, Chicago, IL 60610' },
+  ],
+  'Best Buy': [
+    { lat: 41.8906, lng: -87.6188, address: '540 N Michigan Ave, Chicago, IL 60611' },
+  ],
+  'CVS': [
+    { lat: 41.8781, lng: -87.6298, address: '100 E Chicago Ave, Chicago, IL 60611' },
+  ],
+};
+
 export default function MapScreen() {
   const { darkMode } = useTheme();
   const [userLocation, setUserLocation] = useState({ latitude: 41.8781, longitude: -87.6298 });
@@ -76,38 +92,64 @@ export default function MapScreen() {
   const searchNearbyStores = async () => {
     try {
       const storeLocations: Store[] = [];
+      let foundAny = false;
 
       for (const storeType of STORE_TYPES) {
-        const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${userLocation.latitude},${userLocation.longitude}&radius=${radius * 1609}&keyword=${storeType}&key=${GOOGLE_PLACES_API_KEY}`;
+        try {
+          const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${userLocation.latitude},${userLocation.longitude}&radius=${radius * 1609}&keyword=${storeType}&key=${GOOGLE_PLACES_API_KEY}`;
+          
+          const response = await fetch(url);
+          const data = await response.json();
 
-        const response = await fetch(url);
-        const data = await response.json();
+          if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+            foundAny = true;
+            data.results.slice(0, 3).forEach((place: any) => {
+              const distance = calculateDistance(
+                userLocation.latitude,
+                userLocation.longitude,
+                place.geometry.location.lat,
+                place.geometry.location.lng
+              );
 
-        if (data.results && Array.isArray(data.results)) {
-          data.results.forEach((place: any) => {
-            const distance = calculateDistance(
-              userLocation.latitude,
-              userLocation.longitude,
-              place.geometry.location.lat,
-              place.geometry.location.lng
-            );
-
-            storeLocations.push({
-              id: place.place_id,
-              name: storeType,
-              address: place.vicinity,
-              latitude: place.geometry.location.lat,
-              longitude: place.geometry.location.lng,
-              distance,
-              dealCount: 0,
+              storeLocations.push({
+                id: place.place_id,
+                name: storeType,
+                address: place.vicinity,
+                latitude: place.geometry.location.lat,
+                longitude: place.geometry.location.lng,
+                distance,
+                dealCount: 0,
+              });
             });
-          });
+          }
+        } catch (error) {
+          console.warn(`Error fetching ${storeType}:`, error);
         }
+      }
+
+      if (!foundAny) {
+        console.warn('Google Places API failed, using fallback');
+        Object.entries(FALLBACK_STORES).forEach(([storeName, locations]) => {
+          locations.forEach((loc, idx) => {
+            const distance = calculateDistance(userLocation.latitude, userLocation.longitude, loc.lat, loc.lng);
+            if (distance <= radius) {
+              storeLocations.push({
+                id: `${storeName}-${idx}`,
+                name: storeName,
+                address: loc.address,
+                latitude: loc.lat,
+                longitude: loc.lng,
+                distance,
+                dealCount: 0,
+              });
+            }
+          });
+        });
       }
 
       setStores(storeLocations.sort((a, b) => a.distance - b.distance));
     } catch (error) {
-      console.error('Google Places error:', error);
+      console.error('Store search error:', error);
     }
   };
 
