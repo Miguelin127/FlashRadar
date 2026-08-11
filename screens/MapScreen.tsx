@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, ActivityIndicator } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
-import * as Location from 'expo-location';
 import { db } from '../firebaseConfig';
 import { useTheme } from '../context/ThemeContext';
 
@@ -14,10 +13,22 @@ interface Deal {
   discountPercent: number;
 }
 
+const STORE_COORDINATES: { [key: string]: { lat: number; lng: number } } = {
+  'Walmart': { lat: 41.8781, lng: -87.6298 },
+  'Target': { lat: 41.8820, lng: -87.6295 },
+  'Best Buy': { lat: 41.8850, lng: -87.6200 },
+  'CVS': { lat: 41.8750, lng: -87.6350 },
+  'Walgreens': { lat: 41.8900, lng: -87.6400 },
+  'Home Depot': { lat: 41.8700, lng: -87.6100 },
+  'Costco': { lat: 41.8600, lng: -87.6500 },
+  'Nike': { lat: 41.8880, lng: -87.6180 },
+  'Lowes': { lat: 41.8550, lng: -87.5950 },
+  'Walmart Supercenter': { lat: 41.8781, lng: -87.6298 },
+};
+
 export default function MapScreen() {
   const { darkMode } = useTheme();
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [location, setLocation] = useState({ latitude: 41.8781, longitude: -87.6298 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,17 +64,14 @@ export default function MapScreen() {
     }
   };
 
-  // Group deals by store
   const storeLocations = Array.from(new Set(deals.map(d => d.store)))
     .map(store => ({
       store,
       count: deals.filter(d => d.store === store).length,
-      lat: 41.8781 + Math.random() * 0.05,
-      lng: -87.6298 + Math.random() * 0.05,
+      ...STORE_COORDINATES[store] || { lat: 41.8781, lng: -87.6298 },
     }));
 
   const bgColor = darkMode ? '#000' : '#fff';
-  const textColor = darkMode ? '#fff' : '#000';
 
   if (loading) {
     return (
@@ -78,10 +86,10 @@ export default function MapScreen() {
       <MapView
         style={{ flex: 1 }}
         initialRegion={{
-          latitude: location.latitude,
-          longitude: location.longitude,
-          latitudeDelta: 0.1,
-          longitudeDelta: 0.1,
+          latitude: 41.8781,
+          longitude: -87.6298,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
         }}
       >
         {storeLocations.map((loc) => (
@@ -91,16 +99,18 @@ export default function MapScreen() {
             title={loc.store}
             description={`${loc.count} deals`}
           >
-            <View style={{ 
-              backgroundColor: '#FF7A00', 
-              borderRadius: 50, 
-              padding: 8, 
+            <View style={{
+              backgroundColor: '#FF7A00',
+              borderRadius: 50,
+              padding: 10,
               alignItems: 'center',
               justifyContent: 'center',
-              width: 50,
-              height: 50,
+              width: 55,
+              height: 55,
+              borderWidth: 2,
+              borderColor: '#fff',
             }}>
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>
                 {loc.count}
               </Text>
             </View>
@@ -108,7 +118,6 @@ export default function MapScreen() {
         ))}
       </MapView>
 
-      {/* Info Overlay */}
       <View style={{ position: 'absolute', top: 50, left: 15, right: 15, backgroundColor: '#4CAF50', padding: 12, borderRadius: 8 }}>
         <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>
           🏪 {storeLocations.length} Stores • 💰 {deals.length} Deals
