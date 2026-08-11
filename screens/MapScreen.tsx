@@ -13,27 +13,46 @@ interface Deal {
   discountPercent: number;
 }
 
-const STORE_COORDINATES: { [key: string]: { lat: number; lng: number } } = {
-  'Walmart': { lat: 41.8781, lng: -87.6298 },
-  'Target': { lat: 41.8820, lng: -87.6295 },
-  'Best Buy': { lat: 41.8850, lng: -87.6200 },
-  'CVS': { lat: 41.8750, lng: -87.6350 },
-  'Walgreens': { lat: 41.8900, lng: -87.6400 },
-  'Home Depot': { lat: 41.8700, lng: -87.6100 },
-  'Costco': { lat: 41.8600, lng: -87.6500 },
-  'Nike': { lat: 41.8880, lng: -87.6180 },
-  'Lowes': { lat: 41.8550, lng: -87.5950 },
-  'Walmart Supercenter': { lat: 41.8781, lng: -87.6298 },
-};
+interface StoreLocation {
+  store: string;
+  count: number;
+  lat: number;
+  lng: number;
+}
+
+const GOOGLE_MAPS_API_KEY = 'AIzaSyCKn73y--LsPxw5vJBknf8VURDWiO84ZME';
+const CHICAGO_LAT = 41.8781;
+const CHICAGO_LNG = -87.6298;
 
 export default function MapScreen() {
   const { darkMode } = useTheme();
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [storeLocations, setStoreLocations] = useState<StoreLocation[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchDeals();
   }, []);
+
+  const geocodeStore = async (storeName: string): Promise<{ lat: number; lng: number }> => {
+    try {
+      const query = `${storeName} Chicago Illinois`;
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${GOOGLE_MAPS_API_KEY}`
+      );
+      const data = await response.json();
+      
+      if (data.results && data.results.length > 0) {
+        const location = data.results[0].geometry.location;
+        return { lat: location.lat, lng: location.lng };
+      }
+    } catch (error) {
+      console.warn(`Geocoding failed for ${storeName}:`, error);
+    }
+    
+    // Fallback to Chicago center
+    return { lat: CHICAGO_LAT, lng: CHICAGO_LNG };
+  };
 
   const fetchDeals = async () => {
     try {
@@ -57,19 +76,28 @@ export default function MapScreen() {
         .filter(d => d.price > 0 && !d.store?.toLowerCase?.().includes('amazon') && ((d.originalPrice - d.price) / d.originalPrice) * 100 >= 40);
 
       setDeals(dealsData);
+
+      // Geocode all unique stores
+      const uniqueStores = Array.from(new Set(dealsData.map(d => d.store)));
+      const locations: StoreLocation[] = [];
+
+      for (const store of uniqueStores) {
+        const coords = await geocodeStore(store);
+        locations.push({
+          store,
+          count: dealsData.filter(d => d.store === store).length,
+          lat: coords.lat,
+          lng: coords.lng,
+        });
+      }
+
+      setStoreLocations(locations.sort((a, b) => b.count - a.count));
       setLoading(false);
     } catch (error) {
       console.error('Fetch error:', error);
       setLoading(false);
     }
   };
-
-  const storeLocations = Array.from(new Set(deals.map(d => d.store)))
-    .map(store => ({
-      store,
-      count: deals.filter(d => d.store === store).length,
-      ...STORE_COORDINATES[store] || { lat: 41.8781, lng: -87.6298 },
-    }));
 
   const bgColor = darkMode ? '#000' : '#fff';
 
@@ -86,10 +114,10 @@ export default function MapScreen() {
       <MapView
         style={{ flex: 1 }}
         initialRegion={{
-          latitude: 41.8781,
-          longitude: -87.6298,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
+          latitude: CHICAGO_LAT,
+          longitude: CHICAGO_LNG,
+          latitudeDelta: 0.08,
+          longitudeDelta: 0.08,
         }}
       >
         {storeLocations.map((loc) => (
@@ -109,6 +137,9 @@ export default function MapScreen() {
               height: 55,
               borderWidth: 2,
               borderColor: '#fff',
+              shadowColor: '#000',
+              shadowOpacity: 0.3,
+              shadowRadius: 3,
             }}>
               <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>
                 {loc.count}
