@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Alert, Image } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { db } from '../firebaseConfig';
 import { useTheme } from '../context/ThemeContext';
 
-interface Store {
+interface StoreLocation {
   id: string;
+  retailer: string;
   name: string;
   address: string;
+  city: string;
+  state: string;
   latitude: number;
   longitude: number;
-  distance: number;
-  dealCount: number;
 }
 
 interface Deal {
@@ -28,44 +29,50 @@ interface Deal {
   merchantUrl?: string;
 }
 
-const GOOGLE_PLACES_API_KEY = 'AIzaSyCKn73y--LsPxw5vJBknf8VURDWiO84ZME';
-const STORE_TYPES = ['Walmart', 'Target', 'Best Buy', 'CVS', 'Walgreens', 'Home Depot', 'Costco'];
+const CANONICAL_STORES: StoreLocation[] = [
+  { id: 'walmart-01', retailer: 'Walmart', name: 'Walmart', address: '4650 W North Ave', city: 'Chicago', state: 'IL', latitude: 41.9094, longitude: -87.7123 },
+  { id: 'target-01', retailer: 'Target', name: 'Target', address: '830 N State St', city: 'Chicago', state: 'IL', latitude: 41.8847, longitude: -87.6191 },
+  { id: 'bestbuy-01', retailer: 'Best Buy', name: 'Best Buy', address: '540 N Michigan Ave', city: 'Chicago', state: 'IL', latitude: 41.8906, longitude: -87.6188 },
+  { id: 'cvs-01', retailer: 'CVS', name: 'CVS', address: '100 E Chicago Ave', city: 'Chicago', state: 'IL', latitude: 41.8781, longitude: -87.6298 },
+  { id: 'walgreens-01', retailer: 'Walgreens', name: 'Walgreens', address: '757 N Michigan Ave', city: 'Chicago', state: 'IL', latitude: 41.8850, longitude: -87.6300 },
+  { id: 'homedepot-01', retailer: 'Home Depot', name: 'Home Depot', address: '2151 W 35th St', city: 'Chicago', state: 'IL', latitude: 41.7435, longitude: -87.5640 },
+];
 
-const FALLBACK_STORES: { [key: string]: { lat: number; lng: number; address: string }[] } = {
-  'Walmart': [
-    { lat: 41.9094, lng: -87.7123, address: '4650 W North Ave, Chicago, IL 60639' },
-    { lat: 41.6945, lng: -87.6234, address: '10900 S Doty Ave, Chicago, IL 60628' },
-  ],
-  'Target': [
-    { lat: 41.8847, lng: -87.6191, address: '830 N State St, Chicago, IL 60610' },
-  ],
-  'Best Buy': [
-    { lat: 41.8906, lng: -87.6188, address: '540 N Michigan Ave, Chicago, IL 60611' },
-  ],
-  'CVS': [
-    { lat: 41.8781, lng: -87.6298, address: '100 E Chicago Ave, Chicago, IL 60611' },
-  ],
+const STORE_ALIASES: { [key: string]: string } = {
+  'walmart': 'Walmart',
+  'target': 'Target',
+  'best buy': 'Best Buy',
+  'bestbuy': 'Best Buy',
+  'cvs': 'CVS',
+  'walgreens': 'Walgreens',
+  'home depot': 'Home Depot',
+  'homedepot': 'Home Depot',
+};
+
+const normalizeStoreName = (storeName: string): string => {
+  return storeName.toLowerCase().trim().replace('.com', '').replace(' store', '');
+};
+
+const getCanonicalStoreName = (storeName: string): string | null => {
+  const normalized = normalizeStoreName(storeName);
+  return STORE_ALIASES[normalized] || null;
 };
 
 export default function MapScreen() {
   const { darkMode } = useTheme();
   const [userLocation, setUserLocation] = useState({ latitude: 41.8781, longitude: -87.6298 });
-  const [stores, setStores] = useState<Store[]>([]);
   const [allDeals, setAllDeals] = useState<Deal[]>([]);
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  const [selectedStore, setSelectedStore] = useState<StoreLocation | null>(null);
   const [storeDeal, setStoreDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [radius, setRadius] = useState(5);
 
   useEffect(() => {
     initLocation();
   }, []);
 
   useEffect(() => {
-    if (userLocation) {
-      fetchDealsAndStores();
-    }
-  }, [userLocation, radius]);
+    fetchDeals();
+  }, []);
 
   const initLocation = async () => {
     try {
@@ -79,102 +86,7 @@ export default function MapScreen() {
     }
   };
 
-  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-    const R = 3959;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLng = ((lng2 - lng1) * Math.PI) / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-  };
-
-  const searchNearbyStores = async () => {
-    try {
-      const storeLocations: Store[] = [];
-      let foundAny = false;
-
-      for (const storeType of STORE_TYPES) {
-        try {
-          const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${userLocation.latitude},${userLocation.longitude}&radius=${radius * 1609}&keyword=${storeType}&key=${GOOGLE_PLACES_API_KEY}`;
-          
-          const response = await fetch(url);
-          const data = await response.json();
-
-          if (data.results && Array.isArray(data.results) && data.results.length > 0) {
-            foundAny = true;
-            data.results.slice(0, 3).forEach((place: any) => {
-              const distance = calculateDistance(
-                userLocation.latitude,
-                userLocation.longitude,
-                place.geometry.location.lat,
-                place.geometry.location.lng
-              );
-
-              storeLocations.push({
-                id: place.place_id,
-                name: storeType,
-                address: place.vicinity,
-                latitude: place.geometry.location.lat,
-                longitude: place.geometry.location.lng,
-                distance,
-                dealCount: 0,
-              });
-            });
-          }
-        } catch (error) {
-          console.warn(`Error fetching ${storeType}:`, error);
-        }
-      }
-
-      if (!foundAny) {
-        console.warn('Google Places API failed, using fallback');
-        Object.entries(FALLBACK_STORES).forEach(([storeName, locations]) => {
-          locations.forEach((loc, idx) => {
-            const distance = calculateDistance(userLocation.latitude, userLocation.longitude, loc.lat, loc.lng);
-            if (distance <= radius) {
-              storeLocations.push({
-                id: `${storeName}-${idx}`,
-                name: storeName,
-                address: loc.address,
-                latitude: loc.lat,
-                longitude: loc.lng,
-                distance,
-                dealCount: 0,
-              });
-            }
-          });
-        });
-      }
-
-      setStores(storeLocations.sort((a, b) => a.distance - b.distance));
-    } catch (error) {
-      console.error('Store search error:', error);
-    }
-  };
-
-  const isAmazonDeal = (deal: Deal): boolean => {
-    const store = deal.store?.toLowerCase?.() || '';
-    const url = (deal.url || deal.affiliateUrl || deal.merchantUrl || '').toLowerCase();
-    return store.includes('amazon') || url.includes('amazon');
-  };
-
-  const isValidForStore = (deal: Deal, storeName: string): boolean => {
-    const url = (deal.url || deal.affiliateUrl || deal.merchantUrl || '').toLowerCase();
-    const storeNameLower = storeName.toLowerCase();
-
-    if (storeNameLower.includes('walmart')) return url.includes('walmart');
-    if (storeNameLower.includes('target')) return url.includes('target');
-    if (storeNameLower.includes('best buy')) return url.includes('bestbuy');
-    if (storeNameLower.includes('cvs')) return url.includes('cvs');
-    if (storeNameLower.includes('walgreens')) return url.includes('walgreens');
-    if (storeNameLower.includes('home depot')) return url.includes('homedepot');
-    if (storeNameLower.includes('costco')) return url.includes('costco');
-
-    return false;
-  };
-
-  const fetchDealsAndStores = async () => {
+  const fetchDeals = async () => {
     try {
       setLoading(true);
 
@@ -201,15 +113,18 @@ export default function MapScreen() {
         })
         .filter(d => {
           if (d.price <= 0) return false;
-          if (isAmazonDeal(d)) return false;
+          if (d.store.toLowerCase().includes('amazon')) return false;
           const discount = ((d.originalPrice - d.price) / d.originalPrice) * 100;
           return discount >= 40;
         });
 
+      console.log('Loaded deals:', dealsData.length);
+      dealsData.forEach(d => {
+        const canonical = getCanonicalStoreName(d.store);
+        console.log(`DEAL MATCH: "${d.title}" storeName: ${d.store} canonical: ${canonical}`);
+      });
+
       setAllDeals(dealsData);
-
-      await searchNearbyStores();
-
       setLoading(false);
     } catch (error) {
       console.error('Fetch error:', error);
@@ -217,13 +132,21 @@ export default function MapScreen() {
     }
   };
 
-  const handleStoreSelect = (store: Store) => {
-    setSelectedStore(store);
-    const deals = allDeals.filter(d => d.store && isValidForStore(d, store.name));
-    setStoreDeals(deals);
+  const getStoreDeals = (store: StoreLocation): Deal[] => {
+    return allDeals.filter(deal => {
+      const canonical = getCanonicalStoreName(deal.store);
+      return canonical === store.retailer;
+    });
   };
 
-  const handleGetDirections = async (store: Store) => {
+  const handleStoreSelect = (store: StoreLocation) => {
+    setSelectedStore(store);
+    const deals = getStoreDeals(store);
+    setStoreDeals(deals);
+    console.log(`Selected ${store.retailer}: ${deals.length} deals`);
+  };
+
+  const handleGetDirections = async (store: StoreLocation) => {
     const url = `https://maps.apple.com/?daddr=${store.latitude},${store.longitude}&saddr=${userLocation.latitude},${userLocation.longitude}`;
     try {
       await Linking.openURL(url);
@@ -255,51 +178,33 @@ export default function MapScreen() {
           longitudeDelta: 0.05,
         }}
       >
-        {stores.map(store => (
-          <Marker
-            key={store.id}
-            coordinate={{ latitude: store.latitude, longitude: store.longitude }}
-            onPress={() => handleStoreSelect(store)}
-          >
-            <View style={{
-              backgroundColor: '#FF7A00',
-              borderRadius: 50,
-              padding: 10,
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 60,
-              height: 60,
-              borderWidth: 2,
-              borderColor: '#fff',
-            }}>
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
-                {allDeals.filter(d => d.store && isValidForStore(d, store.name)).length}
-              </Text>
-            </View>
-          </Marker>
-        ))}
-      </MapView>
-
-      <View style={{ position: 'absolute', top: 50, left: 15, right: 15 }}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {[2, 5, 10, 25].map(r => (
-            <TouchableOpacity
-              key={r}
-              onPress={() => setRadius(r)}
-              style={{
-                flex: 1,
-                backgroundColor: radius === r ? '#FF7A00' : cardBg,
-                paddingVertical: 8,
-                borderRadius: 6,
-              }}
+        {CANONICAL_STORES.map(store => {
+          const dealCount = getStoreDeals(store).length;
+          return (
+            <Marker
+              key={store.id}
+              coordinate={{ latitude: store.latitude, longitude: store.longitude }}
+              onPress={() => handleStoreSelect(store)}
             >
-              <Text style={{ color: radius === r ? '#fff' : textColor, fontSize: 11, fontWeight: 'bold', textAlign: 'center' }}>
-                {r}mi
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+              <View style={{
+                backgroundColor: '#FF7A00',
+                borderRadius: 50,
+                padding: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 60,
+                height: 60,
+                borderWidth: 2,
+                borderColor: '#fff',
+              }}>
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
+                  {dealCount}
+                </Text>
+              </View>
+            </Marker>
+          );
+        })}
+      </MapView>
 
       {selectedStore && (
         <View style={{ flex: 0.5, backgroundColor: bgColor, borderTopWidth: 2, borderTopColor: '#FF7A00' }}>
@@ -307,13 +212,10 @@ export default function MapScreen() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
               <View>
                 <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 18 }}>
-                  {selectedStore.name}
+                  {selectedStore.retailer}
                 </Text>
                 <Text style={{ color: '#999', fontSize: 11, marginTop: 4 }}>
                   {selectedStore.address}
-                </Text>
-                <Text style={{ color: '#999', fontSize: 12, marginTop: 2 }}>
-                  {selectedStore.distance.toFixed(1)} mi away
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedStore(null)}>
@@ -332,7 +234,7 @@ export default function MapScreen() {
 
             {storeDeal.length === 0 ? (
               <Text style={{ color: '#999', textAlign: 'center', marginTop: 20 }}>
-                No verified deals at this location
+                No deals at this location
               </Text>
             ) : (
               <>
