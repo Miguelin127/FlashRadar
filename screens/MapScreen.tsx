@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput, Image, Linking, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Alert } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { db } from '../firebaseConfig';
@@ -28,29 +28,8 @@ interface Deal {
   merchantUrl?: string;
 }
 
-const STORE_LOCATIONS: { [key: string]: { lat: number; lng: number; address: string }[] } = {
-  'Walmart': [
-    { lat: 41.9094, lng: -87.7123, address: '4650 W North Ave, Chicago, IL 60639' },
-    { lat: 41.6945, lng: -87.6234, address: '10900 S Doty Ave, Chicago, IL 60628' },
-    { lat: 41.7476, lng: -87.6608, address: '7535 S Ashland Ave, Chicago, IL 60620' },
-  ],
-  'Target': [
-    { lat: 41.8847, lng: -87.6191, address: '830 N State St, Chicago, IL 60610' },
-    { lat: 41.7945, lng: -87.6230, address: '1113 W 35th St, Chicago, IL 60609' },
-  ],
-  'Best Buy': [
-    { lat: 41.8906, lng: -87.6188, address: '540 N Michigan Ave, Chicago, IL 60611' },
-  ],
-  'CVS': [
-    { lat: 41.8781, lng: -87.6298, address: '100 E Chicago Ave, Chicago, IL 60611' },
-  ],
-  'Walgreens': [
-    { lat: 41.8850, lng: -87.6300, address: '757 N Michigan Ave, Chicago, IL 60611' },
-  ],
-  'Home Depot': [
-    { lat: 41.7435, lng: -87.5640, address: '2151 W 35th St, Chicago, IL 60609' },
-  ],
-};
+const GOOGLE_PLACES_API_KEY = 'AIzaSyCKn73y--LsPxw5vJBknf8VURDWiO84ZME';
+const STORE_TYPES = ['Walmart', 'Target', 'Best Buy', 'CVS', 'Walgreens', 'Home Depot', 'Costco'];
 
 export default function MapScreen() {
   const { darkMode } = useTheme();
@@ -68,7 +47,7 @@ export default function MapScreen() {
 
   useEffect(() => {
     if (userLocation) {
-      fetchStoresAndDeals();
+      fetchDealsAndStores();
     }
   }, [userLocation, radius]);
 
@@ -94,6 +73,44 @@ export default function MapScreen() {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   };
 
+  const searchNearbyStores = async () => {
+    try {
+      const storeLocations: Store[] = [];
+
+      for (const storeType of STORE_TYPES) {
+        const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${userLocation.latitude},${userLocation.longitude}&radius=${radius * 1609}&keyword=${storeType}&key=${GOOGLE_PLACES_API_KEY}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.results && Array.isArray(data.results)) {
+          data.results.forEach((place: any) => {
+            const distance = calculateDistance(
+              userLocation.latitude,
+              userLocation.longitude,
+              place.geometry.location.lat,
+              place.geometry.location.lng
+            );
+
+            storeLocations.push({
+              id: place.place_id,
+              name: storeType,
+              address: place.vicinity,
+              latitude: place.geometry.location.lat,
+              longitude: place.geometry.location.lng,
+              distance,
+              dealCount: 0,
+            });
+          });
+        }
+      }
+
+      setStores(storeLocations.sort((a, b) => a.distance - b.distance));
+    } catch (error) {
+      console.error('Google Places error:', error);
+    }
+  };
+
   const isAmazonDeal = (deal: Deal): boolean => {
     const store = deal.store?.toLowerCase?.() || '';
     const url = (deal.url || deal.affiliateUrl || deal.merchantUrl || '').toLowerCase();
@@ -104,17 +121,18 @@ export default function MapScreen() {
     const url = (deal.url || deal.affiliateUrl || deal.merchantUrl || '').toLowerCase();
     const storeNameLower = storeName.toLowerCase();
 
-    if (storeNameLower === 'walmart') return url.includes('walmart');
-    if (storeNameLower === 'target') return url.includes('target');
-    if (storeNameLower === 'best buy') return url.includes('bestbuy');
-    if (storeNameLower === 'cvs') return url.includes('cvs');
-    if (storeNameLower === 'walgreens') return url.includes('walgreens');
-    if (storeNameLower === 'home depot') return url.includes('homedepot');
+    if (storeNameLower.includes('walmart')) return url.includes('walmart');
+    if (storeNameLower.includes('target')) return url.includes('target');
+    if (storeNameLower.includes('best buy')) return url.includes('bestbuy');
+    if (storeNameLower.includes('cvs')) return url.includes('cvs');
+    if (storeNameLower.includes('walgreens')) return url.includes('walgreens');
+    if (storeNameLower.includes('home depot')) return url.includes('homedepot');
+    if (storeNameLower.includes('costco')) return url.includes('costco');
 
     return false;
   };
 
-  const fetchStoresAndDeals = async () => {
+  const fetchDealsAndStores = async () => {
     try {
       setLoading(true);
 
@@ -143,38 +161,13 @@ export default function MapScreen() {
           if (d.price <= 0) return false;
           if (isAmazonDeal(d)) return false;
           const discount = ((d.originalPrice - d.price) / d.originalPrice) * 100;
-          if (discount < 40) return false;
-          return true;
+          return discount >= 40;
         });
 
       setAllDeals(dealsData);
 
-      const storeMap = new Map<string, Store>();
+      await searchNearbyStores();
 
-      Object.entries(STORE_LOCATIONS).forEach(([storeName, locations]) => {
-        locations.forEach((loc, idx) => {
-          const storeId = `${storeName}-${idx}`;
-          const distance = calculateDistance(userLocation.latitude, userLocation.longitude, loc.lat, loc.lng);
-
-          if (distance <= radius) {
-            const dealCount = dealsData.filter(d => d.store === storeName && isValidForStore(d, storeName)).length;
-
-            if (dealCount > 0) {
-              storeMap.set(storeId, {
-                id: storeId,
-                name: storeName,
-                address: loc.address,
-                latitude: loc.lat,
-                longitude: loc.lng,
-                distance,
-                dealCount,
-              });
-            }
-          }
-        });
-      });
-
-      setStores(Array.from(storeMap.values()).sort((a, b) => a.distance - b.distance));
       setLoading(false);
     } catch (error) {
       console.error('Fetch error:', error);
@@ -184,7 +177,7 @@ export default function MapScreen() {
 
   const handleStoreSelect = (store: Store) => {
     setSelectedStore(store);
-    const deals = allDeals.filter(d => d.store === store.name && isValidForStore(d, store.name));
+    const deals = allDeals.filter(d => d.store && isValidForStore(d, store.name));
     setStoreDeals(deals);
   };
 
@@ -238,7 +231,7 @@ export default function MapScreen() {
               borderColor: '#fff',
             }}>
               <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
-                {store.dealCount}
+                {allDeals.filter(d => d.store && isValidForStore(d, store.name)).length}
               </Text>
             </View>
           </Marker>
@@ -274,8 +267,11 @@ export default function MapScreen() {
                 <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 18 }}>
                   {selectedStore.name}
                 </Text>
-                <Text style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
-                  {selectedStore.distance.toFixed(1)} mi
+                <Text style={{ color: '#999', fontSize: 11, marginTop: 4 }}>
+                  {selectedStore.address}
+                </Text>
+                <Text style={{ color: '#999', fontSize: 12, marginTop: 2 }}>
+                  {selectedStore.distance.toFixed(1)} mi away
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedStore(null)}>
@@ -299,7 +295,7 @@ export default function MapScreen() {
             ) : (
               <>
                 <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 14, marginBottom: 10 }}>
-                  {storeDeal.length} Deals
+                  {storeDeal.length} Deals Available
                 </Text>
                 {storeDeal.map(deal => (
                   <TouchableOpacity
