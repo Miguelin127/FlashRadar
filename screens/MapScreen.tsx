@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput, Image, Linking, Alert, FlatList } from 'react-native';
-import MapView, { Marker, Callout } from 'react-native-maps';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput, Image, Linking, Alert } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { db } from '../firebaseConfig';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext';
 
 interface Store {
   id: string;
@@ -44,7 +43,6 @@ const STORE_LOCATIONS: { [key: string]: { lat: number; lng: number; address: str
   ],
   'CVS': [
     { lat: 41.8781, lng: -87.6298, address: '100 E Chicago Ave, Chicago, IL 60611' },
-    { lat: 41.8850, lng: -87.6200, address: '875 N Michigan Ave, Chicago, IL 60611' },
   ],
   'Walgreens': [
     { lat: 41.8850, lng: -87.6300, address: '757 N Michigan Ave, Chicago, IL 60611' },
@@ -56,7 +54,6 @@ const STORE_LOCATIONS: { [key: string]: { lat: number; lng: number; address: str
 
 export default function MapScreen() {
   const { darkMode } = useTheme();
-  const { user } = useAuth();
   const [userLocation, setUserLocation] = useState({ latitude: 41.8781, longitude: -87.6298 });
   const [stores, setStores] = useState<Store[]>([]);
   const [allDeals, setAllDeals] = useState<Deal[]>([]);
@@ -64,7 +61,6 @@ export default function MapScreen() {
   const [storeDeal, setStoreDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [radius, setRadius] = useState(5);
-  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     initLocation();
@@ -82,12 +78,9 @@ export default function MapScreen() {
       if (status === 'granted') {
         const loc = await Location.getCurrentPositionAsync({});
         setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-      } else {
-        setUserLocation({ latitude: 41.8781, longitude: -87.6298 });
       }
     } catch (error) {
       console.warn('Location error:', error);
-      setUserLocation({ latitude: 41.8781, longitude: -87.6298 });
     }
   };
 
@@ -101,11 +94,30 @@ export default function MapScreen() {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   };
 
+  const isAmazonDeal = (deal: Deal): boolean => {
+    const store = deal.store?.toLowerCase?.() || '';
+    const url = (deal.url || deal.affiliateUrl || deal.merchantUrl || '').toLowerCase();
+    return store.includes('amazon') || url.includes('amazon');
+  };
+
+  const isValidForStore = (deal: Deal, storeName: string): boolean => {
+    const url = (deal.url || deal.affiliateUrl || deal.merchantUrl || '').toLowerCase();
+    const storeNameLower = storeName.toLowerCase();
+
+    if (storeNameLower === 'walmart') return url.includes('walmart');
+    if (storeNameLower === 'target') return url.includes('target');
+    if (storeNameLower === 'best buy') return url.includes('bestbuy');
+    if (storeNameLower === 'cvs') return url.includes('cvs');
+    if (storeNameLower === 'walgreens') return url.includes('walgreens');
+    if (storeNameLower === 'home depot') return url.includes('homedepot');
+
+    return false;
+  };
+
   const fetchStoresAndDeals = async () => {
     try {
       setLoading(true);
 
-      // Fetch all deals
       const [liveSnaps, instoreSnaps] = await Promise.all([
         db.collection('deals_live').limit(500).get(),
         db.collection('deals_instore').limit(500).get(),
@@ -127,11 +139,16 @@ export default function MapScreen() {
             merchantUrl: data.merchantUrl || '',
           };
         })
-        .filter(d => d.price > 0 && !d.store?.toLowerCase?.().includes('amazon') && ((d.originalPrice - d.price) / d.originalPrice) * 100 >= 40);
+        .filter(d => {
+          if (d.price <= 0) return false;
+          if (isAmazonDeal(d)) return false;
+          const discount = ((d.originalPrice - d.price) / d.originalPrice) * 100;
+          if (discount < 40) return false;
+          return true;
+        });
 
       setAllDeals(dealsData);
 
-      // Build store list
       const storeMap = new Map<string, Store>();
 
       Object.entries(STORE_LOCATIONS).forEach(([storeName, locations]) => {
@@ -140,17 +157,19 @@ export default function MapScreen() {
           const distance = calculateDistance(userLocation.latitude, userLocation.longitude, loc.lat, loc.lng);
 
           if (distance <= radius) {
-            const dealCount = dealsData.filter(d => d.store === storeName).length;
+            const dealCount = dealsData.filter(d => d.store === storeName && isValidForStore(d, storeName)).length;
 
-            storeMap.set(storeId, {
-              id: storeId,
-              name: storeName,
-              address: loc.address,
-              latitude: loc.lat,
-              longitude: loc.lng,
-              distance,
-              dealCount,
-            });
+            if (dealCount > 0) {
+              storeMap.set(storeId, {
+                id: storeId,
+                name: storeName,
+                address: loc.address,
+                latitude: loc.lat,
+                longitude: loc.lng,
+                distance,
+                dealCount,
+              });
+            }
           }
         });
       });
@@ -165,7 +184,7 @@ export default function MapScreen() {
 
   const handleStoreSelect = (store: Store) => {
     setSelectedStore(store);
-    const deals = allDeals.filter(d => d.store === store.name);
+    const deals = allDeals.filter(d => d.store === store.name && isValidForStore(d, store.name));
     setStoreDeals(deals);
   };
 
@@ -192,7 +211,6 @@ export default function MapScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: bgColor }}>
-      {/* Map */}
       <MapView
         style={{ flex: selectedStore ? 0.5 : 1 }}
         initialRegion={{
@@ -209,7 +227,7 @@ export default function MapScreen() {
             onPress={() => handleStoreSelect(store)}
           >
             <View style={{
-              backgroundColor: store.dealCount > 10 ? '#FF7A00' : '#FF9800',
+              backgroundColor: '#FF7A00',
               borderRadius: 50,
               padding: 10,
               alignItems: 'center',
@@ -227,25 +245,7 @@ export default function MapScreen() {
         ))}
       </MapView>
 
-      {/* Controls */}
       <View style={{ position: 'absolute', top: 50, left: 15, right: 15 }}>
-        <TextInput
-          placeholder="Search stores..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          style={{
-            backgroundColor: bgColor,
-            borderColor: '#ddd',
-            borderWidth: 1,
-            borderRadius: 8,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            color: textColor,
-            marginBottom: 10,
-          }}
-          placeholderTextColor={textColor}
-        />
-
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {[2, 5, 10, 25].map(r => (
             <TouchableOpacity
@@ -266,7 +266,6 @@ export default function MapScreen() {
         </View>
       </View>
 
-      {/* Store Bottom Sheet */}
       {selectedStore && (
         <View style={{ flex: 0.5, backgroundColor: bgColor, borderTopWidth: 2, borderTopColor: '#FF7A00' }}>
           <ScrollView style={{ padding: 15 }}>
@@ -276,7 +275,7 @@ export default function MapScreen() {
                   {selectedStore.name}
                 </Text>
                 <Text style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
-                  📍 {selectedStore.distance.toFixed(1)} miles
+                  {selectedStore.distance.toFixed(1)} mi
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedStore(null)}>
@@ -293,44 +292,28 @@ export default function MapScreen() {
               </Text>
             </TouchableOpacity>
 
-            <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 14, marginBottom: 10 }}>
-              {storeDeal.length} Deals Available
-            </Text>
-
             {storeDeal.length === 0 ? (
               <Text style={{ color: '#999', textAlign: 'center', marginTop: 20 }}>
-                No active deals found at this location
+                No verified deals at this location
               </Text>
             ) : (
-              storeDeal.map(deal => (
-                <TouchableOpacity
-                  key={deal.id}
-                  style={{
-                    backgroundColor: cardBg,
-                    borderRadius: 8,
-                    padding: 12,
-                    marginBottom: 10,
-                    borderWidth: 1,
-                    borderColor: '#ddd',
-                    flexDirection: 'row',
-                  }}
-                  onPress={() => {
-                    const url = deal.affiliateUrl || deal.merchantUrl || deal.url;
-                    if (url) Linking.openURL(url);
-                  }}
-                >
-                  {deal.image && (
-                    <Image
-                      source={{ uri: deal.image }}
-                      style={{ width: 60, height: 60, borderRadius: 6, marginRight: 10 }}
-                      onError={() => {}}
-                    />
-                  )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 12 }} numberOfLines={2}>
+              <>
+                <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 14, marginBottom: 10 }}>
+                  {storeDeal.length} Deals
+                </Text>
+                {storeDeal.map(deal => (
+                  <TouchableOpacity
+                    key={deal.id}
+                    onPress={() => {
+                      const url = deal.affiliateUrl || deal.merchantUrl || deal.url;
+                      if (url) Linking.openURL(url);
+                    }}
+                    style={{ backgroundColor: cardBg, borderRadius: 8, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#ddd' }}
+                  >
+                    <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 12, marginBottom: 6 }} numberOfLines={2}>
                       {deal.title}
                     </Text>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <View>
                         <Text style={{ color: '#FF7A00', fontWeight: 'bold', fontSize: 14 }}>
                           ${deal.price.toFixed(2)}
@@ -343,9 +326,9 @@ export default function MapScreen() {
                         {deal.discountPercent}% OFF
                       </Text>
                     </View>
-                  </View>
-                </TouchableOpacity>
-              ))
+                  </TouchableOpacity>
+                ))}
+              </>
             )}
           </ScrollView>
         </View>
