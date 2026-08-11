@@ -3,8 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, Image, Pressable,
-  TouchableOpacity, Alert, Linking, ActivityIndicator,
-} from "react-native";
+  TouchableOpacity, Alert, Linking, ActivityIndicator, Share } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
 
@@ -77,6 +76,19 @@ function resolveImage(deal: Deal): string | null {
 }
 
 /* ─── Component ──────────────────────────────────────────────── */
+
+const handleShare = (deal: any) => {
+  const message = `Check out this deal on FlashRadar!
+
+${deal.title}
+${deal.price} (${deal.discountPercent}% OFF)
+${deal.store}
+
+${deal.url || deal.affiliateUrl}
+
+Find more: https://flashradarapp.com`;
+  Share.share({ message, title: 'Share Deal' }).catch(console.error);
+};
 
 export default function DealCard({
   deal, onPress, onSaveToggle, darkMode = true, blurred = false, compact = false,
@@ -194,7 +206,17 @@ export default function DealCard({
             }
           </TouchableOpacity>
 
-          {/* Badge strip */}
+
+
+          {/* Share button - bottom right */}
+          <TouchableOpacity
+            onPress={handleShare}
+            style={{ position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(255, 122, 0, 0.8)', width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' }}
+          >
+            <Ionicons name="share-social" size={14} color="#fff" />
+          </TouchableOpacity>
+
+        {/* Badge strip */}
           <View style={cs.badgeRow}>
             {isExpired && <View style={[cs.badge, { backgroundColor: "#555" }]}><Text style={cs.badgeTxt}>EXPIRED</Text></View>}
             {!isExpired && isJustIn && <View style={[cs.badge, { backgroundColor: "#2563eb" }]}><Text style={cs.badgeTxt}>JUST IN</Text></View>}

@@ -45,7 +45,7 @@ export default function MapScreen() {
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
 
   useEffect(() => {
-    initMap();
+    initMap().catch(err => console.warn('Map init failed:', err));
   }, []);
 
   useEffect(() => {
@@ -53,12 +53,29 @@ export default function MapScreen() {
   }, [deals, searchQuery, filterStore, radius]);
 
   const initMap = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.warn('Location permission denied');
+        setLocation({ latitude: 41.8781, longitude: -87.6298 });
+        await fetchNearbyDeals(41.8781, -87.6298);
+        return;
+      }
 
-    const loc = await Location.getCurrentPositionAsync({});
-    setLocation(loc.coords);
-    fetchNearbyDeals(loc.coords.latitude, loc.coords.longitude);
+      try {
+        const loc = await Location.getCurrentPositionAsync({ timeout: 5000 });
+        setLocation(loc.coords);
+        await fetchNearbyDeals(loc.coords.latitude, loc.coords.longitude);
+      } catch (locError) {
+        console.warn('getCurrentPosition failed, using default:', locError);
+        setLocation({ latitude: 41.8781, longitude: -87.6298 });
+        await fetchNearbyDeals(41.8781, -87.6298);
+      }
+    } catch (error) {
+      console.error('initMap error:', error);
+      setLocation({ latitude: 41.8781, longitude: -87.6298 });
+      await fetchNearbyDeals(41.8781, -87.6298);
+    }
   };
 
   const fetchNearbyDeals = async (lat: number, lng: number) => {

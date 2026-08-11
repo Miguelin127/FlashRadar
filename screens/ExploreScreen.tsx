@@ -13,6 +13,7 @@ import { getStrings } from "../utils/strings";
 
 import { db, functions } from "../firebaseConfig";
 import { httpsCallable } from "firebase/functions";
+import { Share } from "react-native";
 import DealCard from "../components/DealCard";
 import { useTheme } from "../context/ThemeContext";
 import { PREMIUM_STORES, FREE_DEAL_LIMIT, isStoreLocked } from "../constants/premiumStores";

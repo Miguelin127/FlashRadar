@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Share } from 'react-native';
+import { Linking } from 'react-native';
 import {
   View,
   Text,
@@ -13,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { firebase } from '../firebaseConfig';
 
 interface RankedProduct {
   id: string;
@@ -43,23 +46,57 @@ export default function ShoppingIntelligenceScreen() {
   const [results, setResults] = useState<RankedProduct[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchInfo, setSearchInfo] = useState<SearchResult | null>(null);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const { theme } = useTheme();
 
   const bgColor = theme === 'dark' ? '#1a1a1a' : '#fff';
   const textColor = theme === 'dark' ? '#fff' : '#000';
   const cardBg = theme === 'dark' ? '#2a2a2a' : '#f9f9f9';
 
+  const handleShareDeal = (product: RankedProduct) => {
+    const message = `Check out this deal on FlashRadar!
+
+${product.title}
+${product.price} (${product.discountPercent}% OFF)
+${product.store}
+
+Score: ${product.overallScore}/100
+
+${product.url}
+
+Find more deals: https://flashradarapp.com`;
+    Share.share({
+      message,
+      url: product.url,
+      title: 'Share Deal',
+    }).catch(err => console.error('Share error:', err));
+  };
+
+  const handleViewDeal = (url: string) => {
+    Linking.openURL(url).catch(err => console.error('Error:', err));
+  };
+
+  const handleImageError = (productId: string) => {
+    setFailedImages(prev => new Set([...prev, productId]));
+  };
+
   const handleSearch = async () => {
     if (!query.trim()) return;
 
     setLoading(true);
     try {
+      const uid = firebase.auth().currentUser?.uid;
+      if (!uid) {
+        console.error('Not authenticated');
+        return;
+      }
+
       const response = await fetch(
         'https://us-central1-flashradar-71c93.cloudfunctions.net/shopWithIntelligence',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query }),
+          body: JSON.stringify({ query, uid }),
         }
       );
       const data: SearchResult = await response.json();
@@ -77,6 +114,19 @@ export default function ShoppingIntelligenceScreen() {
       <View style={styles.rankBadge}>
         <Text style={styles.rankText}>#{index + 1}</Text>
       </View>
+
+      {failedImages.has(product.id) ? (
+        <View style={[styles.productImage, { justifyContent: 'center', alignItems: 'center' }]}>
+          <Ionicons name="image-outline" size={40} color="#ccc" />
+        </View>
+      ) : (
+        <Image 
+          source={{ uri: product.image }}
+          style={styles.productImage}
+          resizeMode="contain"
+          onError={() => handleImageError(product.id)}
+        />
+      )}
 
       <View style={styles.productHeader}>
         <Text style={[styles.productTitle, { color: textColor }]} numberOfLines={2}>
@@ -103,14 +153,20 @@ export default function ShoppingIntelligenceScreen() {
         {product.reasoning}
       </Text>
 
-      <TouchableOpacity 
-        style={styles.viewButton}
-        onPress={() => {
-          // Open URL
-        }}
-      >
-        <Text style={styles.viewButtonText}>View Deal</Text>
-      </TouchableOpacity>
+      <View style={styles.buttonRow}>
+        <TouchableOpacity 
+          style={[styles.viewButton, { flex: 1, marginRight: 8 }]}
+          onPress={() => handleViewDeal(product.url)}
+        >
+          <Text style={styles.viewButtonText}>View Deal</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.shareButton]}
+          onPress={() => handleShareDeal(product)}
+        >
+          <Ionicons name="share-social" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -189,6 +245,7 @@ function ScoreBox({ label, score, color }: { label: string; score: number; color
 }
 
 const styles = StyleSheet.create({
+  productImage: { width: '100%', height: 240, borderRadius: 8, marginBottom: 12, backgroundColor: '#f0f0f0', resizeMode: 'contain' },
   container: { flex: 1 },
   content: { padding: 16 },
   header: { alignItems: 'center', marginBottom: 24, marginTop: 12 },
@@ -199,17 +256,17 @@ const styles = StyleSheet.create({
   searchButton: { padding: 12, backgroundColor: '#FF7A00', justifyContent: 'center', alignItems: 'center', borderRadius: 8, margin: 4 },
   resultsSummary: { marginBottom: 16 },
   summaryText: { fontSize: 14, fontWeight: '600' },
-  productCard: { borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#eee' },
+  productCard: { borderRadius: 12, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: '#eee' },
   rankBadge: { position: 'absolute', top: 12, right: 12, backgroundColor: '#FF7A00', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   rankText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  productHeader: { marginBottom: 12 },
+  productHeader: { marginBottom: 8 },
   productTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
   store: { fontSize: 12, color: '#999', fontWeight: '600' },
   priceSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   price: { fontSize: 28, fontWeight: '900', color: '#FF7A00' },
   discount: { backgroundColor: '#FF7A00', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   discountText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  scoresGrid: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 },
+  scoresGrid: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
   scoreBox: { alignItems: 'center' },
   scoreCircle: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
   scoreNumber: { fontWeight: '700', fontSize: 16 },
@@ -217,6 +274,8 @@ const styles = StyleSheet.create({
   reasoning: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
   viewButton: { backgroundColor: '#FF7A00', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   viewButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  buttonRow: { flexDirection: 'row', alignItems: 'center' },
+  shareButton: { backgroundColor: '#FF7A00', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   errorBox: { padding: 12, borderRadius: 8, marginBottom: 16 },
   errorText: { color: '#000', fontSize: 14, fontWeight: '600' },
   emptyState: { paddingVertical: 40, alignItems: 'center' },
