@@ -816,6 +816,7 @@ const styles = StyleSheet.create({
   },
 
   hero: {
+    paddingTop: 60,
     width: '100%',
     height: width * 0.68,
     position: 'relative',
