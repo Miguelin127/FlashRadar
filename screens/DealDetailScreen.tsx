@@ -237,7 +237,7 @@ export default function DealDetailScreen() {
             <Image
               source={{ uri: imageUrl }}
               style={styles.heroImage}
-              resizeMode="cover"
+              resizeMode="contain"
               onError={() => setImageError(true)}
             />
           ) : (
