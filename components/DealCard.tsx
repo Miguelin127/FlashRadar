@@ -7,8 +7,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
 
-/* ─── Types ──────────────────────────────────────────────────── */
-
 export type Deal = {
   id: string;
   title: string;
@@ -50,8 +48,6 @@ type Props = {
   compact?: boolean;
 };
 
-/* ─── Helpers ────────────────────────────────────────────────── */
-
 const ACCENT = "#FF7A00";
 
 function getScoreColor(score: number) {
@@ -75,19 +71,12 @@ function resolveImage(deal: Deal): string | null {
   return dbImage;
 }
 
-/* ─── Component ──────────────────────────────────────────────── */
-
-const handleShare = (deal: any) => {
-  const message = `Check out this deal on FlashRadar!
-
-${deal.title}
-${deal.price} (${deal.discountPercent}% OFF)
-${deal.store}
-
-${deal.url || deal.affiliateUrl}
-
-Find more: https://flashradarapp.com`;
-  Share.share({ message, title: 'Share Deal' }).catch(console.error);
+const handleShare = (deal: Deal) => {
+  const deepLink = `https://flashradarapp.com/deal/${deal.id}`;
+  const price = deal.price ? `$${deal.price.toFixed(2)}` : 'See deal';
+  const discount = deal.discountPercent ? `${deal.discountPercent}% OFF` : '';
+  const message = `🎉 Amazing Deal Found!\n\n${deal.title}\n💰 ${price} (${discount})\n🏪 ${deal.store || 'Retailer'}\n\n📱 View on FlashRadar:\n${deepLink}\n\n💾 Download App: https://flashradarapp.com\n\n⚡ Get exclusive deals before they're gone!`;
+  Share.share({ message, title: 'Amazing Deal on FlashRadar' }).catch(console.error);
 };
 
 export default function DealCard({
@@ -155,7 +144,6 @@ export default function DealCard({
     Linking.openURL(dealUrl);
   };
 
-  // ── COMPACT / GRID MODE ───────────────────────────────────────
   if (compact) {
     return (
       <Pressable
@@ -167,7 +155,6 @@ export default function DealCard({
           { backgroundColor: darkMode ? "#0f0f0f" : "#fff" },
         ]}
       >
-        {/* Discount badge */}
         {(deal.discountPercent ?? 0) > 0 && !isExpired && (
           <View style={cs.discountTag}>
             <Text style={cs.discountTagText}>-{deal.discountPercent}%</Text>
@@ -179,7 +166,6 @@ export default function DealCard({
           </View>
         )}
 
-        {/* Image */}
         <View style={cs.imageWrap}>
           {displayImage && !imageError ? (
             <Image
@@ -194,7 +180,6 @@ export default function DealCard({
             </View>
           )}
 
-          {/* Save */}
           <TouchableOpacity
             onPress={onSaveToggle ?? toggleFavorite}
             disabled={saving}
@@ -206,17 +191,13 @@ export default function DealCard({
             }
           </TouchableOpacity>
 
-
-
-          {/* Share button - bottom right */}
           <TouchableOpacity
-            onPress={handleShare}
+            onPress={() => handleShare(deal)}
             style={{ position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(255, 122, 0, 0.8)', width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' }}
           >
             <Ionicons name="share-social" size={14} color="#fff" />
           </TouchableOpacity>
 
-        {/* Badge strip */}
           <View style={cs.badgeRow}>
             {isExpired && <View style={[cs.badge, { backgroundColor: "#555" }]}><Text style={cs.badgeTxt}>EXPIRED</Text></View>}
             {!isExpired && isJustIn && <View style={[cs.badge, { backgroundColor: "#2563eb" }]}><Text style={cs.badgeTxt}>JUST IN</Text></View>}
@@ -225,7 +206,6 @@ export default function DealCard({
           </View>
         </View>
 
-        {/* Content */}
         <View style={cs.content}>
           <Text style={[cs.store, { color: darkMode ? "#888" : "#999" }]}>
             {(deal.store || "").toUpperCase()}
@@ -269,7 +249,6 @@ export default function DealCard({
     );
   }
 
-  // ── FULL / LIST MODE ─────────────────────────────────────────
   return (
     <Pressable
       onPress={isExpired ? () => {} : onPress}
@@ -280,7 +259,6 @@ export default function DealCard({
         { backgroundColor: darkMode ? "#09090b" : "#fff" },
       ]}
     >
-      {/* IMAGE */}
       <View style={fs.imageWrap}>
         {displayImage && !imageError ? (
           <Image
@@ -331,9 +309,15 @@ export default function DealCard({
             : <Ionicons name={localSaved ? "heart" : "heart-outline"} size={16} color={localSaved ? "#ef4444" : "#fff"} />
           }
         </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => handleShare(deal)}
+          style={fs.shareBtn}
+        >
+          <Ionicons name="share-social" size={16} color="#fff" />
+        </TouchableOpacity>
       </View>
 
-      {/* CONTENT */}
       <View style={[fs.content, { backgroundColor: darkMode ? "#09090b" : "#fff" }]}>
         <View style={fs.metaRow}>
           <View style={fs.storeBadge}>
@@ -412,8 +396,6 @@ export default function DealCard({
   );
 }
 
-/* ─── Compact Styles ─────────────────────────────────────────── */
-
 const cs = StyleSheet.create({
   card: {
     borderRadius: 10, overflow: "hidden", borderWidth: 1,
@@ -470,8 +452,6 @@ const cs = StyleSheet.create({
   grabText: { color: "#000", fontWeight: "900", fontSize: 10 },
 });
 
-/* ─── Full / List Styles ─────────────────────────────────────── */
-
 const fs = StyleSheet.create({
   card: {
     borderRadius: 12, overflow: "hidden", marginBottom: 10,
@@ -495,6 +475,11 @@ const fs = StyleSheet.create({
   badgeText: { color: "#fff", fontSize: 8, fontWeight: "900", letterSpacing: 0.5 },
   saveBtn: {
     position: "absolute", top: 8, left: 8,
+    backgroundColor: "rgba(0,0,0,0.3)", borderRadius: 999, padding: 7,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+  },
+  shareBtn: {
+    position: "absolute", top: 8, right: 50,
     backgroundColor: "rgba(0,0,0,0.3)", borderRadius: 999, padding: 7,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
   },

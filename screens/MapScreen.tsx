@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Alert, Share } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { db } from '../firebaseConfig';
@@ -38,7 +38,6 @@ const STORE_ID_MAP: { [key: string]: string } = {
   'best buy': 'bestbuy',
   'bestbuy': 'bestbuy',
   'cvs': 'cvs',
-  'walgreens': 'walgreens',
   'home depot': 'homedepot',
   'homedepot': 'homedepot',
 };
@@ -54,27 +53,13 @@ const getStoreId = (storeName: string): string | null => {
 
 const isValidDealForStore = (dealUrl: string, storeId: string): boolean => {
   const url = dealUrl.toLowerCase();
-  
   if (url.includes('amazon')) return false;
-  
   if (storeId === 'walmart' && url.includes('walmart')) return true;
   if (storeId === 'target' && url.includes('target')) return true;
   if (storeId === 'bestbuy' && url.includes('bestbuy')) return true;
   if (storeId === 'cvs' && url.includes('cvs')) return true;
   if (storeId === 'homedepot' && url.includes('homedepot')) return true;
-  
   return false;
-};
-
-const isHomepage = (url: string): boolean => {
-  const normalized = url.toLowerCase();
-  return normalized === 'https://www.walmart.com/' || 
-         normalized === 'https://www.target.com/' ||
-         normalized === 'https://www.bestbuy.com/' ||
-         normalized === 'https://www.cvs.com/' ||
-         normalized === 'https://www.homedepot.com/' ||
-         normalized.endsWith('.com/') ||
-         normalized.endsWith('.com');
 };
 
 export default function MapScreen() {
@@ -85,13 +70,27 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    initLocation();
+  }, []);
+
+  useEffect(() => {
     fetchDeals();
   }, []);
+
+  const initLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        await Location.getCurrentPositionAsync({});
+      }
+    } catch (error) {
+      console.warn('Location error:', error);
+    }
+  };
 
   const fetchDeals = async () => {
     try {
       setLoading(true);
-
       const [liveSnaps, instoreSnaps] = await Promise.all([
         db.collection('deals_live').limit(500).get(),
         db.collection('deals_instore').limit(500).get(),
@@ -100,7 +99,6 @@ export default function MapScreen() {
       const dealsData: Deal[] = [...liveSnaps.docs, ...instoreSnaps.docs]
         .map(doc => {
           const data = doc.data();
-          const url = data.url || data.affiliateUrl || data.merchantUrl || '';
           return {
             id: doc.id,
             title: data.title || '',
@@ -108,18 +106,13 @@ export default function MapScreen() {
             originalPrice: data.originalPrice || 0,
             discountPercent: data.discountPercent || 0,
             storeName: data.store || '',
-            dealUrl: url,
+            dealUrl: data.url || data.affiliateUrl || data.merchantUrl || '',
           };
         })
         .filter(d => {
           if (d.price <= 0) return false;
-          if (!d.dealUrl) return false;
           if (d.dealUrl.toLowerCase().includes('amazon')) return false;
           if (d.storeName.toLowerCase().includes('amazon')) return false;
-          if (isHomepage(d.dealUrl)) {
-            console.log(`REJECTED HOMEPAGE: "${d.title}" → ${d.dealUrl}`);
-            return false;
-          }
           const discount = ((d.originalPrice - d.price) / d.originalPrice) * 100;
           if (discount < 40) return false;
           const storeId = getStoreId(d.storeName);
@@ -127,11 +120,6 @@ export default function MapScreen() {
           if (!isValidDealForStore(d.dealUrl, storeId)) return false;
           return true;
         });
-
-      console.log(`Loaded ${dealsData.length} valid deals`);
-      dealsData.forEach(d => {
-        console.log(`DEAL: "${d.title}" → URL: ${d.dealUrl}`);
-      });
 
       setAllDeals(dealsData);
       setLoading(false);
@@ -161,6 +149,24 @@ export default function MapScreen() {
       await Linking.openURL(url);
     } catch (error) {
       Alert.alert('Error', 'Could not open directions');
+    }
+  };
+
+  const handleShareDeal = async (dealId: string, dealTitle: string, dealPrice: number, dealDiscount: number, dealStore: string) => {
+    console.log(`SHARE CLICKED: ID=${dealId}, Title=${dealTitle}, Price=${dealPrice}`);
+    try {
+      const deepLink = `https://flashradarapp.com/deal/${dealId}`;
+      const message = `🎉 Amazing Deal Found!\n\n${dealTitle}\n💰 $${dealPrice.toFixed(2)} (${dealDiscount}% OFF)\n🏪 ${dealStore}\n\n📱 View on FlashRadar:\n${deepLink}\n\n💾 Download App: https://flashradarapp.com\n\n⚡ Get exclusive deals before they're gone!`;
+      
+      console.log('Message:', message);
+      
+      await Share.share({
+        message,
+        url: deepLink,
+        title: 'Amazing Deal on FlashRadar',
+      });
+    } catch (error) {
+      console.error('Share error:', error);
     }
   };
 
@@ -251,17 +257,11 @@ export default function MapScreen() {
                   {storeDeal.length} Deals
                 </Text>
                 {storeDeal.map(deal => (
-                  <TouchableOpacity
-                    key={deal.id}
-                    onPress={() => {
-                      if (deal.dealUrl) Linking.openURL(deal.dealUrl);
-                    }}
-                    style={{ backgroundColor: cardBg, borderRadius: 8, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#ddd' }}
-                  >
+                  <View key={deal.id} style={{ backgroundColor: cardBg, borderRadius: 8, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#ddd' }}>
                     <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 12, marginBottom: 6 }} numberOfLines={2}>
                       {deal.title}
                     </Text>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <View>
                         <Text style={{ color: '#FF7A00', fontWeight: 'bold', fontSize: 14 }}>
                           ${deal.price.toFixed(2)}
@@ -274,7 +274,27 @@ export default function MapScreen() {
                         {deal.discountPercent}% OFF
                       </Text>
                     </View>
-                  </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity
+                        style={{ flex: 1, backgroundColor: '#FF7A00', padding: 8, borderRadius: 6 }}
+                        onPress={() => {
+                          if (deal.dealUrl) Linking.openURL(deal.dealUrl);
+                        }}
+                      >
+                        <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold', fontSize: 11 }}>
+                          View Deal
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ flex: 1, backgroundColor: '#2196F3', padding: 8, borderRadius: 6 }}
+                        onPress={() => handleShareDeal(deal.id, deal.title, deal.price, deal.discountPercent, deal.storeName)}
+                      >
+                        <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold', fontSize: 11 }}>
+                          Share
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 ))}
               </>
             )}
