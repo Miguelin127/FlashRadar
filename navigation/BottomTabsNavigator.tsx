@@ -7,7 +7,7 @@ import { firebase } from "../firebaseConfig";
 import { getStrings } from "../utils/strings";
 
 import RadarScreen from "../screens/RadarScreen";
-import ExploreScreen from "../screens/ExploreScreen";
+import ExploreStackNavigator from "./ExploreStackNavigator";
 import FavoritesScreen from "../screens/FavoritesScreen";
 import MapScreen from "../screens/MapScreen";
 import FlipItScreen from "../screens/FlipItScreen";
@@ -69,7 +69,7 @@ export default function BottomTabsNavigator() {
       })}
     >
       <Tab.Screen name="Radar" component={RadarScreen} options={{ title: t.tabs.radar }} />
-      <Tab.Screen name="Explore" component={ExploreScreen} options={{ title: t.tabs.explore }} />
+      <Tab.Screen name="Explore" component={ExploreStackNavigator} options={{ title: t.tabs.explore }} />
       <Tab.Screen name="Favorites" component={FavoritesScreen} options={{ title: t.tabs.favorites }} />
       <Tab.Screen name="Shopping" component={ShoppingIntelligenceScreen} options={{ title: 'Shopping' }} />
       {isAdmin ? <Tab.Screen name="Map" component={MapScreen} options={{ title: t.tabs.map }} /> : null}
