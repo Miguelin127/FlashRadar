@@ -1,90 +1,92 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Alert, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Alert } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { db } from '../firebaseConfig';
 import { useTheme } from '../context/ThemeContext';
 
-interface StoreLocation {
+type MapStore = {
   id: string;
-  retailer: string;
-  name: string;
+  storeName: string;
   address: string;
-  city: string;
-  state: string;
   latitude: number;
   longitude: number;
-}
+};
 
-interface Deal {
+type Deal = {
   id: string;
   title: string;
   price: number;
   originalPrice: number;
   discountPercent: number;
-  image: string;
-  store: string;
-  url?: string;
-  affiliateUrl?: string;
-  merchantUrl?: string;
-}
+  storeName: string;
+  dealUrl: string;
+};
 
-const CANONICAL_STORES: StoreLocation[] = [
-  { id: 'walmart-01', retailer: 'Walmart', name: 'Walmart', address: '4650 W North Ave', city: 'Chicago', state: 'IL', latitude: 41.9094, longitude: -87.7123 },
-  { id: 'target-01', retailer: 'Target', name: 'Target', address: '830 N State St', city: 'Chicago', state: 'IL', latitude: 41.8847, longitude: -87.6191 },
-  { id: 'bestbuy-01', retailer: 'Best Buy', name: 'Best Buy', address: '540 N Michigan Ave', city: 'Chicago', state: 'IL', latitude: 41.8906, longitude: -87.6188 },
-  { id: 'cvs-01', retailer: 'CVS', name: 'CVS', address: '100 E Chicago Ave', city: 'Chicago', state: 'IL', latitude: 41.8781, longitude: -87.6298 },
-  { id: 'walgreens-01', retailer: 'Walgreens', name: 'Walgreens', address: '757 N Michigan Ave', city: 'Chicago', state: 'IL', latitude: 41.8850, longitude: -87.6300 },
-  { id: 'homedepot-01', retailer: 'Home Depot', name: 'Home Depot', address: '2151 W 35th St', city: 'Chicago', state: 'IL', latitude: 41.7435, longitude: -87.5640 },
+const MAP_STORES: MapStore[] = [
+  { id: 'walmart', storeName: 'Walmart', address: '4650 W North Ave, Chicago, IL 60639', latitude: 41.9094, longitude: -87.7123 },
+  { id: 'target', storeName: 'Target', address: '830 N State St, Chicago, IL 60610', latitude: 41.8847, longitude: -87.6191 },
+  { id: 'bestbuy', storeName: 'Best Buy', address: '540 N Michigan Ave, Chicago, IL 60611', latitude: 41.8906, longitude: -87.6188 },
+  { id: 'cvs', storeName: 'CVS', address: '100 E Chicago Ave, Chicago, IL 60611', latitude: 41.8781, longitude: -87.6298 },
+  { id: 'homedepot', storeName: 'Home Depot', address: '2151 W 35th St, Chicago, IL 60609', latitude: 41.7435, longitude: -87.5640 },
 ];
 
-const STORE_ALIASES: { [key: string]: string } = {
-  'walmart': 'Walmart',
-  'target': 'Target',
-  'best buy': 'Best Buy',
-  'bestbuy': 'Best Buy',
-  'cvs': 'CVS',
-  'walgreens': 'Walgreens',
-  'home depot': 'Home Depot',
-  'homedepot': 'Home Depot',
+const STORE_ID_MAP: { [key: string]: string } = {
+  'walmart': 'walmart',
+  'walmart supercenter': 'walmart',
+  'target': 'target',
+  'best buy': 'bestbuy',
+  'bestbuy': 'bestbuy',
+  'cvs': 'cvs',
+  'walgreens': 'walgreens',
+  'home depot': 'homedepot',
+  'homedepot': 'homedepot',
 };
 
-const normalizeStoreName = (storeName: string): string => {
-  return storeName.toLowerCase().trim().replace('.com', '').replace(' store', '');
+const normalizeStoreName = (name: string): string => {
+  return name.toLowerCase().trim().replace('.com', '').replace(' store', '');
 };
 
-const getCanonicalStoreName = (storeName: string): string | null => {
+const getStoreId = (storeName: string): string | null => {
   const normalized = normalizeStoreName(storeName);
-  return STORE_ALIASES[normalized] || null;
+  return STORE_ID_MAP[normalized] || null;
+};
+
+const isValidDealForStore = (dealUrl: string, storeId: string): boolean => {
+  const url = dealUrl.toLowerCase();
+  
+  if (url.includes('amazon')) return false;
+  
+  if (storeId === 'walmart' && url.includes('walmart')) return true;
+  if (storeId === 'target' && url.includes('target')) return true;
+  if (storeId === 'bestbuy' && url.includes('bestbuy')) return true;
+  if (storeId === 'cvs' && url.includes('cvs')) return true;
+  if (storeId === 'homedepot' && url.includes('homedepot')) return true;
+  
+  return false;
+};
+
+const isHomepage = (url: string): boolean => {
+  const normalized = url.toLowerCase();
+  return normalized === 'https://www.walmart.com/' || 
+         normalized === 'https://www.target.com/' ||
+         normalized === 'https://www.bestbuy.com/' ||
+         normalized === 'https://www.cvs.com/' ||
+         normalized === 'https://www.homedepot.com/' ||
+         normalized.endsWith('.com/') ||
+         normalized.endsWith('.com');
 };
 
 export default function MapScreen() {
   const { darkMode } = useTheme();
-  const [userLocation, setUserLocation] = useState({ latitude: 41.8781, longitude: -87.6298 });
   const [allDeals, setAllDeals] = useState<Deal[]>([]);
-  const [selectedStore, setSelectedStore] = useState<StoreLocation | null>(null);
-  const [storeDeal, setStoreDeals] = useState<Deal[]>([]);
+  const [selectedStore, setSelectedStore] = useState<MapStore | null>(null);
+  const [storeDeal, setStoreDeal] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    initLocation();
-  }, []);
 
   useEffect(() => {
     fetchDeals();
   }, []);
-
-  const initLocation = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
-        setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-      }
-    } catch (error) {
-      console.warn('Location error:', error);
-    }
-  };
 
   const fetchDeals = async () => {
     try {
@@ -98,30 +100,37 @@ export default function MapScreen() {
       const dealsData: Deal[] = [...liveSnaps.docs, ...instoreSnaps.docs]
         .map(doc => {
           const data = doc.data();
+          const url = data.url || data.affiliateUrl || data.merchantUrl || '';
           return {
             id: doc.id,
             title: data.title || '',
             price: data.price || 0,
             originalPrice: data.originalPrice || 0,
             discountPercent: data.discountPercent || 0,
-            image: data.image || '',
-            store: data.store || '',
-            url: data.url || '',
-            affiliateUrl: data.affiliateUrl || '',
-            merchantUrl: data.merchantUrl || '',
+            storeName: data.store || '',
+            dealUrl: url,
           };
         })
         .filter(d => {
           if (d.price <= 0) return false;
-          if (d.store.toLowerCase().includes('amazon')) return false;
+          if (!d.dealUrl) return false;
+          if (d.dealUrl.toLowerCase().includes('amazon')) return false;
+          if (d.storeName.toLowerCase().includes('amazon')) return false;
+          if (isHomepage(d.dealUrl)) {
+            console.log(`REJECTED HOMEPAGE: "${d.title}" → ${d.dealUrl}`);
+            return false;
+          }
           const discount = ((d.originalPrice - d.price) / d.originalPrice) * 100;
-          return discount >= 40;
+          if (discount < 40) return false;
+          const storeId = getStoreId(d.storeName);
+          if (!storeId) return false;
+          if (!isValidDealForStore(d.dealUrl, storeId)) return false;
+          return true;
         });
 
-      console.log('Loaded deals:', dealsData.length);
+      console.log(`Loaded ${dealsData.length} valid deals`);
       dealsData.forEach(d => {
-        const canonical = getCanonicalStoreName(d.store);
-        console.log(`DEAL MATCH: "${d.title}" storeName: ${d.store} canonical: ${canonical}`);
+        console.log(`DEAL: "${d.title}" → URL: ${d.dealUrl}`);
       });
 
       setAllDeals(dealsData);
@@ -132,22 +141,22 @@ export default function MapScreen() {
     }
   };
 
-  const getStoreDeals = (store: StoreLocation): Deal[] => {
-    return allDeals.filter(deal => {
-      const canonical = getCanonicalStoreName(deal.store);
-      return canonical === store.retailer;
-    });
+  const getStoreDealCount = (storeId: string): number => {
+    return allDeals.filter(d => getStoreId(d.storeName) === storeId).length;
   };
 
-  const handleStoreSelect = (store: StoreLocation) => {
+  const getStoreDeals = (storeId: string): Deal[] => {
+    return allDeals.filter(d => getStoreId(d.storeName) === storeId);
+  };
+
+  const handleStoreSelect = (store: MapStore) => {
     setSelectedStore(store);
-    const deals = getStoreDeals(store);
-    setStoreDeals(deals);
-    console.log(`Selected ${store.retailer}: ${deals.length} deals`);
+    const deals = getStoreDeals(store.id);
+    setStoreDeal(deals);
   };
 
-  const handleGetDirections = async (store: StoreLocation) => {
-    const url = `https://maps.apple.com/?daddr=${store.latitude},${store.longitude}&saddr=${userLocation.latitude},${userLocation.longitude}`;
+  const handleGetDirections = async (store: MapStore) => {
+    const url = `https://maps.apple.com/?daddr=${store.latitude},${store.longitude}`;
     try {
       await Linking.openURL(url);
     } catch (error) {
@@ -172,15 +181,15 @@ export default function MapScreen() {
       <MapView
         style={{ flex: selectedStore ? 0.5 : 1 }}
         initialRegion={{
-          latitude: userLocation.latitude,
-          longitude: userLocation.longitude,
+          latitude: 41.8781,
+          longitude: -87.6298,
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         }}
       >
-        {CANONICAL_STORES.map(store => {
-          const dealCount = getStoreDeals(store).length;
-          return (
+        {MAP_STORES.map(store => {
+          const dealCount = getStoreDealCount(store.id);
+          return dealCount > 0 ? (
             <Marker
               key={store.id}
               coordinate={{ latitude: store.latitude, longitude: store.longitude }}
@@ -202,7 +211,7 @@ export default function MapScreen() {
                 </Text>
               </View>
             </Marker>
-          );
+          ) : null;
         })}
       </MapView>
 
@@ -212,7 +221,7 @@ export default function MapScreen() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
               <View>
                 <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 18 }}>
-                  {selectedStore.retailer}
+                  {selectedStore.storeName}
                 </Text>
                 <Text style={{ color: '#999', fontSize: 11, marginTop: 4 }}>
                   {selectedStore.address}
@@ -239,14 +248,13 @@ export default function MapScreen() {
             ) : (
               <>
                 <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 14, marginBottom: 10 }}>
-                  {storeDeal.length} Deals Available
+                  {storeDeal.length} Deals
                 </Text>
                 {storeDeal.map(deal => (
                   <TouchableOpacity
                     key={deal.id}
                     onPress={() => {
-                      const url = deal.affiliateUrl || deal.merchantUrl || deal.url;
-                      if (url) Linking.openURL(url);
+                      if (deal.dealUrl) Linking.openURL(deal.dealUrl);
                     }}
                     style={{ backgroundColor: cardBg, borderRadius: 8, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#ddd' }}
                   >
