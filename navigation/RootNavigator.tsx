@@ -4,6 +4,7 @@ import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../context/AuthContext";
 
+import DealDetailScreen from "../screens/DealDetailScreen";
 import BottomTabsNavigator from "./BottomTabsNavigator";
 import FlipScannerScreen from "../screens/FlipScannerScreen";
 import FlipHistoryScreen from "../screens/FlipHistoryScreen";
