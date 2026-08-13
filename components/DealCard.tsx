@@ -72,7 +72,8 @@ function resolveImage(deal: Deal): string | null {
 }
 
 const handleShare = (deal: Deal) => {
-  const deepLink = `https://flashradarapp.com/deal/${deal.id}`;
+  const encodedId = encodeURIComponent(deal.id);
+  const deepLink = `https://flashradarapp.com/deal/${encodedId}`;
   const price = deal.price ? `$${deal.price.toFixed(2)}` : 'See deal';
   const discount = deal.discountPercent ? `${deal.discountPercent}% OFF` : '';
   const message = `🎉 Amazing Deal Found!\n\n${deal.title}\n💰 ${price} (${discount})\n🏪 ${deal.store || 'Retailer'}\n\n📱 View on FlashRadar:\n${deepLink}\n\n💾 Download App: https://flashradarapp.com\n\n⚡ Get exclusive deals before they're gone!`;
