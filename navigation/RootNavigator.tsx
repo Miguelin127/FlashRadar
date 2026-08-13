@@ -5,7 +5,6 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../context/AuthContext";
 
 import BottomTabsNavigator from "./BottomTabsNavigator";
-import DealDetailScreen from "../screens/DealDetailScreen";
 import FlipScannerScreen from "../screens/FlipScannerScreen";
 import FlipHistoryScreen from "../screens/FlipHistoryScreen";
 import FlipItResultScreen from "../screens/FlipItResultScreen";
@@ -48,7 +47,6 @@ export default function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={BottomTabsNavigator} />
-      <Stack.Screen name="DealDetail" component={DealDetailScreen as any} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="FlipScanner" component={FlipScannerScreen} />
       <Stack.Screen name="FlipHistory" component={FlipHistoryScreen} />
