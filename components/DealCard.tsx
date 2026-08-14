@@ -385,7 +385,7 @@ export default function DealCard({
                 >
                   {blurred
                     ? <><Ionicons name="lock-closed-outline" size={13} color="#888" /><Text style={[fs.grabText, { color: "#888" }]}>PREMIUM</Text></>
-                    : <><Text style={fs.grabText}>GRAB DEAL</Text><Iconicons name="arrow-forward" size={13} color="#000" /></>
+                    : <><Text style={fs.grabText}>GRAB DEAL</Text><Ionicons name="arrow-forward" size={13} color="#000" /></>
                   }
                 </TouchableOpacity>
               </>

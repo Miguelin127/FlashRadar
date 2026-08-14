@@ -6,7 +6,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { firebase } from "../firebaseConfig";
 import { getStrings } from "../utils/strings";
 
-import RadarScreen from "../screens/RadarScreen";
+import RadarStackNavigator from "./RadarStackNavigator";
 import ExploreStackNavigator from "./ExploreStackNavigator";
 import FavoritesScreen from "../screens/FavoritesScreen";
 import MapScreen from "../screens/MapScreen";
@@ -68,7 +68,7 @@ export default function BottomTabsNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Radar" component={RadarScreen} options={{ title: t.tabs.radar }} />
+      <Tab.Screen name="Radar" component={RadarStackNavigator} options={{ title: t.tabs.radar }} />
       <Tab.Screen name="Explore" component={ExploreStackNavigator} options={{ title: t.tabs.explore }} />
       <Tab.Screen name="Favorites" component={FavoritesScreen} options={{ title: t.tabs.favorites }} />
       <Tab.Screen name="Shopping" component={ShoppingIntelligenceScreen} options={{ title: 'Shopping' }} />
