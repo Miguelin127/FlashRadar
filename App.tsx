@@ -35,6 +35,20 @@ async function captureAndSaveLocation(uid: string) {
 }
 
 function AppWithTheme() {
+
+async function saveFCMToken(uid: string) {
+  try {
+    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    await db.collection("users").doc(uid).set({
+      fcmToken: token,
+      notificationPreferences: {},
+      fcmTokenUpdatedAt: new Date(),
+    }, { merge: true });
+    console.log("[Push] FCM token saved");
+  } catch (e) {
+    console.warn("[Push] Failed to save token:", e);
+  }
+}
   const { darkMode } = useTheme();
   return (
     <NavigationContainer theme={darkMode ? DarkTheme : DefaultTheme}>
