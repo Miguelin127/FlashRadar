@@ -12,7 +12,7 @@ import FavoritesScreen from "../screens/FavoritesScreen";
 import MapScreen from "../screens/MapScreen";
 import FlipItScreen from "../screens/FlipItScreen";
 import CreatorDashboard from "../screens/CreatorDashboard";
-import SettingsScreen from "../screens/SettingsScreen";
+import SettingsStackNavigator from "./SettingsStackNavigator";
 import ShoppingIntelligenceScreen from "../screens/ShoppingIntelligenceScreen";
 
 export type RootTabParamList = {
@@ -77,7 +77,7 @@ export default function BottomTabsNavigator() {
       {isPremium && (
         <Tab.Screen name="Creator" component={CreatorDashboard} options={{ title: t.tabs.creator }} />
       )}
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t.tabs.settings }} />
+      <Tab.Screen name="Settings" component={SettingsStackNavigator} options={{ title: t.tabs.settings }} />
     </Tab.Navigator>
   );
 }
