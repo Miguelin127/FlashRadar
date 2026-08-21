@@ -221,6 +221,9 @@ export default function SettingsScreen() {
           <Text style={[styles.toggleText, { color: colors.text }]}>{t.settings.pushNotifications}</Text>
           <TogglePill value={notificationsEnabled} onToggle={handleToggleNotifications} />
         </View>
+        <TouchableOpacity style={styles.button} onPress={() => navigation.navigate("NotificationPreferences")}>
+          <Text style={styles.buttonText}>Notification Preferences</Text>
+        </TouchableOpacity>
         <View style={styles.toggleRow}>
           <Text style={[styles.toggleText, { color: colors.text }]}>{t.settings.darkMode}</Text>
           <TogglePill value={darkMode} onToggle={() => toggleTheme()} />
