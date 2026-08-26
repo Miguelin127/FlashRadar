@@ -255,7 +255,7 @@ export default function MapScreen() {
         </View>
       </View>
 
-      {showSearchButton && (
+      {showSearchButton && !selected && (
         <TouchableOpacity 
           style={styles.searchBtn}
           onPress={handleSearchThisArea}
