@@ -5,7 +5,8 @@ import * as Location from 'expo-location';
 import { db } from '../firebaseConfig';
 import { collection, getDocs } from 'firebase/firestore';
 import { useTheme } from '../context/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
+
+const PHYSICAL_STORES = ['walmart', 'target', 'best buy', 'cvs', 'home depot', 'sephora', 'nike', "victoria's secret", 'walgreens', 'lowes', 'staples', 'costco'];
 
 interface Store {
   id: string;
@@ -40,17 +41,20 @@ export default function MapScreen() {
         longitudeDelta: 0.1,
       });
 
-      // Fetch stores from deals
       const dealsSnap = await getDocs(collection(db, 'deals_live'));
       const storeMap = new Map<string, { deals: number; lat: number; lng: number }>();
 
       dealsSnap.forEach(doc => {
         const data = doc.data();
-        if (data.store) {
-          const existing = storeMap.get(data.store) || { deals: 0, lat: latitude + Math.random() * 0.05, lng: longitude + Math.random() * 0.05 };
-          existing.deals += 1;
-          storeMap.set(data.store, existing);
-        }
+        if (!data.store) return;
+        
+        // Only include physical retail stores
+        const isPhysical = PHYSICAL_STORES.some(s => data.store.toLowerCase().includes(s));
+        if (!isPhysical) return;
+
+        const existing = storeMap.get(data.store) || { deals: 0, lat: latitude + Math.random() * 0.05, lng: longitude + Math.random() * 0.05 };
+        existing.deals += 1;
+        storeMap.set(data.store, existing);
       });
 
       const storeList = Array.from(storeMap.entries()).map(([id, data]) => ({
@@ -62,7 +66,7 @@ export default function MapScreen() {
       }));
 
       setStores(storeList);
-      console.log('Stores loaded:', storeList.length);
+      console.log('Physical stores loaded:', storeList.length);
     } catch (error) {
       console.error('Map error:', error);
     }
