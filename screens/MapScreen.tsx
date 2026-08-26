@@ -1,3 +1,4 @@
+import { getDealRetailer } from '../utils/getDealRetailer';
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, FlatList, Linking, ActivityIndicator } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
@@ -58,13 +59,15 @@ export default function MapScreen() {
   const fetchDealsForStore = async (storeName: string) => {
     setLoadingDeals(true);
     try {
-      const normalizedStore = normalizeRetailer(storeName);
-      const dealsSnap = await getDocs(collection(db, 'deals_live'));
+      const normalizedStore = storeName.toLowerCase().replace(/.com|.ca/g, "").trim();
+      const dealsSnap = await getDocs(collection(db, "deals_live"));
       
       const deals: Deal[] = [];
       dealsSnap.forEach(doc => {
         const data = doc.data();
-        if (data.store && normalizeRetailer(data.store).includes(normalizedStore)) {
+        const dealRetailer = getDealRetailer(data);
+        
+        if (dealRetailer === normalizedStore) {
           deals.push({
             id: doc.id,
             title: data.title,
@@ -80,14 +83,18 @@ export default function MapScreen() {
             merchantUrl: data.merchantUrl,
             url: data.url,
           });
+        } else if (dealRetailer !== normalizedStore) {
+          console.warn("Retailer mismatch:", doc.id, data.store, dealRetailer);
         }
       });
 
       setSelectedDeals(deals);
     } catch (error) {
-      console.error('Error fetching deals:', error);
+      console.error("Error fetching deals:", error);
     } finally {
       setLoadingDeals(false);
+    }
+  };
     }
   };
 
@@ -187,7 +194,7 @@ export default function MapScreen() {
   };
 
   const handleViewDeal = (deal: Deal) => {
-    navigation.navigate('DealDetail', { deal, dealId: deal.id });
+    navigation.navigate('Explore', { screen: 'DealDetail', params: { deal } });
   };
 
   const handleShowDeals = async (store: PhysicalStore) => {
