@@ -1,32 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, Linking, ActivityIndicator } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { db } from '../firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 
-interface Deal {
-  id: string;
-  title: string;
-  store: string;
-  price: number;
-  address?: string;
-  latitude?: number;
-  longitude?: number;
-  discountPercent?: number;
-  imageUrl?: string;
-}
+const GOOGLE_API_KEY = 'AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc';
+const STORE_TYPES = ['Target', 'Walmart', 'Best Buy', 'CVS', 'Home Depot', 'Walgreens', 'Sephora'];
 
 interface PhysicalStore {
   id: string;
+  name: string;
   address: string;
   latitude: number;
   longitude: number;
-  retailer: string;
-  dealCount: number;
-  deals: Deal[];
 }
 
 export default function MapScreen() {
@@ -34,15 +21,66 @@ export default function MapScreen() {
   const [region, setRegion] = useState<any>(null);
   const [stores, setStores] = useState<PhysicalStore[]>([]);
   const [selected, setSelected] = useState<PhysicalStore | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     initMap();
   }, []);
 
+  const fetchStoresNearLocation = async (latitude: number, longitude: number) => {
+    try {
+      const allStores: PhysicalStore[] = [];
+
+      for (const storeType of STORE_TYPES) {
+        const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': GOOGLE_API_KEY,
+            'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.formattedAddress',
+          },
+          body: JSON.stringify({
+            textQuery: storeType,
+            maxResultCount: 5,
+            locationBias: {
+              circle: {
+                center: { latitude, longitude },
+                radius: 20000.0,
+              },
+            },
+          }),
+        });
+
+        const data = await res.json();
+        if (data.places) {
+          data.places.forEach((place: any) => {
+            allStores.push({
+              id: place.id,
+              name: place.displayName?.text || storeType,
+              address: place.formattedAddress || '',
+              latitude: place.location?.latitude || 0,
+              longitude: place.location?.longitude || 0,
+            });
+          });
+        }
+      }
+
+      setStores(allStores);
+      console.log('Real stores loaded:', allStores.length);
+    } catch (error) {
+      console.error('Error fetching stores:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const initMap = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      if (status !== 'granted') {
+        setLoading(false);
+        return;
+      }
 
       const loc = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = loc.coords;
@@ -54,49 +92,10 @@ export default function MapScreen() {
         longitudeDelta: 0.1,
       });
 
-      // Fetch REAL deal locations from Firestore
-      const dealsSnap = await getDocs(collection(db, 'deals_live'));
-      const storeMap = new Map<string, PhysicalStore>();
-
-      dealsSnap.forEach(doc => {
-        const data = doc.data() as Deal;
-        
-        // Only use deals with real physical addresses and coordinates
-        if (!data.address || data.latitude === undefined || data.longitude === undefined) {
-          console.log('Skipping deal - missing address or coordinates:', data.title);
-          return;
-        }
-
-        // Validate coordinates are reasonable
-        if (data.latitude === 0 || data.longitude === 0) {
-          console.log('Skipping store - invalid coordinates (0,0):', data.address);
-          return;
-        }
-
-        const key = `${data.latitude},${data.longitude}`;
-        const existing = storeMap.get(key);
-
-        if (existing) {
-          existing.dealCount += 1;
-          existing.deals.push(data);
-        } else {
-          storeMap.set(key, {
-            id: key,
-            address: data.address,
-            latitude: data.latitude,
-            longitude: data.longitude,
-            retailer: data.store,
-            dealCount: 1,
-            deals: [data],
-          });
-        }
-      });
-
-      const storeList = Array.from(storeMap.values());
-      setStores(storeList);
-      console.log('Physical stores loaded:', storeList.length);
+      await fetchStoresNearLocation(latitude, longitude);
     } catch (error) {
       console.error('Map error:', error);
+      setLoading(false);
     }
   };
 
@@ -108,6 +107,15 @@ export default function MapScreen() {
     });
   };
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: darkMode ? '#000' : '#fff' }}>
+        <ActivityIndicator size="large" color="#FF7A00" />
+        <Text style={{ color: darkMode ? '#fff' : '#000', marginTop: 12 }}>Loading stores...</Text>
+      </View>
+    );
+  }
+
   if (!region) return <View style={{ flex: 1 }} />;
 
   return (
@@ -117,8 +125,7 @@ export default function MapScreen() {
           <Marker
             key={store.id}
             coordinate={{ latitude: store.latitude, longitude: store.longitude }}
-            title={store.retailer}
-            description={`${store.dealCount} deals`}
+            title={store.name}
             pinColor="#FF7A00"
             onPress={() => setSelected(store)}
           />
@@ -131,39 +138,12 @@ export default function MapScreen() {
             <Ionicons name="close" size={24} color={darkMode ? '#fff' : '#000'} />
           </TouchableOpacity>
 
-          <Text style={[styles.retailer, { color: darkMode ? '#fff' : '#000' }]}>
-            {selected.retailer}
+          <Text style={[styles.name, { color: darkMode ? '#fff' : '#000' }]}>
+            {selected.name}
           </Text>
           <Text style={[styles.address, { color: darkMode ? '#aaa' : '#666' }]}>
             {selected.address}
           </Text>
-
-          <Text style={[styles.dealsHeader, { color: darkMode ? '#fff' : '#000' }]}>
-            🔥 {selected.dealCount} FlashRadar Deals
-          </Text>
-
-          <FlatList
-            data={selected.deals.slice(0, 3)}
-            keyExtractor={item => item.id}
-            scrollEnabled={false}
-            renderItem={({ item }) => (
-              <View style={[styles.dealItem, { borderBottomColor: darkMode ? '#333' : '#eee' }]}>
-                <Text style={[styles.dealTitle, { color: darkMode ? '#fff' : '#000' }]}>
-                  {item.title}
-                </Text>
-                <View style={styles.dealRow}>
-                  <Text style={[styles.price, { color: '#FF7A00' }]}>
-                    ${item.price}
-                  </Text>
-                  {item.discountPercent && (
-                    <Text style={[styles.discount, { color: '#22c55e' }]}>
-                      {item.discountPercent}% OFF
-                    </Text>
-                  )}
-                </View>
-              </View>
-            )}
-          />
 
           <TouchableOpacity style={styles.directionBtn} onPress={() => openDirections(selected)}>
             <Ionicons name="navigate" size={16} color="#fff" />
@@ -184,21 +164,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 16,
-    maxHeight: '50%',
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 5,
   },
   closeBtn: { alignSelf: 'flex-end', marginBottom: 8 },
-  retailer: { fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
-  address: { fontSize: 13, marginBottom: 12 },
-  dealsHeader: { fontSize: 14, fontWeight: '700', marginBottom: 12 },
-  dealItem: { paddingVertical: 10, borderBottomWidth: 1 },
-  dealTitle: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
-  dealRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  price: { fontSize: 14, fontWeight: 'bold' },
-  discount: { fontSize: 11, fontWeight: '700' },
-  directionBtn: { flexDirection: 'row', backgroundColor: '#FF7A00', paddingVertical: 12, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginTop: 12, gap: 8 },
+  name: { fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
+  address: { fontSize: 14, marginBottom: 16 },
+  directionBtn: { flexDirection: 'row', backgroundColor: '#FF7A00', paddingVertical: 12, borderRadius: 8, justifyContent: 'center', alignItems: 'center', gap: 8 },
   directionText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
 });
