@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, Linking, ActivityIndicator, TextInput } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useTheme } from '../context/ThemeContext';
@@ -10,7 +10,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { getDealRetailer } from '../utils/getDealRetailer';
 
 const GOOGLE_API_KEY = 'AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc';
-const STORE_TYPES = ['Target', 'Walmart', 'Best Buy', 'CVS', 'Home Depot', 'Walgreens', 'Sephora'];
+const STORE_TYPES = ['Target', 'Walmart', 'Best Buy', 'CVS', 'Home Depot', 'Walgreens', 'Sephora', 'Nike', 'Amazon', 'eBay'];
 
 interface PhysicalStore {
   id: string;
@@ -47,6 +47,8 @@ export default function MapScreen() {
   const [showSearchButton, setShowSearchButton] = useState(false);
   const [selectedDeals, setSelectedDeals] = useState<Deal[]>([]);
   const [loadingDeals, setLoadingDeals] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     initMap();
@@ -79,8 +81,6 @@ export default function MapScreen() {
             merchantUrl: data.merchantUrl,
             url: data.url,
           });
-        } else if (dealRetailer !== normalizedStore) {
-          console.warn('Retailer mismatch:', doc.id, data.store, dealRetailer);
         }
       });
 
@@ -92,11 +92,12 @@ export default function MapScreen() {
     }
   };
 
-  const fetchStoresNearLocation = async (latitude: number, longitude: number) => {
+  const fetchStoresNearLocation = async (latitude: number, longitude: number, query?: string) => {
     try {
       const allStores: PhysicalStore[] = [];
+      const storeTypesToSearch = query ? [query] : STORE_TYPES;
 
-      for (const storeType of STORE_TYPES) {
+      for (const storeType of storeTypesToSearch) {
         const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
           method: 'POST',
           headers: {
@@ -150,6 +151,7 @@ export default function MapScreen() {
 
       const loc = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = loc.coords;
+      setUserLocation({ latitude, longitude });
 
       const newRegion = {
         latitude,
@@ -177,6 +179,12 @@ export default function MapScreen() {
       setLoading(true);
       await fetchStoresNearLocation(mapRegion.latitude, mapRegion.longitude);
     }
+  };
+
+  const handleSearchStore = async () => {
+    if (!searchQuery.trim() || !userLocation) return;
+    setLoading(true);
+    await fetchStoresNearLocation(userLocation.latitude, userLocation.longitude, searchQuery);
   };
 
   const openDirections = (store: PhysicalStore) => {
@@ -227,6 +235,25 @@ export default function MapScreen() {
           />
         ))}
       </MapView>
+
+      <View style={[styles.searchContainer, { backgroundColor: darkMode ? '#111' : '#fff' }]}>
+        <View style={[styles.searchInput, { borderColor: darkMode ? '#333' : '#e0e0e0' }]}>
+          <Ionicons name="search" size={18} color="#FF7A00" />
+          <TextInput
+            placeholder="Search stores (Nike, CVS, Target...)"
+            placeholderTextColor={darkMode ? '#666' : '#999'}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearchStore}
+            style={[styles.input, { color: darkMode ? '#fff' : '#000' }]}
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color="#FF7A00" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
 
       {showSearchButton && (
         <TouchableOpacity 
@@ -302,9 +329,36 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
+  searchContainer: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    right: 16,
+    zIndex: 10,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  searchInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    height: 40,
+    fontSize: 14,
+  },
   searchBtn: {
     position: 'absolute',
-    top: 60,
+    bottom: 100,
     alignSelf: 'center',
     backgroundColor: '#FF7A00',
     paddingHorizontal: 16,
