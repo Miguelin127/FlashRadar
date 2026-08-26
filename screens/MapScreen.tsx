@@ -6,7 +6,18 @@ import { db } from '../firebaseConfig';
 import { collection, getDocs } from 'firebase/firestore';
 import { useTheme } from '../context/ThemeContext';
 
-const PHYSICAL_STORES = ['walmart', 'target', 'best buy', 'cvs', 'home depot', 'sephora', 'nike', "victoria's secret", 'walgreens', 'lowes', 'staples', 'costco'];
+const STORE_LOCATIONS: { [key: string]: { lat: number; lng: number } } = {
+  'walmart': { lat: 41.8950, lng: -87.6500 },
+  'target': { lat: 41.8847, lng: -87.6191 },
+  'best buy': { lat: 41.8906, lng: -87.6188 },
+  'cvs': { lat: 41.8781, lng: -87.6298 },
+  'home depot': { lat: 41.7435, lng: -87.5640 },
+  'sephora': { lat: 41.8839, lng: -87.6278 },
+  'walgreens': { lat: 41.8800, lng: -87.6300 },
+  'lowes': { lat: 41.7500, lng: -87.5500 },
+};
+
+const PHYSICAL_STORES = Object.keys(STORE_LOCATIONS);
 
 interface Store {
   id: string;
@@ -42,28 +53,30 @@ export default function MapScreen() {
       });
 
       const dealsSnap = await getDocs(collection(db, 'deals_live'));
-      const storeMap = new Map<string, { deals: number; lat: number; lng: number }>();
+      const storeMap = new Map<string, number>();
 
       dealsSnap.forEach(doc => {
         const data = doc.data();
         if (!data.store) return;
-        
-        // Only include physical retail stores
+
         const isPhysical = PHYSICAL_STORES.some(s => data.store.toLowerCase().includes(s));
         if (!isPhysical) return;
 
-        const existing = storeMap.get(data.store) || { deals: 0, lat: latitude + Math.random() * 0.05, lng: longitude + Math.random() * 0.05 };
-        existing.deals += 1;
-        storeMap.set(data.store, existing);
+        storeMap.set(data.store, (storeMap.get(data.store) || 0) + 1);
       });
 
-      const storeList = Array.from(storeMap.entries()).map(([id, data]) => ({
-        id,
-        name: id,
-        latitude: data.lat,
-        longitude: data.lng,
-        deals: data.deals,
-      }));
+      const storeList = Array.from(storeMap.entries())
+        .filter(([name]) => STORE_LOCATIONS[name.toLowerCase()])
+        .map(([name, deals]) => {
+          const coords = STORE_LOCATIONS[name.toLowerCase()];
+          return {
+            id: name,
+            name,
+            latitude: coords.lat,
+            longitude: coords.lng,
+            deals,
+          };
+        });
 
       setStores(storeList);
       console.log('Physical stores loaded:', storeList.length);
