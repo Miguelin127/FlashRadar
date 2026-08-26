@@ -331,7 +331,7 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   searchContainer: {
     position: 'absolute',
-    top: 16,
+    top: 70,
     left: 16,
     right: 16,
     zIndex: 10,
