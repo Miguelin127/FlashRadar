@@ -1,4 +1,3 @@
-import { getDealRetailer } from '../utils/getDealRetailer';
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, FlatList, Linking, ActivityIndicator } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
@@ -7,7 +6,8 @@ import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { db } from '../firebaseConfig';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
+import { getDealRetailer } from '../utils/getDealRetailer';
 
 const GOOGLE_API_KEY = 'AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc';
 const STORE_TYPES = ['Target', 'Walmart', 'Best Buy', 'CVS', 'Home Depot', 'Walgreens', 'Sephora'];
@@ -52,21 +52,17 @@ export default function MapScreen() {
     initMap();
   }, []);
 
-  const normalizeRetailer = (name: string): string => {
-    return name.toLowerCase().replace(/\.com|\.ca/g, '').trim();
-  };
-
   const fetchDealsForStore = async (storeName: string) => {
     setLoadingDeals(true);
     try {
-      const normalizedStore = storeName.toLowerCase().replace(/.com|.ca/g, "").trim();
-      const dealsSnap = await getDocs(collection(db, "deals_live"));
-      
+      const normalizedStore = storeName.toLowerCase().replace(/\.com|\.ca/g, '').trim();
+      const dealsSnap = await getDocs(collection(db, 'deals_live'));
+
       const deals: Deal[] = [];
       dealsSnap.forEach(doc => {
         const data = doc.data();
         const dealRetailer = getDealRetailer(data);
-        
+
         if (dealRetailer === normalizedStore) {
           deals.push({
             id: doc.id,
@@ -84,17 +80,15 @@ export default function MapScreen() {
             url: data.url,
           });
         } else if (dealRetailer !== normalizedStore) {
-          console.warn("Retailer mismatch:", doc.id, data.store, dealRetailer);
+          console.warn('Retailer mismatch:', doc.id, data.store, dealRetailer);
         }
       });
 
       setSelectedDeals(deals);
     } catch (error) {
-      console.error("Error fetching deals:", error);
+      console.error('Error fetching deals:', error);
     } finally {
       setLoadingDeals(false);
-    }
-  };
     }
   };
 
