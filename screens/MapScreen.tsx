@@ -1,306 +1,167 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Alert, Share } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { db } from '../firebaseConfig';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useTheme } from '../context/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 
-type MapStore = {
+interface Store {
   id: string;
   storeName: string;
   address: string;
   latitude: number;
   longitude: number;
-};
+  dealCount?: number;
+}
 
-type Deal = {
-  id: string;
-  title: string;
-  price: number;
-  originalPrice: number;
-  discountPercent: number;
-  storeName: string;
-  dealUrl: string;
-};
-
-const MAP_STORES: MapStore[] = [
-  { id: 'walmart', storeName: 'Walmart', address: '4650 W North Ave, Chicago, IL 60639', latitude: 41.9094, longitude: -87.7123 },
-  { id: 'target', storeName: 'Target', address: '830 N State St, Chicago, IL 60610', latitude: 41.8847, longitude: -87.6191 },
-  { id: 'bestbuy', storeName: 'Best Buy', address: '540 N Michigan Ave, Chicago, IL 60611', latitude: 41.8906, longitude: -87.6188 },
-  { id: 'cvs', storeName: 'CVS', address: '100 E Chicago Ave, Chicago, IL 60611', latitude: 41.8781, longitude: -87.6298 },
-  { id: 'homedepot', storeName: 'Home Depot', address: '2151 W 35th St, Chicago, IL 60609', latitude: 41.7435, longitude: -87.5640 },
-];
-
-const STORE_ID_MAP: { [key: string]: string } = {
-  'walmart': 'walmart',
-  'walmart supercenter': 'walmart',
-  'target': 'target',
-  'best buy': 'bestbuy',
-  'bestbuy': 'bestbuy',
-  'cvs': 'cvs',
-  'home depot': 'homedepot',
-  'homedepot': 'homedepot',
-};
-
-const normalizeStoreName = (name: string): string => {
-  return name.toLowerCase().trim().replace('.com', '').replace(' store', '');
-};
-
-const getStoreId = (storeName: string): string | null => {
-  const normalized = normalizeStoreName(storeName);
-  return STORE_ID_MAP[normalized] || null;
-};
-
-const isValidDealForStore = (dealUrl: string, storeId: string): boolean => {
-  const url = dealUrl.toLowerCase();
-  if (url.includes('amazon')) return false;
-  if (storeId === 'walmart' && url.includes('walmart')) return true;
-  if (storeId === 'target' && url.includes('target')) return true;
-  if (storeId === 'bestbuy' && url.includes('bestbuy')) return true;
-  if (storeId === 'cvs' && url.includes('cvs')) return true;
-  if (storeId === 'homedepot' && url.includes('homedepot')) return true;
-  return false;
-};
-
-export default function MapScreen() {
+export default function MapScreen({ navigation }: any) {
   const { darkMode } = useTheme();
-  const [allDeals, setAllDeals] = useState<Deal[]>([]);
-  const [selectedStore, setSelectedStore] = useState<MapStore | null>(null);
-  const [storeDeal, setStoreDeal] = useState<Deal[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
 
   useEffect(() => {
-    initLocation();
+    initializeMap();
   }, []);
 
-  useEffect(() => {
-    fetchDeals();
-  }, []);
-
-  const initLocation = async () => {
+  const initializeMap = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        await Location.getCurrentPositionAsync({});
+      if (status !== 'granted') {
+        console.warn('Location permission denied');
+        return;
       }
+
+      const location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+      setUserLocation({ latitude, longitude });
+
+      await fetchStoresNearLocation(latitude, longitude);
     } catch (error) {
-      console.warn('Location error:', error);
-    }
-  };
-
-  const fetchDeals = async () => {
-    try {
-      setLoading(true);
-      const [liveSnaps, instoreSnaps] = await Promise.all([
-        db.collection('deals_live').limit(500).get(),
-        db.collection('deals_instore').limit(500).get(),
-      ]);
-
-      const dealsData: Deal[] = [...liveSnaps.docs, ...instoreSnaps.docs]
-        .map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            title: data.title || '',
-            price: data.price || 0,
-            originalPrice: data.originalPrice || 0,
-            discountPercent: data.discountPercent || 0,
-            storeName: data.store || '',
-            dealUrl: data.url || data.affiliateUrl || data.merchantUrl || '',
-          };
-        })
-        .filter(d => {
-          if (d.price <= 0) return false;
-          if (d.dealUrl.toLowerCase().includes('amazon')) return false;
-          if (d.storeName.toLowerCase().includes('amazon')) return false;
-          const discount = ((d.originalPrice - d.price) / d.originalPrice) * 100;
-          if (discount < 40) return false;
-          const storeId = getStoreId(d.storeName);
-          if (!storeId) return false;
-          if (!isValidDealForStore(d.dealUrl, storeId)) return false;
-          return true;
-        });
-
-      setAllDeals(dealsData);
-      setLoading(false);
-    } catch (error) {
-      console.error('Fetch error:', error);
+      console.error('Error initializing map:', error);
+    } finally {
       setLoading(false);
     }
   };
 
-  const getStoreDealCount = (storeId: string): number => {
-    return allDeals.filter(d => getStoreId(d.storeName) === storeId).length;
-  };
-
-  const getStoreDeals = (storeId: string): Deal[] => {
-    return allDeals.filter(d => getStoreId(d.storeName) === storeId);
-  };
-
-  const handleStoreSelect = (store: MapStore) => {
-    setSelectedStore(store);
-    const deals = getStoreDeals(store.id);
-    setStoreDeal(deals);
-  };
-
-  const handleGetDirections = async (store: MapStore) => {
-    const url = `https://maps.apple.com/?daddr=${store.latitude},${store.longitude}`;
+  const fetchStoresNearLocation = async (latitude: number, longitude: number) => {
     try {
-      await Linking.openURL(url);
-    } catch (error) {
-      Alert.alert('Error', 'Could not open directions');
-    }
-  };
-
-  const handleShareDeal = async (dealId: string, dealTitle: string, dealPrice: number, dealDiscount: number, dealStore: string) => {
-    console.log(`SHARE CLICKED: ID=${dealId}, Title=${dealTitle}, Price=${dealPrice}`);
-    try {
-      const deepLink = `https://flashradarapp.com/deal/${dealId}`;
-      const message = `🎉 Amazing Deal Found!\n\n${dealTitle}\n💰 $${dealPrice.toFixed(2)} (${dealDiscount}% OFF)\n🏪 ${dealStore}\n\n📱 View on FlashRadar:\n${deepLink}\n\n💾 Download App: https://flashradarapp.com\n\n⚡ Get exclusive deals before they're gone!`;
+      const dealsSnap = await getDocs(collection(db, 'deals_live'));
       
-      console.log('Message:', message);
+      // Extract unique stores from deals
+      const storeMap = new Map<string, { name: string; count: number; lat?: number; lng?: number }>();
       
-      await Share.share({
-        message,
-        url: deepLink,
-        title: 'Amazing Deal on FlashRadar',
+      dealsSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.store) {
+          const existing = storeMap.get(data.store) || { name: data.store, count: 0 };
+          existing.count += 1;
+          if (data.latitude && data.longitude) {
+            existing.lat = data.latitude;
+            existing.lng = data.longitude;
+          }
+          storeMap.set(data.store, existing);
+        }
       });
+
+      // Convert to Store objects (use geocoding for locations without coords)
+      const storeList: Store[] = Array.from(storeMap.entries()).map(([id, data]) => ({
+        id,
+        storeName: data.name,
+        address: data.name,
+        latitude: data.lat || latitude + (Math.random() - 0.5) * 0.1,
+        longitude: data.lng || longitude + (Math.random() - 0.5) * 0.1,
+        dealCount: data.count,
+      }));
+
+      setStores(storeList);
     } catch (error) {
-      console.error('Share error:', error);
+      console.error('Error fetching stores:', error);
     }
   };
-
-  const bgColor = darkMode ? '#000' : '#fff';
-  const textColor = darkMode ? '#fff' : '#000';
-  const cardBg = darkMode ? '#1a1a1a' : '#f5f5f5';
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: bgColor }}>
-        <ActivityIndicator size="large" color="#FF7A00" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: darkMode ? '#000' : '#fff' }}>
+        <Text>Loading map...</Text>
       </View>
     );
   }
 
+  const mapRegion = userLocation ? {
+    latitude: userLocation.latitude,
+    latitudeDelta: 0.15,
+    longitude: userLocation.longitude,
+    longitudeDelta: 0.15,
+  } : undefined;
+
   return (
-    <View style={{ flex: 1, backgroundColor: bgColor }}>
-      <MapView
-        style={{ flex: selectedStore ? 0.5 : 1 }}
-        initialRegion={{
-          latitude: 41.8781,
-          longitude: -87.6298,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-      >
-        {MAP_STORES.map(store => {
-          const dealCount = getStoreDealCount(store.id);
-          return dealCount > 0 ? (
+    <View style={{ flex: 1 }}>
+      {mapRegion && (
+        <MapView
+          style={StyleSheet.absoluteFillObject}
+          initialRegion={mapRegion}
+          showsUserLocation
+          showsMyLocationButton
+        >
+          {stores.map(store => (
             <Marker
               key={store.id}
               coordinate={{ latitude: store.latitude, longitude: store.longitude }}
-              onPress={() => handleStoreSelect(store)}
-            >
-              <View style={{
-                backgroundColor: '#FF7A00',
-                borderRadius: 50,
-                padding: 10,
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 60,
-                height: 60,
-                borderWidth: 2,
-                borderColor: '#fff',
-              }}>
-                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
-                  {dealCount}
-                </Text>
-              </View>
-            </Marker>
-          ) : null;
-        })}
-      </MapView>
+              title={store.storeName}
+              description={`${store.dealCount || 0} deals`}
+              onPress={() => setSelectedStore(store)}
+            />
+          ))}
+        </MapView>
+      )}
 
       {selectedStore && (
-        <View style={{ flex: 0.5, backgroundColor: bgColor, borderTopWidth: 2, borderTopColor: '#FF7A00' }}>
-          <ScrollView style={{ padding: 15 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-              <View>
-                <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 18 }}>
-                  {selectedStore.storeName}
-                </Text>
-                <Text style={{ color: '#999', fontSize: 11, marginTop: 4 }}>
-                  {selectedStore.address}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setSelectedStore(null)}>
-                <Text style={{ fontSize: 24, color: textColor }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={{ backgroundColor: '#2196F3', padding: 12, borderRadius: 8, marginBottom: 15 }}
-              onPress={() => handleGetDirections(selectedStore)}
-            >
-              <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold' }}>
-                🚗 Get Directions
-              </Text>
-            </TouchableOpacity>
-
-            {storeDeal.length === 0 ? (
-              <Text style={{ color: '#999', textAlign: 'center', marginTop: 20 }}>
-                No deals at this location
-              </Text>
-            ) : (
-              <>
-                <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 14, marginBottom: 10 }}>
-                  {storeDeal.length} Deals
-                </Text>
-                {storeDeal.map(deal => (
-                  <View key={deal.id} style={{ backgroundColor: cardBg, borderRadius: 8, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#ddd' }}>
-                    <Text style={{ color: textColor, fontWeight: 'bold', fontSize: 12, marginBottom: 6 }} numberOfLines={2}>
-                      {deal.title}
-                    </Text>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <View>
-                        <Text style={{ color: '#FF7A00', fontWeight: 'bold', fontSize: 14 }}>
-                          ${deal.price.toFixed(2)}
-                        </Text>
-                        <Text style={{ color: '#999', fontSize: 10, textDecorationLine: 'line-through' }}>
-                          ${deal.originalPrice.toFixed(2)}
-                        </Text>
-                      </View>
-                      <Text style={{ color: '#fff', backgroundColor: '#FF7A00', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, fontWeight: 'bold', fontSize: 11 }}>
-                        {deal.discountPercent}% OFF
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TouchableOpacity
-                        style={{ flex: 1, backgroundColor: '#FF7A00', padding: 8, borderRadius: 6 }}
-                        onPress={() => {
-                          if (deal.dealUrl) Linking.openURL(deal.dealUrl);
-                        }}
-                      >
-                        <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold', fontSize: 11 }}>
-                          View Deal
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={{ flex: 1, backgroundColor: '#2196F3', padding: 8, borderRadius: 6 }}
-                        onPress={() => handleShareDeal(deal.id, deal.title, deal.price, deal.discountPercent, deal.storeName)}
-                      >
-                        <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold', fontSize: 11 }}>
-                          Share
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </>
-            )}
-          </ScrollView>
+        <View style={[styles.bottomSheet, { backgroundColor: darkMode ? '#111' : '#fff' }]}>
+          <TouchableOpacity onPress={() => setSelectedStore(null)} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color={darkMode ? '#fff' : '#000'} />
+          </TouchableOpacity>
+          <Text style={[styles.storeName, { color: darkMode ? '#fff' : '#000' }]}>
+            {selectedStore.storeName}
+          </Text>
+          <Text style={[styles.dealCount, { color: darkMode ? '#aaa' : '#666' }]}>
+            {selectedStore.dealCount} deals available
+          </Text>
+          <TouchableOpacity
+            style={styles.viewDealsButton}
+            onPress={() => {
+              navigation.navigate('Explore', { filter: selectedStore.storeName });
+              setSelectedStore(null);
+            }}
+          >
+            <Text style={styles.viewDealsText}>View Deals</Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  closeButton: { alignSelf: 'flex-end', marginBottom: 10 },
+  storeName: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
+  dealCount: { fontSize: 14, marginBottom: 15 },
+  viewDealsButton: { backgroundColor: '#FF7A00', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  viewDealsText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+});
