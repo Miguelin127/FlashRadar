@@ -72,7 +72,6 @@ export default function BottomTabsNavigator() {
       <Tab.Screen name="Explore" component={ExploreStackNavigator} options={{ title: t.tabs.explore }} />
       <Tab.Screen name="Favorites" component={FavoritesScreen} options={{ title: t.tabs.favorites }} />
       <Tab.Screen name="Shopping" component={ShoppingIntelligenceScreen} options={{ title: 'Shopping' }} />
-      {/*isAdmin ? <Tab.Screen name="Map" component={MapScreen} options={{ title: t.tabs.map }} /> : null}
       <Tab.Screen name="FlipIt" component={FlipItScreen} options={{ title: t.tabs.flipit }} />
       {isPremium && (
         <Tab.Screen name="Creator" component={CreatorDashboard} options={{ title: t.tabs.creator }} />

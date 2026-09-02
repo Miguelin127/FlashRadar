@@ -41,12 +41,22 @@ interface SearchResult {
   results: RankedProduct[];
 }
 
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
+
 export default function ShoppingIntelligenceScreen() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<RankedProduct[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchInfo, setSearchInfo] = useState<SearchResult | null>(null);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
   const { theme } = useTheme();
 
   const bgColor = theme === 'dark' ? '#1a1a1a' : '#fff';
@@ -84,6 +94,7 @@ Find more deals: https://flashradarapp.com`;
     if (!query.trim()) return;
 
     setLoading(true);
+    setChatMessages([]);
     try {
       const uid = firebase.auth().currentUser?.uid;
       if (!uid) {
@@ -106,6 +117,58 @@ Find more deals: https://flashradarapp.com`;
       console.error('Search error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleChatSend = async () => {
+    if (!chatInput.trim() || !results || results.length === 0) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: chatInput,
+      timestamp: new Date(),
+    };
+
+    setChatMessages(prev => [...prev, userMessage]);
+    setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const uid = firebase.auth().currentUser?.uid;
+      if (!uid) return;
+
+      const productsContext = results.map(p => 
+        `${p.title} ($${p.price}, ${p.discountPercent}% off) from ${p.store}`
+      ).join('\n');
+
+      const response = await fetch(
+        'https://us-central1-flashradar-71c93.cloudfunctions.net/shopWithIntelligence',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `Previous search: "${query}". These products were found:\n${productsContext}\n\nFollow-up question: ${chatInput}`,
+            uid,
+            isFollowUp: true,
+          }),
+        }
+      );
+
+      const data = await response.json();
+      if (data.success && data.results && data.results[0]) {
+        const assistantMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.results[0].reasoning,
+          timestamp: new Date(),
+        };
+        setChatMessages(prev => [...prev, assistantMessage]);
+      }
+    } catch (error) {
+      console.error('Chat error:', error);
+    } finally {
+      setChatLoading(false);
     }
   };
 
@@ -170,6 +233,20 @@ Find more deals: https://flashradarapp.com`;
     </View>
   );
 
+  const renderChatBubble = (msg: ChatMessage) => (
+    <View key={msg.id} style={[
+      styles.chatBubble,
+      msg.role === 'user' ? styles.userBubble : styles.assistantBubble
+    ]}>
+      <Text style={[
+        styles.chatText,
+        msg.role === 'user' ? { color: '#fff' } : { color: textColor }
+      ]}>
+        {msg.content}
+      </Text>
+    </View>
+  );
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -218,6 +295,38 @@ Find more deals: https://flashradarapp.com`;
             </View>
 
             {results.map((product, index) => renderProductCard(product, index))}
+
+            <View style={[styles.chatContainer, { backgroundColor: cardBg }]}>
+              <Text style={[styles.chatTitle, { color: textColor }]}>Ask AI</Text>
+              
+              {chatMessages.length > 0 && (
+                <View style={styles.messagesBox}>
+                  {chatMessages.map(msg => renderChatBubble(msg))}
+                </View>
+              )}
+
+              <View style={[styles.chatInputContainer, { borderColor: '#ddd' }]}>
+                <TextInput
+                  style={[styles.chatInput, { color: textColor }]}
+                  placeholder="Ask about these deals..."
+                  placeholderTextColor="#999"
+                  value={chatInput}
+                  onChangeText={setChatInput}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={styles.chatButton}
+                  onPress={handleChatSend}
+                  disabled={chatLoading || !chatInput.trim()}
+                >
+                  {chatLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Ionicons name="send" size={18} color="#fff" />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         )}
 
@@ -245,7 +354,7 @@ function ScoreBox({ label, score, color }: { label: string; score: number; color
 }
 
 const styles = StyleSheet.create({
-  productImage: { width: '100%', height: 240, borderRadius: 8, marginBottom: 12, backgroundColor: '#f0f0f0', resizeMode: 'contain' },
+  productImage: { width: '100%', height: 240, borderRadius: 8, marginBottom: 12, backgroundColor: '#f0f0f0' },
   container: { flex: 1 },
   content: { padding: 16 },
   header: { alignItems: 'center', marginBottom: 24, marginTop: 12 },
@@ -280,4 +389,14 @@ const styles = StyleSheet.create({
   errorText: { color: '#000', fontSize: 14, fontWeight: '600' },
   emptyState: { paddingVertical: 40, alignItems: 'center' },
   emptyText: { fontSize: 14, textAlign: 'center' },
+  chatContainer: { borderRadius: 12, padding: 16, marginTop: 16, borderWidth: 1, borderColor: '#eee' },
+  chatTitle: { fontSize: 14, fontWeight: '700', marginBottom: 12 },
+  messagesBox: { maxHeight: 200, marginBottom: 12 },
+  chatBubble: { marginBottom: 8, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  userBubble: { backgroundColor: '#FF7A00', alignSelf: 'flex-end', maxWidth: '80%' },
+  assistantBubble: { backgroundColor: '#e0e0e0', alignSelf: 'flex-start', maxWidth: '80%' },
+  chatText: { fontSize: 13, lineHeight: 18 },
+  chatInputContainer: { flexDirection: 'row', borderWidth: 1, borderRadius: 8, alignItems: 'flex-end' },
+  chatInput: { flex: 1, padding: 10, fontSize: 14, maxHeight: 80 },
+  chatButton: { padding: 10, backgroundColor: '#FF7A00', borderRadius: 6, margin: 4 },
 });
