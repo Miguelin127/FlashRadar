@@ -38,6 +38,10 @@ type Props = {
   isLocked?: boolean;
   isPulsing?: boolean;
   theme?: "dark" | "light";
+  darkMode?: boolean;
+  compact?: boolean;
+  blurred?: boolean;
+  onPress?: () => void;
 };
 
 export default function DealCard({
