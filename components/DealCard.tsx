@@ -53,6 +53,10 @@ export default function DealCard({
   isLocked,
   isPulsing,
   theme = "dark",
+  darkMode,
+  compact,
+  blurred,
+  onPress,
 }: Props) {
   const { user } = useAuth();
   const [localSaved, setLocalSaved] = useState(!!deal.isSaved);
