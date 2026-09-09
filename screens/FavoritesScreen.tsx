@@ -246,7 +246,7 @@ export default function FavoritesScreen() {
             return (
               <DealCard
                 deal={item}
-                onToggleSave={() => {}}
+                onToggleSave={async () => {}}
                 distance={userLocation && item.latitude ? distanceMiles(userLocation, { latitude: item.latitude, longitude: item.longitude || 0 }) : null}
                 onOpenMaps={() => openMaps(item)}
                 onViewDeal={() => navigation.navigate("DealDetail" as never, { deal: item } as never)}
@@ -263,7 +263,7 @@ export default function FavoritesScreen() {
           keyExtractor={(i) => i.id}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
-            <View style={[styles.wishlistCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <View style={[styles.wishlistCard, { borderColor: colors.subtext, backgroundColor: colors.card }]}>
               <Image source={{ uri: item.imageUrl }} style={styles.wishImage} />
               <View style={styles.wishContent}>
                 <Text style={[styles.wishTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
@@ -273,7 +273,7 @@ export default function FavoritesScreen() {
                 <View style={styles.targetRow}>
                   <Text style={[styles.label, { color: colors.subtext }]}>Target:</Text>
                   <TextInput
-                    style={[styles.priceInput, { color: colors.text, borderColor: colors.border }]}
+                    style={[styles.priceInput, { color: colors.text, borderColor: colors.subtext }]}
                     keyboardType="decimal-pad"
                     placeholder="$0"
                     value={item.targetPrice ? item.targetPrice.toString() : ""}
