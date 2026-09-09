@@ -152,7 +152,7 @@ export default function DealCard({
             {deal.discountPercent ? <Text style={cs.discount}>{deal.discountPercent}% OFF</Text> : null}
           </View>
 
-          {distance !== null ? <Text style={cs.distance}>{distance.toFixed(1)} mi away</Text> : null}
+          {distance !== null           {distance !== null ? <Text style={cs.distance}>{distance.toFixed(1)} mi away</Text> : null}          {distance !== null ? <Text style={cs.distance}>{distance.toFixed(1)} mi away</Text> : null} distance !== undefined ? <Text style={cs.distance}>{distance.toFixed(1)} mi away</Text> : null}
         </View>
 
         <TouchableOpacity
