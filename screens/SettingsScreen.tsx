@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  ActivityIndicator, Switch, ScrollView, Share, Platform, Linking,
+  ActivityIndicator, Switch, ScrollView, Share, Platform, Linking, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +15,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import { useUser } from "../context/UserContext";
 import { registerForPushToken } from "../utils";
+import * as ImagePicker from "expo-image-picker";
 
 interface NotificationItem {
   id: string;
@@ -36,6 +37,8 @@ export default function SettingsScreen() {
   const [trialEnds, setTrialEnds] = useState<Date | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string>("");
 
   useEffect(() => {
     if (!user) return;
@@ -44,6 +47,8 @@ export default function SettingsScreen() {
       setTrialActive(!!d?.trialActive);
       setTrialEnds(d?.trialEnds?.toDate?.() ?? null);
       setNotificationsEnabled(!!d?.notificationsEnabled);
+      setProfilePhoto(d?.profilePhoto || null);
+      setDisplayName(d?.displayName || user.displayName || user.email?.split('@')[0] || 'User');
     });
     return () => unsub();
   }, [user]);
@@ -90,6 +95,30 @@ export default function SettingsScreen() {
     await Share.share({
       message: "🚀 Join me on FlashRadar and unlock powerful deal alerts: https://flashradarapp.com",
     });
+  };
+
+  const handleChangePhoto = async () => {
+    if (!user) return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        setLoading(true);
+        const uri = result.assets[0].uri;
+        await db.collection("users").doc(user.uid).update({ profilePhoto: uri });
+        setProfilePhoto(uri);
+        Alert.alert("Success", "Profile photo updated!");
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -194,6 +223,26 @@ export default function SettingsScreen() {
           )}
         </View>
 
+        <TouchableOpacity onPress={handleChangePhoto} style={[styles.card, { borderColor: colors.accent }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
+              {profilePhoto ? (
+                <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%', borderRadius: 40 }} />
+              ) : (
+                <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff' }}>
+                  {displayName.substring(0, 2).toUpperCase()}
+                </Text>
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>{displayName}</Text>
+              <Text style={{ color: '#888', fontSize: 12 }}>{user?.email}</Text>
+              {isAdmin && <Text style={{ color: '#FF7A00', fontSize: 11, fontWeight: '600', marginTop: 4 }}>👤 Admin</Text>}
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#888" />
+          </View>
+        </TouchableOpacity>
+
         {!isPremium && (
           <TouchableOpacity style={styles.button} onPress={handleUpgrade}>
             <Text style={styles.buttonText}>{t.settings.unlockPremium}</Text>
@@ -261,19 +310,6 @@ export default function SettingsScreen() {
           <Text style={styles.buttonText}>{t.settings.inviteFriends}</Text>
         </TouchableOpacity>
 
-        {isAdmin && (
-          <TouchableOpacity
-            onPress={() => navigation.navigate("AdminPostDeal")}
-            style={{ backgroundColor: "#FF7A00", padding: 14, borderRadius: 12, alignItems: "center", marginBottom: 10 }}
-          >
-            <Text style={{ color: "#000", fontWeight: "900", fontSize: 15 }}>{t.settings.postDeal}</Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity style={styles.logout} onPress={handleLogout}>
-          <Text style={styles.logoutText}>{t.settings.logout}</Text>
-        </TouchableOpacity>
-
         <TouchableOpacity style={styles.deleteAccount} onPress={handleDeleteAccount}>
           <Text style={styles.deleteAccountText}>{t.settings.deleteAccount}</Text>
         </TouchableOpacity>
@@ -290,21 +326,20 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  container: { padding: 20, paddingBottom: 120 },
-  header: { fontSize: 26, fontWeight: "900", textAlign: "center", marginBottom: 16 },
-  card: { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 16 },
-  cardTitle: { fontSize: 18, fontWeight: "800" },
-  sectionTitle: { fontSize: 18, fontWeight: "900", marginBottom: 6 },
-  notification: { paddingVertical: 8 },
-  unread: { backgroundColor: "rgba(255,122,0,0.10)", borderRadius: 8, padding: 8 },
-  button: { backgroundColor: "#FF7A00", padding: 14, borderRadius: 14, alignItems: "center", marginBottom: 12 },
-  buttonText: { color: "#fff", fontWeight: "900", fontSize: 18 },
-  toggleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginVertical: 12 },
-  toggleText: { fontSize: 18, fontWeight: "600" },
-  togglePill: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 999, paddingVertical: 8, paddingLeft: 14, paddingRight: 10, minWidth: 120, justifyContent: "space-between" },
-  pillLabel: { fontWeight: "900", fontSize: 16, letterSpacing: 0.5 },
-  logout: { borderWidth: 2, borderColor: "#FF3B30", padding: 14, borderRadius: 14, alignItems: "center", marginTop: 10 },
-  logoutText: { color: "#FF3B30", fontWeight: "900", fontSize: 18 },
+  container: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 },
+  header: { fontSize: 24, fontWeight: "900", marginBottom: 20 },
+  card: { marginBottom: 16, padding: 16, borderRadius: 12, borderWidth: 1 },
+  cardTitle: { fontSize: 16, fontWeight: "700" },
+  sectionTitle: { fontSize: 14, fontWeight: "700", marginBottom: 12 },
+  notification: { paddingVertical: 8, paddingHorizontal: 0, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.1)" },
+  unread: { backgroundColor: "rgba(255,122,0,0.05)" },
+  toggleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  toggleText: { fontSize: 14, fontWeight: "600" },
+  togglePill: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  pillLabel: { fontSize: 11, fontWeight: "700" },
+  button: { backgroundColor: "#FF7A00", paddingVertical: 14, borderRadius: 12, alignItems: "center", marginBottom: 12 },
+  buttonText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   deleteAccount: { padding: 14, borderRadius: 14, alignItems: "center", marginTop: 8 },
   deleteAccountText: { color: "#888", fontWeight: "600", fontSize: 14, textDecorationLine: "underline" },
+  avatar: { width: 80, height: 80, borderRadius: 40, justifyContent: "center", alignItems: "center" },
 });
