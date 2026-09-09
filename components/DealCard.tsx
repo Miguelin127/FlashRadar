@@ -9,7 +9,7 @@ type Deal = {
   title: string;
   store: string;
   storeKey?: string;
-  price: number;
+  price?: number;
   image?: string | null;
   imageUrl?: string | null;
   merchantUrl?: string;
@@ -94,12 +94,13 @@ export default function DealCard({
     try {
       if (!user) return;
       const targetPrice = parseFloat(wishlistPrice);
+      const currentPrice = deal.price || 0;
       const newItem = {
         id: deal.id,
         title: deal.title,
         imageUrl: deal.image || deal.imageUrl || "",
         url: deal.url || deal.affiliateUrl || deal.merchantUrl || "",
-        currentPrice: deal.price,
+        currentPrice,
         targetPrice,
         notifyWhenBelow: true,
         addedAt: new Date(),
@@ -129,6 +130,8 @@ export default function DealCard({
     }
   };
 
+  const safePrice = deal.price || 0;
+
   return (
     <>
       <View style={cs.card}>
@@ -145,11 +148,11 @@ export default function DealCard({
           <Text style={cs.store}>{deal.store}</Text>
           
           <View style={cs.priceRow}>
-            <Text style={cs.price}>${deal.price.toFixed(2)}</Text>
-            {deal.discountPercent && <Text style={cs.discount}>{deal.discountPercent}% OFF</Text>}
+            <Text style={cs.price}>${safePrice.toFixed(2)}</Text>
+            {deal.discountPercent ? <Text style={cs.discount}>{deal.discountPercent}% OFF</Text> : null}
           </View>
 
-          {distance !== null && <Text style={cs.distance}>{distance.toFixed(1)} mi away</Text>}
+          {distance !== null ? <Text style={cs.distance}>{distance.toFixed(1)} mi away</Text> : null}
         </View>
 
         <TouchableOpacity
@@ -165,7 +168,7 @@ export default function DealCard({
 
         <TouchableOpacity
           onPress={() => setShowWishlistModal(true)}
-          style={cs.saveBtn}
+          style={cs.saveBtnRight}
         >
           <Ionicons name="star-outline" size={13} color="#fff" />
         </TouchableOpacity>
@@ -188,7 +191,7 @@ export default function DealCard({
           <View style={cs.modalContent}>
             <Text style={cs.modalTitle}>Add to Wishlist</Text>
             <Text style={cs.modalSubtitle} numberOfLines={2}>{deal.title}</Text>
-            <Text style={cs.currentPrice}>Current: ${deal.price.toFixed(2)}</Text>
+            <Text style={cs.currentPrice}>Current: ${safePrice.toFixed(2)}</Text>
             
             <TextInput
               placeholder="Target price"
@@ -196,6 +199,7 @@ export default function DealCard({
               value={wishlistPrice}
               onChangeText={setWishlistPrice}
               style={cs.priceInput}
+              placeholderTextColor="#999"
             />
             
             <TouchableOpacity onPress={addToWishlist} style={cs.addBtn}>
@@ -231,6 +235,7 @@ const cs = StyleSheet.create({
   discount: { fontSize: 9, fontWeight: "700", color: "#22c55e", backgroundColor: "rgba(34,197,94,0.2)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   distance: { fontSize: 9, color: "#888" },
   saveBtn: { position: "absolute", top: 8, left: 8, backgroundColor: "rgba(255,122,0,0.8)", width: 28, height: 28, borderRadius: 14, justifyContent: "center", alignItems: "center" },
+  saveBtnRight: { position: "absolute", top: 8, right: 8, backgroundColor: "rgba(255,122,0,0.8)", width: 28, height: 28, borderRadius: 14, justifyContent: "center", alignItems: "center" },
   shareBtn: { position: "absolute", bottom: 8, right: 8, backgroundColor: "rgba(255,122,0,0.8)", width: 32, height: 32, borderRadius: 16, justifyContent: "center", alignItems: "center" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center" },
   modalContent: { backgroundColor: "#fff", borderRadius: 12, padding: 20, width: "80%", gap: 12 },
