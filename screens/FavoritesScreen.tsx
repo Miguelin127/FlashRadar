@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
-  FlatList, Animated, Platform, Linking,
+  FlatList, Animated, Platform, Linking, Image, TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -44,6 +44,17 @@ type Deal = {
   longitude?: number;
 };
 
+type WishlistItem = {
+  id: string;
+  title: string;
+  imageUrl: string;
+  url: string;
+  currentPrice: number;
+  targetPrice: number;
+  notifyWhenBelow: boolean;
+  addedAt: Date;
+};
+
 function distanceMiles(
   a: { latitude: number; longitude: number },
   b: { latitude: number; longitude: number }
@@ -64,6 +75,8 @@ export default function FavoritesScreen() {
   const { language } = useLanguage();
   const t = getStrings(language);
   const [favorites, setFavorites] = useState<Deal[]>([]);
+  const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
+  const [tab, setTab] = useState<"favorites" | "wishlist">("favorites");
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
@@ -87,7 +100,6 @@ export default function FavoritesScreen() {
       const user = auth.currentUser;
       if (!user) { setFavorites([]); setLoading(false); return; }
 
-      // ── Compat SDK ─────────────────────────────────────────────────────────
       const snap = await db
         .collection("users")
         .doc(user.uid)
@@ -104,39 +116,43 @@ export default function FavoritesScreen() {
     }
   };
 
-  useFocusEffect(useCallback(() => { fetchFavorites(); }, []));
-
-  const toggleSave = async (deal: Deal) => {
-    const user = auth.currentUser;
-    if (!user) return;
-    const ref = db.collection("users").doc(user.uid).collection("favorites").doc(deal.id);
+  const fetchWishlist = async () => {
     try {
-      if (deal.isSaved) {
-        await ref.delete();
-        setFavorites((prev) => prev.filter((d) => d.id !== deal.id));
-      } else {
-        await ref.set(deal, { merge: true });
-        setFavorites((prev) => [...prev, { ...deal, isSaved: true }]);
-      }
+      const user = auth.currentUser;
+      if (!user) { setWishlist([]); return; }
+      const snap = await db.collection("wishlists").doc(user.uid).get();
+      setWishlist(snap.data()?.items || []);
     } catch (err) {
-      console.error("Error toggling favorite:", err);
+      console.error("Error fetching wishlist:", err);
     }
   };
 
-  const clearAll = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-    for (const fav of favorites) {
-      await db.collection("users").doc(user.uid).collection("favorites").doc(fav.id).delete();
+  useFocusEffect(useCallback(() => { 
+    fetchFavorites(); 
+    fetchWishlist();
+  }, []));
+
+  const clearAll = () => {
+    if (tab === "favorites") {
+      setFavorites([]);
+      auth.currentUser && db.collection("users").doc(auth.currentUser.uid).collection("favorites").get().then((snap) => {
+        snap.docs.forEach((d) => d.ref.delete());
+      });
     }
-    setFavorites([]);
   };
 
-  const openDeal = async (deal: Deal) => {
-    // ── Affiliate URL first ───────────────────────────────────────────────────
-    const url = deal.affiliateUrl || deal.merchantUrl || deal.url;
-    if (!url) return;
-    try { await Linking.openURL(url); } catch (e) { console.warn(e); }
+  const removeWishlistItem = async (id: string) => {
+    if (!auth.currentUser) return;
+    const updated = wishlist.filter((i) => i.id !== id);
+    await db.collection("wishlists").doc(auth.currentUser.uid).set({ items: updated });
+    setWishlist(updated);
+  };
+
+  const updateWishlistTarget = async (id: string, targetPrice: number) => {
+    if (!auth.currentUser) return;
+    const updated = wishlist.map((i) => (i.id === id ? { ...i, targetPrice } : i));
+    await db.collection("wishlists").doc(auth.currentUser.uid).set({ items: updated });
+    setWishlist(updated);
   };
 
   const openMaps = (deal: Deal) => {
@@ -163,12 +179,32 @@ export default function FavoritesScreen() {
     return <SafeAreaView style={styles.center}><ActivityIndicator size="large" color="#FF6600" /></SafeAreaView>;
   }
 
-  if (favorites.length === 0) {
+  const isFavoritesEmpty = favorites.length === 0;
+  const isWishlistEmpty = wishlist.length === 0;
+  const showEmpty = tab === "favorites" ? isFavoritesEmpty : isWishlistEmpty;
+
+  if (showEmpty) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
         <StatusBar style={theme === "dark" ? "light" : "dark"} />
-        <Ionicons name="heart-outline" size={64} color={colors.text} />
-        <Text style={[styles.empty, { color: colors.text }]}>{t.favorites.noFavorites}</Text>
+        <View style={styles.tabContainer}>
+          <TouchableOpacity 
+            onPress={() => setTab("favorites")}
+            style={[styles.tabButton, tab === "favorites" && styles.tabActive]}
+          >
+            <Text style={[styles.tabLabel, { color: tab === "favorites" ? "#FF6600" : colors.subtext }]}>❤️ Favorites</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setTab("wishlist")}
+            style={[styles.tabButton, tab === "wishlist" && styles.tabActive]}
+          >
+            <Text style={[styles.tabLabel, { color: tab === "wishlist" ? "#FF6600" : colors.subtext }]}>🎯 Wishlist</Text>
+          </TouchableOpacity>
+        </View>
+        <Ionicons name={tab === "favorites" ? "heart-outline" : "star-outline"} size={64} color={colors.text} />
+        <Text style={[styles.empty, { color: colors.text }]}>
+          {tab === "favorites" ? "No favorites yet" : "No wishlist items"}
+        </Text>
         <TouchableOpacity
           style={[styles.exploreButton, { backgroundColor: "#FF6600" }]}
           onPress={() => navigation.navigate("Explore" as never)}
@@ -182,74 +218,98 @@ export default function FavoritesScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
-      <View style={styles.headerRow}>
-        <Text style={[styles.header, { color: "#FF6600" }]}>❤️ Favorites</Text>
-        <TouchableOpacity style={styles.clearBtn} onPress={clearAll}>
-          <Ionicons name="trash-outline" size={18} color="#fff" />
-          <Text style={styles.clearText}>Clear All</Text>
+      
+      <View style={styles.tabContainer}>
+        <TouchableOpacity 
+          onPress={() => setTab("favorites")}
+          style={[styles.tabButton, tab === "favorites" && styles.tabActive]}
+        >
+          <Text style={[styles.tabLabel, { color: tab === "favorites" ? "#FF6600" : colors.subtext }]}>❤️ Favorites</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          onPress={() => setTab("wishlist")}
+          style={[styles.tabButton, tab === "wishlist" && styles.tabActive]}
+        >
+          <Text style={[styles.tabLabel, { color: tab === "wishlist" ? "#FF6600" : colors.subtext }]}>🎯 Wishlist</Text>
         </TouchableOpacity>
       </View>
-      <FlatList
-        data={favorites}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => {
-          const isHot = item.price < 10;
-          const isLocked = isStoreLocked(item.storeKey, isPremium);
-          const isLive = item.timestamp && Date.now() / 1000 - (item.timestamp.seconds || 0) < 600;
-          return (
-            <View style={[styles.cardWrapper, { backgroundColor: isDarkMode ? "#1E1E1E" : "#fff", borderColor: isDarkMode ? "#333" : "#ddd" }]}>
+
+      {tab === "favorites" ? (
+        <FlatList
+          data={favorites}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item }) => {
+            const isHot = item.price < 10;
+            const isLocked = isStoreLocked(item.storeKey, isPremium);
+            const isLive = item.timestamp && Date.now() / 1000 - (item.timestamp.seconds || 0) < 600;
+            return (
               <DealCard
-                deal={{ ...item, hot: isHot, live: isLive, rare: item.rare, isSaved: true }}
-                onSaveToggle={() => toggleSave(item)}
-                onPress={() => { if (isLocked) { (navigation as any).navigate("Upgrade"); } else { openDeal(item); } }}
-                darkMode={isDarkMode}
-                blurred={isLocked}
+                deal={item}
+                onToggleSave={() => {}}
+                distance={userLocation && item.latitude ? distanceMiles(userLocation, { latitude: item.latitude, longitude: item.longitude || 0 }) : null}
+                onOpenMaps={() => openMaps(item)}
+                onViewDeal={() => navigation.navigate("DealDetail" as never, { deal: item } as never)}
+                isLocked={isLocked}
+                isPulsing={isLive}
+                theme={theme}
               />
-              <View style={styles.tagRow}>
-                {isLive && <PulseTag text="🟢 Live" color="green" />}
-                {isHot && <PulseTag text="🔥 Hot" color="red" />}
-                {item.rare && <PulseTag text="🦄 Rare Find" color="purple" />}
-              </View>
-              {(item.source === "local" || (item.latitude && item.longitude)) && (
-                <View style={styles.metaRow}>
-                  {userLocation && item.latitude && item.longitude && (
-                    <Text style={[styles.distanceBadge, { backgroundColor: isDarkMode ? "#333" : "#eee", color: isDarkMode ? "#eee" : "#333" }]}>
-                      {distanceMiles(userLocation, { latitude: item.latitude, longitude: item.longitude }).toFixed(1)} mi
-                    </Text>
-                  )}
-                  {item.address && (
-                    <TouchableOpacity style={styles.directionsButton} onPress={() => openMaps(item)}>
-                      <Ionicons name="car" size={14} color="#fff" />
-                      <Text style={styles.directionsText}>Directions</Text>
-                    </TouchableOpacity>
-                  )}
+            );
+          }}
+        />
+      ) : (
+        <FlatList
+          data={wishlist}
+          keyExtractor={(i) => i.id}
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item }) => (
+            <View style={[styles.wishlistCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+              <Image source={{ uri: item.imageUrl }} style={styles.wishImage} />
+              <View style={styles.wishContent}>
+                <Text style={[styles.wishTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
+                <Text style={[styles.wishPrice, { color: colors.accent }]}>
+                  Now: ${item.currentPrice.toFixed(2)}
+                </Text>
+                <View style={styles.targetRow}>
+                  <Text style={[styles.label, { color: colors.subtext }]}>Target:</Text>
+                  <TextInput
+                    style={[styles.priceInput, { color: colors.text, borderColor: colors.border }]}
+                    keyboardType="decimal-pad"
+                    placeholder="$0"
+                    value={item.targetPrice ? item.targetPrice.toString() : ""}
+                    onChangeText={(val) => updateWishlistTarget(item.id, parseFloat(val) || 0)}
+                  />
                 </View>
-              )}
+              </View>
+              <TouchableOpacity onPress={() => removeWishlistItem(item.id)}>
+                <Ionicons name="trash-outline" size={20} color="#dc2626" />
+              </TouchableOpacity>
             </View>
-          );
-        }}
-      />
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  listContent: { padding: 10 },
-  cardWrapper: { marginBottom: 12, borderWidth: 1, borderRadius: 10, padding: 6 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, paddingHorizontal: 10 },
-  header: { fontSize: 22, fontWeight: "700" },
-  clearBtn: { flexDirection: "row", backgroundColor: "#FF6600", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, alignItems: "center" },
-  clearText: { color: "#fff", marginLeft: 4, fontSize: 13 },
-  tagRow: { flexDirection: "row", marginLeft: 12, marginTop: 4 },
-  metaRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 8, marginTop: 4 },
-  distanceBadge: { fontSize: 11, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, overflow: "hidden" },
-  directionsButton: { flexDirection: "row", alignItems: "center", backgroundColor: "#FF6600", borderRadius: 16, paddingHorizontal: 8, paddingVertical: 4 },
-  directionsText: { color: "#fff", marginLeft: 4, fontSize: 11 },
-  tagBase: { fontSize: 12, fontWeight: "600" },
-  empty: { textAlign: "center", marginTop: 20, fontSize: 16 },
-  exploreButton: { marginTop: 12, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
-  exploreText: { color: "#fff", fontWeight: "600" },
+  container: { flex: 1 },
+  tabContainer: { flexDirection: "row", gap: 16, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.1)" },
+  tabButton: { paddingBottom: 8 },
+  tabActive: { borderBottomWidth: 2, borderBottomColor: "#FF6600" },
+  tabLabel: { fontSize: 14, fontWeight: "700" },
+  listContent: { paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  empty: { fontSize: 16, marginTop: 12, textAlign: "center" },
+  exploreButton: { marginTop: 20, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 },
+  exploreText: { color: "#fff", fontWeight: "700", textAlign: "center" },
+  tagBase: { fontSize: 10, fontWeight: "700" },
+  wishlistCard: { flexDirection: "row", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1, alignItems: "center" },
+  wishImage: { width: 70, height: 70, borderRadius: 8 },
+  wishContent: { flex: 1, gap: 6 },
+  wishTitle: { fontSize: 13, fontWeight: "600" },
+  wishPrice: { fontSize: 12, fontWeight: "700" },
+  targetRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  label: { fontSize: 11 },
+  priceInput: { flex: 1, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 4, borderWidth: 1, fontSize: 11 },
 });
