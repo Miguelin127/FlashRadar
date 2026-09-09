@@ -12,9 +12,9 @@ type Deal = {
   price?: number;
   image?: string | null;
   imageUrl?: string | null;
-  merchantUrl?: string;
-  affiliateUrl?: string;
-  url?: string;
+  merchantUrl?: string | null;
+  affiliateUrl?: string | null;
+  url?: string | null;
   isSaved?: boolean;
   hot?: boolean;
   rare?: boolean;
