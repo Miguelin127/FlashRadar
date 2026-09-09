@@ -1,530 +1,245 @@
-// flashradar/components/DealCard.tsx
-
-import React, { useCallback, useEffect, useState } from "react";
-import {
-  View, Text, StyleSheet, Image, Pressable,
-  TouchableOpacity, Alert, Linking, ActivityIndicator, Share } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator, Linking, Platform, Modal, TextInput, Alert } from "react-native";
+import { useAuth } from "../context/AuthContext";
 import { auth, db } from "../firebaseConfig";
+import { Ionicons } from "@expo/vector-icons";
 
-export type Deal = {
+type Deal = {
   id: string;
   title: string;
-  store?: string;
+  store: string;
   storeKey?: string;
-  price?: number | null;
-  originalPrice?: number | null;
-  discountPercent?: number | null;
+  price: number;
   image?: string | null;
   imageUrl?: string | null;
-  url?: string | null;
-  merchantUrl?: string | null;
-  affiliateUrl?: string | null;
+  merchantUrl?: string;
+  affiliateUrl?: string;
+  url?: string;
+  isSaved?: boolean;
   hot?: boolean;
   rare?: boolean;
   lightning?: boolean;
   live?: boolean;
-  isSaved?: boolean;
-  dealScore?: number | null;
-  asin?: string | null;
-  publishedAt?: any;
-  createdAt?: any;
-  couponCode?: string | null;
-  promoCode?: string | null;
-  expired?: boolean;
-  resaleIntel?: {
-    profitPotential: number;
-    roiPercent: number;
-    demandLevel: string;
-  } | null;
+  source?: "local" | "online";
+  discountPercent?: number | null;
+  timestamp?: any;
+  expiresAt?: number | null;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 type Props = {
   deal: Deal;
-  onPress?: () => void;
-  onSaveToggle?: () => void;
-  darkMode?: boolean;
-  blurred?: boolean;
-  compact?: boolean;
-};
-
-const ACCENT = "#FF7A00";
-
-function getScoreColor(score: number) {
-  if (score >= 90) return "#a855f7";
-  if (score >= 75) return ACCENT;
-  return "#eab308";
-}
-
-function resolveImage(deal: Deal): string | null {
-  const dbImage = deal.imageUrl || deal.image || null;
-  const urlForAsin = deal.url || deal.affiliateUrl || deal.merchantUrl || "";
-  const isAmazon = (deal.store || deal.storeKey || "").toLowerCase().includes("amazon");
-  const asinMatch = urlForAsin.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/)?.[1];
-  const asin = deal.asin || asinMatch;
-  if (isAmazon && asin && (!dbImage || dbImage.includes("placeholder"))) {
-    return `https://images-na.ssl-images-amazon.com/images/P/${asin.toUpperCase()}.01._AC_SL500_.jpg`;
-  }
-  if (dbImage?.includes("images-na.ssl-images-amazon.com")) {
-    return dbImage.replace("images-na.ssl-images-amazon.com", "m.media-amazon.com");
-  }
-  return dbImage;
-}
-
-const handleShare = (deal: Deal) => {
-  const encodedId = encodeURIComponent(deal.id);
-  const deepLink = `https://flashradarapp.com/deal/${encodedId}`;
-  const price = deal.price ? `$${deal.price.toFixed(2)}` : 'See deal';
-  const discount = deal.discountPercent ? `${deal.discountPercent}% OFF` : '';
-  const message = `🎉 Amazing Deal Found!\n\n${deal.title}\n💰 ${price} (${discount})\n🏪 ${deal.store || 'Retailer'}\n\n📱 View on FlashRadar:\n${deepLink}\n\n💾 Download App: https://flashradarapp.com\n\n⚡ Get exclusive deals before they're gone!`;
-  Share.share({ message, title: 'Amazing Deal on FlashRadar' }).catch(console.error);
+  onToggleSave?: (deal: Deal) => Promise<void>;
+  distance?: number | null;
+  onOpenMaps?: () => void;
+  onViewDeal: () => void;
+  isLocked?: boolean;
+  isPulsing?: boolean;
+  theme?: "dark" | "light";
 };
 
 export default function DealCard({
-  deal, onPress, onSaveToggle, darkMode = true, blurred = false, compact = false,
+  deal,
+  onToggleSave,
+  distance,
+  onOpenMaps,
+  onViewDeal,
+  isLocked,
+  isPulsing,
+  theme = "dark",
 }: Props) {
-  const [imageError, setImageError] = useState(false);
-  const [displayImage, setDisplayImage] = useState<string | null>(resolveImage(deal));
-  const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
   const [localSaved, setLocalSaved] = useState(!!deal.isSaved);
-  const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showWishlistModal, setShowWishlistModal] = useState(false);
+  const [wishlistPrice, setWishlistPrice] = useState("");
 
   useEffect(() => { setLocalSaved(!!deal.isSaved); }, [deal.isSaved]);
-  useEffect(() => { setDisplayImage(resolveImage(deal)); setImageError(false); }, [deal.id]);
 
-  const publishedMs = deal.publishedAt?.seconds
-    ? deal.publishedAt.seconds * 1000
-    : deal.createdAt?.seconds ? deal.createdAt.seconds * 1000 : Date.now();
-  const isJustIn = Date.now() - publishedMs < 1_800_000;
-  const isMajorSteal = (deal.discountPercent ?? 0) > 40;
-  const isExpired = !!deal.expired;
-
-  const displayScore = deal.dealScore ?? 70;
-  const scoreColor = getScoreColor(displayScore);
-
-  function isValidDealUrl(url: string | null | undefined): boolean {
-    if (!url) return false;
-    try {
-      const u = new URL(url);
-      if (u.pathname.includes("/c//")) return false;
-      if (u.hostname.includes("slickdeals.net")) return false;
-      return true;
-    } catch { return false; }
-  }
-
-  const dealUrl = [deal.affiliateUrl, deal.merchantUrl, deal.url].find(isValidDealUrl) || null;
-  const couponCode = deal.couponCode || deal.promoCode || null;
-  const hasFlipIntel = deal.resaleIntel && (deal.resaleIntel.profitPotential ?? 0) > 0;
-
-  const toggleFavorite = useCallback(async () => {
-    const user = auth.currentUser;
-    if (!user) { Alert.alert("Sign in required", "Please sign in to save favorites."); return; }
-    const ref = db.collection("users").doc(user.uid).collection("favorites").doc(deal.id);
-    try {
+  const toggleFavorite = async () => {
+    if (onToggleSave) {
       setSaving(true);
-      const next = !localSaved;
-      setLocalSaved(next);
-      if (!next) await ref.delete();
-      else await ref.set({ ...deal, isSaved: true }, { merge: true });
-    } catch { setLocalSaved(localSaved); }
-    finally { setSaving(false); }
-  }, [deal, localSaved]);
+      try {
+        await onToggleSave(deal);
+        setLocalSaved(!localSaved);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
 
-  const handleCopyCode = async () => {
-    if (!couponCode) return;
+    setSaving(true);
     try {
-      const Clipboard = require("expo-clipboard");
-      await Clipboard.setStringAsync(couponCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
+      const ref = db.collection("users").doc(user?.uid || "").collection("favorites").doc(deal.id);
+      if (localSaved) {
+        await ref.delete();
+      } else {
+        await ref.set({ ...deal, isSaved: true }, { merge: true });
+      }
+      setLocalSaved(!localSaved);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleOpenDeal = () => {
-    if (blurred || !dealUrl || isExpired) return;
-    Linking.openURL(dealUrl);
+  const addToWishlist = async () => {
+    if (!wishlistPrice || isNaN(parseFloat(wishlistPrice))) {
+      Alert.alert("Enter a valid target price");
+      return;
+    }
+    try {
+      if (!user) return;
+      const targetPrice = parseFloat(wishlistPrice);
+      const newItem = {
+        id: deal.id,
+        title: deal.title,
+        imageUrl: deal.image || deal.imageUrl || "",
+        url: deal.url || deal.affiliateUrl || deal.merchantUrl || "",
+        currentPrice: deal.price,
+        targetPrice,
+        notifyWhenBelow: true,
+        addedAt: new Date(),
+      };
+      const snap = await db.collection("wishlists").doc(user.uid).get();
+      const items = snap.data()?.items || [];
+      const exists = items.find((i: any) => i.id === deal.id);
+      if (exists) {
+        Alert.alert("Already in wishlist");
+      } else {
+        await db.collection("wishlists").doc(user.uid).set({ items: [...items, newItem] });
+        Alert.alert("Added to wishlist!");
+        setShowWishlistModal(false);
+        setWishlistPrice("");
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error adding to wishlist");
+    }
   };
 
-  if (compact) {
-    return (
-      <Pressable
-        onPress={isExpired ? () => {} : onPress}
-        style={[
-          cs.card,
-          deal.rare && cs.rareCard,
-          isExpired && cs.expiredCard,
-          { backgroundColor: darkMode ? "#0f0f0f" : "#fff" },
-        ]}
-      >
-        {(deal.discountPercent ?? 0) > 0 && !isExpired && (
-          <View style={cs.discountTag}>
-            <Text style={cs.discountTagText}>-{deal.discountPercent}%</Text>
-          {deal.resaleIntel?.roiPercent ? (
-            <View style={{ backgroundColor: "#10b981" + "22", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, marginLeft: 4 }}>
-              <Text style={{ color: "#10b981", fontSize: 11, fontWeight: "900" }}>📈 {deal.resaleIntel.roiPercent}% ROI</Text>
-            </View>
-          ) : null}
-          </View>
-        )}
-
-        <View style={cs.imageWrap}>
-          {displayImage && !imageError ? (
-            <Image
-              source={{ uri: displayImage }}
-              style={[cs.image, (blurred || isExpired) && cs.blurred]}
-              resizeMode="contain"
-              onError={() => setImageError(true)}
-            />
-          ) : (
-            <View style={cs.imageFallback}>
-              <Ionicons name="image-outline" size={24} color="#555" />
-            </View>
-          )}
-
-          <TouchableOpacity
-            onPress={onSaveToggle ?? toggleFavorite}
-            disabled={saving}
-            style={cs.saveBtn}
-          >
-            {saving
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Ionicons name={localSaved ? "heart" : "heart-outline"} size={13} color={localSaved ? "#ef4444" : "#fff"} />
-            }
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => handleShare(deal)}
-            style={{ position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(255, 122, 0, 0.8)', width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' }}
-          >
-            <Ionicons name="share-social" size={14} color="#fff" />
-          </TouchableOpacity>
-
-          <View style={cs.badgeRow}>
-            {isExpired && <View style={[cs.badge, { backgroundColor: "#555" }]}><Text style={cs.badgeTxt}>EXPIRED</Text></View>}
-            {!isExpired && isJustIn && <View style={[cs.badge, { backgroundColor: "#2563eb" }]}><Text style={cs.badgeTxt}>JUST IN</Text></View>}
-            {!isExpired && deal.rare && <View style={[cs.badge, { backgroundColor: "#9333ea" }]}><Text style={cs.badgeTxt}>RARE</Text></View>}
-            {!isExpired && isMajorSteal && !isJustIn && !deal.rare && <View style={[cs.badge, { backgroundColor: "#ea580c" }]}><Text style={cs.badgeTxt}>HOT</Text></View>}
-          </View>
-        </View>
-
-        <View style={cs.content}>
-          <Text style={[cs.store, { color: darkMode ? "#888" : "#999" }]}>
-            {(deal.store || "").toUpperCase()}
-          </Text>
-          <Text style={[cs.title, { color: isExpired ? "#555" : darkMode ? "#f4f4f5" : "#111" }]} numberOfLines={2}>
-            {deal.title}
-          </Text>
-
-          <View style={cs.priceRow}>
-            <Text style={[cs.price, isExpired && { color: "#555" }]}>
-              {Number.isFinite(Number(deal.price)) && Number(deal.price) > 0 ? `$${Number(deal.price).toFixed(2)}` : "See deal"}
-            </Text>
-            {deal.originalPrice != null && deal.price != null && deal.originalPrice > deal.price && (
-              <Text style={cs.original}>${Number(deal.originalPrice).toFixed(2)}</Text>
-            )}
-          </View>
-
-          {isExpired ? (
-            <View style={cs.expiredBtn}>
-              <Ionicons name="time-outline" size={11} color="#666" />
-              <Text style={cs.expiredBtnText}>DEAL EXPIRED</Text>
-            </View>
-          ) : couponCode && !blurred ? (
-            <TouchableOpacity style={cs.codeBtn} onPress={handleCopyCode}>
-              <Ionicons name={copied ? "checkmark" : "pricetag-outline"} size={11} color={copied ? "#22c55e" : "#000"} />
-              <Text style={cs.codeBtnText}>{copied ? "Copied!" : "Get Code"}</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[cs.grabBtn, blurred && cs.grabBtnLocked]}
-              onPress={handleOpenDeal}
-            >
-              {blurred
-                ? <><Ionicons name="lock-closed-outline" size={11} color="#888" /><Text style={[cs.grabText, { color: "#888" }]}>PREMIUM</Text></>
-                : <><Text style={cs.grabText}>GRAB DEAL</Text><Ionicons name="arrow-forward" size={11} color="#000" /></>
-              }
-            </TouchableOpacity>
-          )}
-        </View>
-      </Pressable>
-    );
-  }
+  const handleShare = async (d: Deal) => {
+    try {
+      await Linking.openURL(d.affiliateUrl || d.url || "");
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
-    <Pressable
-      onPress={isExpired ? () => {} : onPress}
-      style={[
-        fs.card,
-        deal.rare && fs.rareCard,
-        isExpired && fs.expiredCard,
-        { backgroundColor: darkMode ? "#09090b" : "#fff" },
-      ]}
-    >
-      <View style={fs.imageWrap}>
-        {displayImage && !imageError ? (
+    <>
+      <View style={cs.card}>
+        <TouchableOpacity activeOpacity={0.8} onPress={onViewDeal}>
           <Image
-            source={{ uri: displayImage }}
-            style={[fs.image, (blurred || isExpired) && fs.blurred]}
-            resizeMode="contain"
-            onError={() => setImageError(true)}
+            source={{ uri: deal.image || deal.imageUrl || "https://via.placeholder.com/150" }}
+            style={cs.image}
           />
-        ) : (
-          <View style={fs.imageFallback}>
-            <Ionicons name="image-outline" size={32} color="#555" />
-            <Text style={fs.imageFallbackText}>Image Unavailable</Text>
-          </View>
-        )}
+          {isLocked && <View style={cs.lockOverlay}><Ionicons name="lock-closed" size={32} color="#fff" /></View>}
+        </TouchableOpacity>
 
-        <View style={fs.badgeStack}>
-          {isExpired && (
-            <View style={[fs.badge, { backgroundColor: "#555" }]}>
-              <Ionicons name="time-outline" size={8} color="#fff" />
-              <Text style={fs.badgeText}>EXPIRED</Text>
-            </View>
-          )}
-          {!isExpired && isJustIn && (
-            <View style={[fs.badge, { backgroundColor: "#2563eb" }]}>
-              <Ionicons name="flash" size={8} color="#fff" />
-              <Text style={fs.badgeText}>JUST IN</Text>
-            </View>
-          )}
-          {!isExpired && isMajorSteal && !isJustIn && (
-            <View style={[fs.badge, { backgroundColor: "#ea580c" }]}>
-              <Text style={fs.badgeText}>HOT DROP</Text>
-            </View>
-          )}
-          {!isExpired && deal.rare && (
-            <View style={[fs.badge, { backgroundColor: "#9333ea" }]}>
-              <Text style={fs.badgeText}>RARE FIND</Text>
-            </View>
-          )}
+        <View style={cs.body}>
+          <Text style={cs.title} numberOfLines={2}>{deal.title}</Text>
+          <Text style={cs.store}>{deal.store}</Text>
+          
+          <View style={cs.priceRow}>
+            <Text style={cs.price}>${deal.price.toFixed(2)}</Text>
+            {deal.discountPercent && <Text style={cs.discount}>{deal.discountPercent}% OFF</Text>}
+          </View>
+
+          {distance !== null && <Text style={cs.distance}>{distance.toFixed(1)} mi away</Text>}
         </View>
 
         <TouchableOpacity
-          onPress={onSaveToggle ?? toggleFavorite}
+          onPress={toggleFavorite}
           disabled={saving}
-          style={fs.saveBtn}
+          style={cs.saveBtn}
         >
           {saving
             ? <ActivityIndicator size="small" color="#fff" />
-            : <Ionicons name={localSaved ? "heart" : "heart-outline"} size={16} color={localSaved ? "#ef4444" : "#fff"} />
+            : <Ionicons name={localSaved ? "heart" : "heart-outline"} size={13} color={localSaved ? "#ef4444" : "#fff"} />
           }
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => handleShare(deal)}
-          style={fs.shareBtn}
+          onPress={() => setShowWishlistModal(true)}
+          style={cs.saveBtn}
         >
-          <Ionicons name="share-social" size={16} color="#fff" />
+          <Ionicons name="star-outline" size={13} color="#fff" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => handleShare(deal)}
+          style={cs.shareBtn}
+        >
+          <Ionicons name="share-social" size={14} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      <View style={[fs.content, { backgroundColor: darkMode ? "#09090b" : "#fff" }]}>
-        <View style={fs.metaRow}>
-          <View style={fs.storeBadge}>
-            <Ionicons name="storefront-outline" size={10} color="#999" />
-            <Text style={fs.storeText}>{(deal.store || deal.storeKey || "RETAILER").toUpperCase()}</Text>
-          </View>
-          <View style={fs.scoreRow}>
-            <Ionicons name="shield-checkmark-outline" size={12} color={scoreColor} />
-            <Text style={[fs.scoreText, { color: scoreColor }]}>
-              {(displayScore / 10).toFixed(1)}
-            </Text>
-          </View>
-        </View>
-
-        <Text style={[fs.title, { color: isExpired ? "#555" : darkMode ? "#f4f4f5" : "#111" }]} numberOfLines={2}>
-          {(deal.title || "").toUpperCase()}
-        </Text>
-
-        {hasFlipIntel && !blurred && !isExpired && (
-          <View style={fs.flipStrip}>
-            <Ionicons name="trending-up-outline" size={11} color={ACCENT} />
-            <Text style={fs.flipText}>
-              Flip: +${deal.resaleIntel!.profitPotential} · {deal.resaleIntel!.roiPercent}% ROI · {deal.resaleIntel!.demandLevel} demand
-            </Text>
-          </View>
-        )}
-
-        <View style={fs.priceRow}>
-          <View>
-            <View style={fs.priceInner}>
-              <Text style={[fs.price, { color: isExpired ? "#555" : darkMode ? "#fff" : "#111" }]}>
-                {Number.isFinite(Number(deal.price)) && Number(deal.price) > 0 ? `$${Number(deal.price).toFixed(2)}` : "See deal"}
-              </Text>
-              {(deal.discountPercent ?? 0) > 0 && !isExpired && (
-                <View style={fs.discountBadge}>
-                  <Text style={fs.discountText}>-{deal.discountPercent}%</Text>
-                </View>
-              )}
-            </View>
-            {deal.originalPrice != null && deal.price != null && deal.originalPrice > deal.price && !isExpired && (
-              <Text style={fs.originalPrice}>
-                EST. VALUE: <Text style={fs.strikethrough}>${Number(deal.originalPrice).toFixed(2)}</Text>
-              </Text>
-            )}
-          </View>
-
-          <View style={{ gap: 6, alignItems: "flex-end" }}>
-            {isExpired ? (
-              <View style={fs.expiredBtn}>
-                <Ionicons name="time-outline" size={13} color="#666" />
-                <Text style={fs.expiredBtnText}>DEAL EXPIRED</Text>
-              </View>
-            ) : (
-              <>
-                {couponCode && !blurred && (
-                  <TouchableOpacity style={fs.codeBtn} onPress={handleCopyCode}>
-                    <Ionicons name={copied ? "checkmark" : "pricetag-outline"} size={12} color={copied ? "#22c55e" : "#000"} />
-                    <Text style={fs.codeBtnText}>{copied ? "Copied!" : "Get Code"}</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={[fs.grabBtn, blurred && fs.grabBtnLocked]}
-                  onPress={handleOpenDeal}
-                >
-                  {blurred
-                    ? <><Ionicons name="lock-closed-outline" size={13} color="#888" /><Text style={[fs.grabText, { color: "#888" }]}>PREMIUM</Text></>
-                    : <><Text style={fs.grabText}>GRAB DEAL</Text><Ionicons name="arrow-forward" size={13} color="#000" /></>
-                  }
-                </TouchableOpacity>
-              </>
-            )}
+      <Modal
+        visible={showWishlistModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowWishlistModal(false)}
+      >
+        <View style={cs.modalOverlay}>
+          <View style={cs.modalContent}>
+            <Text style={cs.modalTitle}>Add to Wishlist</Text>
+            <Text style={cs.modalSubtitle} numberOfLines={2}>{deal.title}</Text>
+            <Text style={cs.currentPrice}>Current: ${deal.price.toFixed(2)}</Text>
+            
+            <TextInput
+              placeholder="Target price"
+              keyboardType="decimal-pad"
+              value={wishlistPrice}
+              onChangeText={setWishlistPrice}
+              style={cs.priceInput}
+            />
+            
+            <TouchableOpacity onPress={addToWishlist} style={cs.addBtn}>
+              <Text style={cs.addBtnText}>Add to Wishlist</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity onPress={() => setShowWishlistModal(false)} style={cs.cancelBtn}>
+              <Text style={cs.cancelText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </View>
-    </Pressable>
+      </Modal>
+    </>
   );
 }
 
 const cs = StyleSheet.create({
   card: {
-    borderRadius: 10, overflow: "hidden", borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)", flex: 1, margin: 4,
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    flex: 1,
+    margin: 4,
   },
-  rareCard: { borderColor: "rgba(168,85,247,0.4)" },
-  expiredCard: { borderColor: "rgba(255,255,255,0.03)", opacity: 0.7 },
-  discountTag: {
-    position: "absolute", top: 6, left: 6, zIndex: 10,
-    backgroundColor: "#ca8a04", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3,
-  },
-  discountTagText: { color: "#fff", fontSize: 8, fontWeight: "900" },
-  imageWrap: {
-    width: "100%", aspectRatio: 1, backgroundColor: "#fff",
-    position: "relative", justifyContent: "center", alignItems: "center",
-  },
-  image: { width: "100%", height: "100%" },
-  blurred: { opacity: 0.1 },
-  imageFallback: {
-    width: "100%", height: "100%", justifyContent: "center",
-    alignItems: "center", backgroundColor: "#f4f4f5",
-  },
-  saveBtn: {
-    position: "absolute", top: 5, right: 5,
-    backgroundColor: "rgba(0,0,0,0.35)", borderRadius: 999, padding: 5,
-  },
-  badgeRow: {
-    position: "absolute", bottom: 4, left: 4,
-    flexDirection: "row", gap: 3, flexWrap: "wrap",
-  },
-  badge: { paddingHorizontal: 4, paddingVertical: 2, borderRadius: 3 },
-  badgeTxt: { color: "#fff", fontSize: 7, fontWeight: "900", letterSpacing: 0.3 },
-  content: { padding: 8 },
-  store: { fontSize: 8, fontWeight: "800", letterSpacing: 0.8, marginBottom: 3 },
-  title: { fontSize: 11, fontWeight: "700", lineHeight: 15, marginBottom: 5, minHeight: 30 },
-  priceRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 7 },
-  price: { fontSize: 16, fontWeight: "900", color: ACCENT },
-  original: { fontSize: 9, color: "#666", textDecorationLine: "line-through" },
-  expiredBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 4, paddingVertical: 7, borderRadius: 6, backgroundColor: "#1a1a1a",
-  },
-  expiredBtnText: { color: "#666", fontWeight: "900", fontSize: 10 },
-  codeBtn: {
-    backgroundColor: "#06b6d4", flexDirection: "row", alignItems: "center",
-    justifyContent: "center", gap: 4, paddingVertical: 7, borderRadius: 6,
-  },
-  codeBtnText: { color: "#000", fontWeight: "900", fontSize: 10 },
-  grabBtn: {
-    backgroundColor: ACCENT, flexDirection: "row", alignItems: "center",
-    justifyContent: "center", gap: 4, paddingVertical: 7, borderRadius: 6,
-  },
-  grabBtnLocked: { backgroundColor: "#222" },
-  grabText: { color: "#000", fontWeight: "900", fontSize: 10 },
-});
-
-const fs = StyleSheet.create({
-  card: {
-    borderRadius: 12, overflow: "hidden", marginBottom: 10,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.05)",
-  },
-  rareCard: { borderColor: "rgba(168,85,247,0.4)" },
-  expiredCard: { borderColor: "rgba(255,255,255,0.03)", opacity: 0.7 },
-  imageWrap: {
-    width: "100%", aspectRatio: 1.4, backgroundColor: "#fff",
-    position: "relative", justifyContent: "center", alignItems: "center",
-  },
-  image: { width: "100%", height: "100%" },
-  blurred: { opacity: 0.1 },
-  imageFallback: {
-    flex: 1, justifyContent: "center", alignItems: "center",
-    backgroundColor: "#f4f4f5", width: "100%",
-  },
-  imageFallbackText: { fontSize: 9, fontWeight: "800", color: "#999", textTransform: "uppercase", marginTop: 4 },
-  badgeStack: { position: "absolute", top: 8, right: 8, gap: 4, alignItems: "flex-end" },
-  badge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 3 },
-  badgeText: { color: "#fff", fontSize: 8, fontWeight: "900", letterSpacing: 0.5 },
-  saveBtn: {
-    position: "absolute", top: 8, left: 8,
-    backgroundColor: "rgba(0,0,0,0.3)", borderRadius: 999, padding: 7,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
-  },
-  shareBtn: {
-    position: "absolute", top: 8, right: 50,
-    backgroundColor: "rgba(0,0,0,0.3)", borderRadius: 999, padding: 7,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
-  },
-  content: { padding: 12, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.05)" },
-  metaRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  storeBadge: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: "rgba(255,255,255,0.06)", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 4,
-  },
-  storeText: { fontSize: 8, fontWeight: "900", color: "#d4d4d8", letterSpacing: 1 },
-  scoreRow: { flexDirection: "row", alignItems: "center", gap: 3 },
-  scoreText: { fontSize: 11, fontWeight: "900" },
-  title: {
-    fontSize: 12, fontWeight: "700", letterSpacing: 0.3,
-    lineHeight: 17, marginBottom: 8, minHeight: 34,
-  },
-  flipStrip: {
-    flexDirection: "row", alignItems: "flex-start", gap: 5,
-    backgroundColor: "rgba(255,255,255,0.05)", padding: 7, borderRadius: 6,
-    borderLeftWidth: 2, borderLeftColor: ACCENT, marginBottom: 8,
-  },
-  flipText: { fontSize: 9, color: "#a1a1aa", fontWeight: "600", flex: 1, lineHeight: 13 },
-  priceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 8 },
-  priceInner: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 },
-  price: { fontSize: 22, fontWeight: "900" },
-  discountBadge: { backgroundColor: "rgba(34,197,94,0.15)", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
-  discountText: { fontSize: 9, fontWeight: "900", color: "#22c55e" },
-  originalPrice: { fontSize: 9, color: "#71717a", fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
-  strikethrough: { textDecorationLine: "line-through" },
-  expiredBtn: {
-    flexDirection: "row", alignItems: "center",
-    gap: 4, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 8,
-    backgroundColor: "#1a1a1a",
-  },
-  expiredBtnText: { color: "#666", fontWeight: "900", fontSize: 10, letterSpacing: 0.5 },
-  codeBtn: {
-    backgroundColor: "#06b6d4", flexDirection: "row", alignItems: "center",
-    gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 7,
-  },
-  codeBtnText: { color: "#000", fontWeight: "900", fontSize: 10 },
-  grabBtn: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: ACCENT, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 8,
-  },
-  grabBtnLocked: { backgroundColor: "#1a1a1a" },
-  grabText: { color: "#000", fontWeight: "900", fontSize: 10, letterSpacing: 0.5 },
+  image: { width: "100%", height: 120 },
+  lockOverlay: { position: "absolute", width: "100%", height: 120, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  body: { padding: 8 },
+  title: { fontSize: 12, fontWeight: "700", color: "#fff", marginBottom: 4 },
+  store: { fontSize: 10, color: "#aaa", marginBottom: 6 },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  price: { fontSize: 14, fontWeight: "900", color: "#FF7A00" },
+  discount: { fontSize: 9, fontWeight: "700", color: "#22c55e", backgroundColor: "rgba(34,197,94,0.2)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  distance: { fontSize: 9, color: "#888" },
+  saveBtn: { position: "absolute", top: 8, left: 8, backgroundColor: "rgba(255,122,0,0.8)", width: 28, height: 28, borderRadius: 14, justifyContent: "center", alignItems: "center" },
+  shareBtn: { position: "absolute", bottom: 8, right: 8, backgroundColor: "rgba(255,122,0,0.8)", width: 32, height: 32, borderRadius: 16, justifyContent: "center", alignItems: "center" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center" },
+  modalContent: { backgroundColor: "#fff", borderRadius: 12, padding: 20, width: "80%", gap: 12 },
+  modalTitle: { fontSize: 16, fontWeight: "700", color: "#000" },
+  modalSubtitle: { fontSize: 12, color: "#666" },
+  currentPrice: { fontSize: 13, fontWeight: "600", color: "#FF7A00" },
+  priceInput: { borderWidth: 1, borderColor: "#ddd", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: "#000" },
+  addBtn: { backgroundColor: "#FF7A00", paddingVertical: 12, borderRadius: 8, alignItems: "center" },
+  addBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  cancelBtn: { alignItems: "center", paddingVertical: 10 },
+  cancelText: { color: "#666", fontSize: 14 },
 });
