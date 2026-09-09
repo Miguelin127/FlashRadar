@@ -98,7 +98,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setReady(true);
       if (firebaseUser) await createUserProfile(firebaseUser);
     });
-    return unsub;
+    
+    // Refresh token every 55 minutes to keep session alive
+    const tokenRefreshInterval = setInterval(async () => {
+      if (auth.currentUser) {
+        try {
+          await auth.currentUser.getIdToken(true);
+        } catch (err) {
+          console.error('Token refresh failed:', err);
+        }
+      }
+    }, 55 * 60 * 1000);
+    
+    return () => {
+      unsub();
+      clearInterval(tokenRefreshInterval);
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
