@@ -249,7 +249,7 @@ export default function FavoritesScreen() {
                 onToggleSave={async () => {}}
                 distance={userLocation && item.latitude ? distanceMiles(userLocation, { latitude: item.latitude, longitude: item.longitude || 0 }) : null}
                 onOpenMaps={() => openMaps(item)}
-                onViewDeal={() => navigation.navigate("DealDetail" as never, { deal: item } as never)}
+                onViewDeal={() => navigation.navigate("DealDetail", { deal: item })}
                 isLocked={isLocked}
                 isPulsing={isLive}
                 theme={theme}
