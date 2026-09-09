@@ -9,6 +9,7 @@ import { getStrings } from "../utils/strings";
 import RadarStackNavigator from "./RadarStackNavigator";
 import ExploreStackNavigator from "./ExploreStackNavigator";
 import FavoritesScreen from "../screens/FavoritesScreen";
+import DealDetailScreen from "../screens/DealDetailScreen";
 import MapScreen from "../screens/MapScreen";
 import FlipItScreen from "../screens/FlipItScreen";
 import CreatorDashboard from "../screens/CreatorDashboard";
@@ -27,6 +28,18 @@ export type RootTabParamList = {
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
+
+
+const FavStack = createNativeStackNavigator();
+
+function FavoritesStackScreen() {
+  return (
+    <FavStack.Navigator screenOptions={{ headerShown: false }}>
+      <FavStack.Screen name="FavoritesList" component={FavoritesScreen} />
+      <FavStack.Screen name="DealDetail" component={DealDetailScreen} />
+    </FavStack.Navigator>
+  );
+}
 
 export default function BottomTabsNavigator() {
   const { language } = useLanguage();
@@ -70,7 +83,7 @@ export default function BottomTabsNavigator() {
     >
       <Tab.Screen name="Radar" component={RadarStackNavigator} options={{ title: t.tabs.radar }} />
       <Tab.Screen name="Explore" component={ExploreStackNavigator} options={{ title: t.tabs.explore }} />
-      <Tab.Screen name="Favorites" component={FavoritesScreen} options={{ title: t.tabs.favorites }} />
+      <Tab.Screen name="Favorites" component={FavoritesStackScreen} options={{ title: t.tabs.favorites }} />
       <Tab.Screen name="Shopping" component={ShoppingIntelligenceScreen} options={{ title: 'Shopping' }} />
       <Tab.Screen name="FlipIt" component={FlipItScreen} options={{ title: t.tabs.flipit }} />
       {isPremium && (
