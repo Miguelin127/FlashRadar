@@ -1,5 +1,3 @@
-// flashradar/screens/ExploreScreen.tsx
-
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   View, Text, StyleSheet, FlatList, ActivityIndicator,
@@ -10,14 +8,52 @@ import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLanguage } from "../context/LanguageContext";
 import { getStrings } from "../utils/strings";
+import { Share } from "react-native";
 
 import { db, functions } from "../firebaseConfig";
 import { httpsCallable } from "firebase/functions";
-import { Share } from "react-native";
+
 import DealCard from "../components/DealCard";
 import { useTheme } from "../context/ThemeContext";
 import { PREMIUM_STORES, FREE_DEAL_LIMIT, isStoreLocked } from "../constants/premiumStores";
 import { useUser } from "../context/UserContext";
+
+/* ─── Helpers ────────────────────────────────────────────────── */
+
+function mapDoc(d: any): Deal {
+  const data = d.data() as any;
+  return {
+    id: d.id,
+    title: data.title ?? "Deal",
+    store: data.store ?? data.storeKey ?? "Retailer",
+    storeKey: data.storeKey ?? null,
+    price: Number(data.price ?? 0),
+    originalPrice: data.originalPrice ?? null,
+    discountPercent: data.discountPercent ?? null,
+    url: data.url ?? null,
+    merchantUrl: data.merchantUrl ?? null,
+    affiliateUrl: data.affiliateUrl ?? null,
+    image: data.imageUrl ?? data.image ?? null,
+    imageUrl: data.imageUrl ?? data.image ?? null,
+    hot: !!data.hot,
+    rare: !!data.rare,
+    lightning: !!data.lightning,
+    live: data.live ?? true,
+    couponCode: data.couponCode ?? data.promoCode ?? null,
+    promoCode: data.promoCode ?? null,
+    dealScore: data.dealScore ?? null,
+    asin: data.asin ?? null,
+    publishedAt: data.publishedAt ?? null,
+    createdAt: data.createdAt ?? null,
+    expired: data.expired ?? false,
+    resaleIntel: data.resaleIntel ?? null,
+  };
+}
+
+function prettyStore(key: string): string {
+  if (!key) return "Store";
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -58,8 +94,6 @@ const ACCENT = "#FF7A00";
 const QUERY_LIMIT = 4000;
 const PAGE_SIZE = 40;
 
-// Weave free + premium deals: 20 free, then 6 premium, repeat.
-// premium is pre-shuffled (session-stable) by the caller.
 function interleaveFeed(free: Deal[], premium: Deal[]): Deal[] {
   const FREE_CHUNK = 20;
   const PREM_CHUNK = 6;
@@ -72,7 +106,6 @@ function interleaveFeed(free: Deal[], premium: Deal[]): Deal[] {
   return out;
 }
 
-// Deterministic shuffle from a numeric seed (session-stable).
 function seededShuffle<T>(arr: T[], seed: number): T[] {
   const a = [...arr];
   let s = seed;
@@ -105,44 +138,6 @@ const PRICE_RANGES = [
 ] as const;
 type PriceKey = typeof PRICE_RANGES[number]["key"];
 
-/* ─── Helpers ────────────────────────────────────────────────── */
-
-function mapDoc(d: any): Deal {
-  const data = d.data() as any;
-  return {
-    id: d.id,
-    title: data.title ?? "Deal",
-    store: data.store ?? data.storeKey ?? "Retailer",
-    storeKey: data.storeKey ?? null,
-    price: Number(data.price ?? 0),
-    originalPrice: data.originalPrice ?? null,
-    discountPercent: data.discountPercent ?? null,
-    url: data.url ?? null,
-    merchantUrl: data.merchantUrl ?? null,
-    affiliateUrl: data.affiliateUrl ?? null,
-    image: data.imageUrl ?? data.image ?? null,
-    imageUrl: data.imageUrl ?? data.image ?? null,
-    hot: !!data.hot,
-    rare: !!data.rare,
-    lightning: !!data.lightning,
-    live: data.live ?? true,
-    couponCode: data.couponCode ?? data.promoCode ?? null,
-    promoCode: data.promoCode ?? null,
-    dealScore: data.dealScore ?? null,
-    asin: data.asin ?? null,
-    publishedAt: data.publishedAt ?? null,
-    createdAt: data.createdAt ?? null,
-    expired: data.expired ?? false,
-    resaleIntel: data.resaleIntel ?? null,
-  };
-}
-
-// Title-case a storeKey for display (e.g. "bestbuy" -> "Bestbuy", "homedepot" -> "Homedepot")
-function prettyStore(key: string): string {
-  if (!key) return "Store";
-  return key.charAt(0).toUpperCase() + key.slice(1);
-}
-
 /* ─── Screen ─────────────────────────────────────────────────── */
 
 export default function ExploreScreen() {
@@ -171,7 +166,6 @@ export default function ExploreScreen() {
   const { isPremium, isAdmin } = useUser();
   const [aiSearching, setAiSearching] = useState(false);
 
-  // Map a numeric price ceiling to the nearest PriceKey range.
   const mapPriceToRange = (max: number | null): PriceKey => {
     if (max == null) return "all";
     if (max <= 25) return "u25";
@@ -216,9 +210,7 @@ export default function ExploreScreen() {
     }
   };
 
-  /* ── Load deals — force server fetch first, then live updates ── */
   useEffect(() => {
-    // Force server fetch to bypass Firestore cache
     Promise.all([
       db.collection("deals_live").orderBy("createdAt", "desc").limit(QUERY_LIMIT).get({ source: "server" }),
       db.collection("deals_instore").orderBy("createdAt", "desc").limit(QUERY_LIMIT).get({ source: "server" }),
@@ -233,7 +225,6 @@ export default function ExploreScreen() {
       })
       .catch(() => setLoading(false));
 
-    // Real-time listener for new deals
     const unsub1 = db
       .collection("deals_live")
       .orderBy("createdAt", "desc")
@@ -246,6 +237,7 @@ export default function ExploreScreen() {
         },
         () => { setLoading(false); setRefreshing(false); }
       );
+
     const unsub2 = db
       .collection("deals_instore")
       .orderBy("createdAt", "desc")
@@ -268,7 +260,6 @@ export default function ExploreScreen() {
     return () => { unsub1(); unsub2(); };
   }, []);
 
-  /* ── Store list derived from actual deals ── */
   const storeOptions = useMemo(() => {
     const counts = new Map<string, number>();
     const labels = new Map<string, string>();
@@ -276,7 +267,6 @@ export default function ExploreScreen() {
       const key = (d.storeKey || d.store || "").toLowerCase();
       if (!key) continue;
       counts.set(key, (counts.get(key) ?? 0) + 1);
-      // Prefer the prettiest label seen for this key (real store name over slug)
       const label = (d.store || "").trim();
       if (label && (!labels.has(key) || label.length > (labels.get(key) || "").length === false)) {
         if (!labels.has(key)) labels.set(key, label);
@@ -287,9 +277,7 @@ export default function ExploreScreen() {
       .map(([key]) => ({ key, label: labels.get(key) || key }));
   }, [rawDeals]);
 
-  /* ── Filter + Sort ── */
   const visibleDeals = useMemo(() => {
-    // Drop ghost/malformed deals (no image) that render as bare buttons
     let list = rawDeals.filter((d) => !!(d.imageUrl || d.image) && !d.expired && Number.isFinite(Number(d.price)) && Number(d.price) > 0);
 
     if (search.trim()) {
@@ -299,14 +287,12 @@ export default function ExploreScreen() {
       );
     }
 
-    // Store filter
     if (storeFilter !== "all") {
       list = list.filter(
         (d) => (d.storeKey || d.store || "").toLowerCase() === storeFilter
       );
     }
 
-    // Price range filter
     if (priceRange !== "all") {
       const range = PRICE_RANGES.find((r) => r.key === priceRange);
       if (range) {
@@ -329,21 +315,17 @@ export default function ExploreScreen() {
       return tb - ta;
     });
 
-    // ── Tier handling (free users only; premium sees everything as-is) ──
     if (!isPremium) {
       const isPrem = (d: Deal) => PREMIUM_STORES.includes((d.storeKey || "").toLowerCase());
       const freeDeals = list.filter((d) => !isPrem(d));
       if (tierFilter === "free") {
-        // Free tier: only free-store deals, no premium
         list = freeDeals;
       } else {
-        // All tier: weave 20 free : 6 premium (premium shuffled, session-stable)
         const premDeals = seededShuffle(list.filter(isPrem), shuffleSeed);
         list = interleaveFeed(freeDeals, premDeals);
       }
     }
 
-    // Free users capped at FREE_DEAL_LIMIT; premium unlimited
     if (!isPremium && list.length > FREE_DEAL_LIMIT) {
       list = list.slice(0, FREE_DEAL_LIMIT);
     }
@@ -351,12 +333,10 @@ export default function ExploreScreen() {
     return list;
   }, [rawDeals, search, filter, sort, storeFilter, priceRange, isPremium, tierFilter, shuffleSeed]);
 
-  // Reset pagination whenever the result set changes
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [search, filter, sort, storeFilter, priceRange]);
 
-  // The slice actually rendered
   const pagedDeals = useMemo(
     () => visibleDeals.slice(0, visibleCount),
     [visibleDeals, visibleCount]
@@ -370,7 +350,6 @@ export default function ExploreScreen() {
     ).length;
   }, [rawDeals, isPremium]);
 
-  /* ── Back to top ── */
   const handleScroll = (e: any) => {
     const y = e.nativeEvent.contentOffset.y;
     const shouldShow = y > 400;
@@ -401,7 +380,6 @@ export default function ExploreScreen() {
       .catch(() => setRefreshing(false));
   };
 
-  /* ── Render item ── */
   const renderItem = ({ item }: { item: Deal }) => {
     const isLocked = !isPremium && PREMIUM_STORES.includes((item.storeKey || "").toLowerCase());
     return (
@@ -432,7 +410,6 @@ export default function ExploreScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
 
-      {/* ── HEADER ── */}
       <View style={[styles.header, { backgroundColor: colors.background }]}>
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: dark ? "#fff" : "#111" }]}>{t.explore.title}</Text>
@@ -444,7 +421,6 @@ export default function ExploreScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Search */}
         <View style={[styles.searchBox, { backgroundColor: dark ? "#1a1a1a" : "#f0f0f0" }]}>
           <Ionicons name="search-outline" size={15} color="#888" />
           <TextInput
@@ -470,7 +446,6 @@ export default function ExploreScreen() {
           )}
         </View>
 
-        {/* Premium banner */}
         {!isPremium && lockedCount > 0 && (
           <TouchableOpacity
             style={styles.premiumBanner}
@@ -484,7 +459,6 @@ export default function ExploreScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Free / All tier toggle (free users only) */}
         {!isPremium && (
           <View style={styles.tierToggle}>
             {(["free", "all"] as const).map((tierVal) => (
@@ -504,7 +478,6 @@ export default function ExploreScreen() {
           </View>
         )}
 
-        {/* Dropdown filter row */}
         <View style={styles.dropRow}>
           <TouchableOpacity
             style={[styles.dropBtn, { backgroundColor: dark ? "#1a1a1a" : "#eee" }, openPanel === "filter" && { borderColor: ACCENT, borderWidth: 1 }]}
@@ -572,6 +545,7 @@ export default function ExploreScreen() {
                 <Text style={[styles.panelChipText, { color: priceRange === pr.key ? "#000" : dark ? "#ddd" : "#333" }]}>{pr.label}</Text>
               </TouchableOpacity>
             ))}
+
             <Text style={[styles.panelLabel, { color: dark ? "#888" : "#999", width: "100%" }]}>Sort</Text>
             {(SORT_OPTIONS as unknown as typeof SORT_OPTIONS[number][]).map((so) => (
               <TouchableOpacity key={so.key} onPress={() => { setSort(so.key); }}
@@ -582,7 +556,6 @@ export default function ExploreScreen() {
           </View>
         )}
 
-        {/* Results count */}
         <Text style={styles.resultsCount}>
           {isAdmin
             ? `${visibleDeals.length} deals`
@@ -592,7 +565,6 @@ export default function ExploreScreen() {
         </Text>
       </View>
 
-      {/* ── AI CART BUILDER ── */}
       <TouchableOpacity
         style={{
           marginHorizontal: 16, marginBottom: 10, borderRadius: 14,
@@ -609,7 +581,6 @@ export default function ExploreScreen() {
         <Text style={{ color: "#FF7A00", fontSize: 20, fontWeight: "900" }}>→</Text>
       </TouchableOpacity>
 
-      {/* ── DEAL LIST ── */}
       <FlatList
         ref={listRef}
         data={pagedDeals}
@@ -635,7 +606,6 @@ export default function ExploreScreen() {
         }
         ListFooterComponent={
           <View>
-            {/* Load More button */}
             {hasMore && (
               <TouchableOpacity
                 style={styles.loadMoreBtn}
@@ -648,7 +618,6 @@ export default function ExploreScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Premium upsell */}
             {!isPremium ? (
               <TouchableOpacity
                 style={styles.unlockBox}
@@ -671,7 +640,6 @@ export default function ExploreScreen() {
         renderItem={renderItem}
       />
 
-      {/* ── BACK TO TOP ── */}
       <Animated.View
         style={[styles.backToTop, { opacity: backToTopAnim, transform: [{ scale: backToTopAnim }] }]}
         pointerEvents={showBackToTop ? "auto" : "none"}
@@ -684,8 +652,6 @@ export default function ExploreScreen() {
     </SafeAreaView>
   );
 }
-
-/* ─── Styles ─────────────────────────────────────────────────── */
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
