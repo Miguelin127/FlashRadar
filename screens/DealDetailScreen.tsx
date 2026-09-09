@@ -98,11 +98,41 @@ export default function DealDetailScreen() {
     deal.retailer ||
     'Retailer';
 
-  const dealUrl =
-    deal.affiliateUrl ||
-    deal.merchantUrl ||
-    deal.url ||
-    deal.dealUrl;
+
+  const getDealUrl = (deal: any): string | null => {
+    const RETAILER_DOMAINS: { [key: string]: string[] } = {
+      'target': ['target.com'],
+      'walmart': ['walmart.com'],
+      'bestbuy': ['bestbuy.com'],
+      'cvs': ['cvs.com'],
+      'homedepot': ['homedepot.com'],
+      'home depot': ['homedepot.com'],
+      'walgreens': ['walgreens.com'],
+      'sephora': ['sephora.com'],
+      'nike': ['nike.com'],
+      'victoria secret': ['victoriassecret.com'],
+      'victoriassecret': ['victoriassecret.com'],
+      'amazon': ['amazon.com'],
+    };
+
+    const dealStore = (deal.store || deal.storeKey || '').toLowerCase().trim();
+    const expectedDomains = RETAILER_DOMAINS[dealStore] || [];
+
+    if (deal.affiliateUrl) {
+      try {
+        const url = new URL(deal.affiliateUrl);
+        const hostname = url.hostname.toLowerCase();
+        const isMatchingRetailer = expectedDomains.some(domain => hostname.includes(domain));
+        if (isMatchingRetailer) return deal.affiliateUrl;
+      } catch (e) {
+        // Invalid URL, skip
+      }
+    }
+
+    return deal.merchantUrl || deal.url || deal.dealUrl || null;
+  };
+
+  const dealUrl = getDealUrl(deal);
 
   const imageUrl =
     deal.imageUrl ||
