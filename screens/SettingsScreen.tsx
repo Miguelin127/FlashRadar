@@ -97,6 +97,10 @@ export default function SettingsScreen() {
     });
   };
 
+        <TouchableOpacity style={[styles.button, { backgroundColor: '#dc2626' }]} onPress={handleLogout}>
+          <Text style={styles.buttonText}>Log Out</Text>
+        </TouchableOpacity>
+
   const handleChangePhoto = async () => {
     if (!user) return;
     try {
@@ -311,6 +315,10 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.deleteAccount} onPress={handleDeleteAccount}>
+
+        <TouchableOpacity style={[styles.button, { backgroundColor: '#dc2626' }]} onPress={handleLogout}>
+          <Text style={styles.buttonText}>Log Out</Text>
+        </TouchableOpacity>
           <Text style={styles.deleteAccountText}>{t.settings.deleteAccount}</Text>
         </TouchableOpacity>
 
