@@ -34,7 +34,7 @@ type Props = {
   onToggleSave?: (deal: Deal) => Promise<void>;
   distance?: number | null;
   onOpenMaps?: () => void;
-  onViewDeal: () => void;
+  onViewDeal?: () => void;
   isLocked?: boolean;
   isPulsing?: boolean;
   theme?: "dark" | "light";
