@@ -37,6 +37,18 @@ export default function AdminPostDealScreen() {
     }
   };
 
+  const handleDiscountChange = (text: string) => {
+    setDiscount(text);
+    if (originalPrice && text) {
+      const orig = parseFloat(originalPrice);
+      const disc = parseFloat(text);
+      if (orig > 0 && disc >= 0 && disc <= 100) {
+        const calculated = orig * (1 - disc / 100);
+        setPrice(calculated.toFixed(2));
+      }
+    }
+  };
+
   const handleUrlChange = (text: string) => {
     setUrl(text);
     if (text.trim()) {
@@ -45,6 +57,7 @@ export default function AdminPostDealScreen() {
     }
   };
   const [originalPrice, setOriginalPrice] = useState("");
+  const [discount, setDiscount] = useState("");
   const [url, setUrl] = useState("");
   const [imageSource, setImageSource] = useState<"camera" | "gallery" | null>(null);
   const [imageUrl, setImageUrl] = useState("");
@@ -61,16 +74,13 @@ export default function AdminPostDealScreen() {
   }
 
   const storeKey = store.toLowerCase().replace(/\s/g, "");
-  const discountPercent = (() => {
-    const p = parseFloat(price);
-    const o = parseFloat(originalPrice);
-    if (p > 0 && o > p) return Math.round(((o - p) / o) * 100);
-    return null;
-  })();
+  const discountPercent = discount ? parseInt(discount) : null;
 
   const handleSubmit = async () => {
     if (!title.trim()) { Alert.alert("Missing title"); return; }
-    if (!price || isNaN(parseFloat(price))) { Alert.alert("Invalid price"); return; }
+    if (!originalPrice || isNaN(parseFloat(originalPrice))) { Alert.alert("Missing original price"); return; }
+    if (!discount || isNaN(parseFloat(discount))) { Alert.alert("Missing discount %"); return; }
+    if (!price || isNaN(parseFloat(price))) { Alert.alert("Invalid sale price"); return; }
     if (!url.trim()) { Alert.alert("Missing URL"); return; }
     if (!store.trim()) { Alert.alert("Missing Store Name"); return; }
     try {
@@ -155,18 +165,23 @@ export default function AdminPostDealScreen() {
           <TextInput style={styles.input} placeholder="Deal title..." placeholderTextColor="#555"
             value={title} onChangeText={setTitle} multiline />
 
-          <View style={{ flexDirection: "row" }}>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={styles.label}>Price *</Text>
-              <TextInput style={styles.input} placeholder="$0.00" placeholderTextColor="#555"
-                value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
-            </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>Original Price</Text>
-              <TextInput style={styles.input} placeholder="$0.00" placeholderTextColor="#555"
+              <Text style={styles.label}>Original Price *</Text>
+              <TextInput style={styles.input} placeholder="$200" placeholderTextColor="#555"
                 value={originalPrice} onChangeText={setOriginalPrice} keyboardType="decimal-pad" />
             </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>Discount % *</Text>
+              <TextInput style={styles.input} placeholder="55%" placeholderTextColor="#555"
+                value={discount} onChangeText={handleDiscountChange} keyboardType="decimal-pad" />
+            </View>
           </View>
+
+          <Text style={styles.label}>Sale Price *</Text>
+          <TextInput style={styles.input} placeholder="$90 (auto)" placeholderTextColor="#555"
+            value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+          <Text style={{ color: "#666", fontSize: 11, marginTop: -8, marginBottom: 12 }}>Calculated automatically, modify if needed</Text>
 
           <Text style={styles.label}>Deal URL *</Text>
           <TextInput style={styles.input} placeholder="https://..." placeholderTextColor="#555"
