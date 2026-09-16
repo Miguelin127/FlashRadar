@@ -218,7 +218,7 @@ export default function ExploreScreen() {
   const mergeDealCollections = (live: Deal[], instore: Deal[]): Deal[] => {
     const merged = [...live, ...instore]
       .reduce((acc, deal) => {
-        if (!acc.find(d => d.id === deal.id && d.source === deal.source)) {
+        if (!acc.find(d => d.id === deal.id)) {
           acc.push(deal);
         }
         return acc;
