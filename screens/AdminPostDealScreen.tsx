@@ -44,7 +44,6 @@ export default function AdminPostDealScreen() {
   };
   const [originalPrice, setOriginalPrice] = useState("");
   const [url, setUrl] = useState("");
-  const [store, setStore] = useState("");
   const [imageSource, setImageSource] = useState<"camera" | "gallery" | null>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [couponCode, setCouponCode] = useState("");
