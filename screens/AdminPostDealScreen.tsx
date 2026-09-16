@@ -97,8 +97,6 @@ export default function AdminPostDealScreen() {
         hot: (discountPercent ?? 0) >= 30,
         rare: (discountPercent ?? 0) >= 50,
         postedBy: user?.email ?? "admin",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       Alert.alert("Deal Posted!", title + " is live.", [
         { text: "Post Another", onPress: () => { setTitle(""); setPrice(""); setOriginalPrice(""); setUrl(""); setImageUrl(""); setCouponCode(""); } },
