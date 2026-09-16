@@ -96,9 +96,6 @@ export default function SettingsScreen() {
       message: "🚀 Join me on FlashRadar and unlock powerful deal alerts: https://flashradarapp.com",
     });
   };
-
-        <TouchableOpacity style={[styles.button, { backgroundColor: '#dc2626' }]} onPress={handleLogout}>
-          <Text style={styles.buttonText}>Log Out</Text>
         </TouchableOpacity>
 
   const handleChangePhoto = async () => {
