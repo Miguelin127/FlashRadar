@@ -250,12 +250,6 @@ export default function SettingsScreen() {
         )}
 
         {isPremium && (
-
-        {isAdmin && (
-          <TouchableOpacity style={[styles.button, { backgroundColor: "#FF7A00" }]} onPress={() => navigation.navigate("AdminPostDeal")}>
-            <Text style={styles.buttonText}>📝 Post Deal (Admin)</Text>
-          </TouchableOpacity>
-        )}
           <TouchableOpacity style={styles.button} onPress={handleManageSubscription}>
             <Text style={styles.buttonText}>{t.settings.manageSubscription}</Text>
           </TouchableOpacity>
