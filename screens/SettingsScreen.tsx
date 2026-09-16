@@ -259,12 +259,6 @@ export default function SettingsScreen() {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>{t.settings.alerts}</Text>
           {notifications.length === 0 && <Text style={{ color: "#777" }}>{t.settings.noNotifications}</Text>}
           {notifications.map((n) => (
-
-        {isAdmin && (
-          <TouchableOpacity style={[styles.button, { backgroundColor: "#FF7A00" }]} onPress={() => navigation.navigate("AdminPostDeal")}>
-            <Text style={styles.buttonText}>📝 Post Deal (Admin)</Text>
-          </TouchableOpacity>
-        )}
             <TouchableOpacity key={n.id} onPress={() => markRead(n.id)} style={[styles.notification, !n.read && styles.unread]}>
               <Text style={{ color: colors.accent, fontWeight: "700" }}>{n.title}</Text>
               <Text style={{ color: colors.text }}>{n.message}</Text>
