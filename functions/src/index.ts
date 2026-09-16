@@ -299,3 +299,4 @@ export { parseSearch } from "./parseSearch";
 export { generateListing } from "./generateListing";
 export { estimateResale } from "./estimateResale";
 export { expireManualDeals } from "./expireManualDeals";
+export { serveDealPage } from "./serveDealPage";
