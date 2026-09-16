@@ -266,6 +266,12 @@ export default function SettingsScreen() {
           ))}
         </View>
 
+
+        {isAdmin && (
+          <TouchableOpacity style={[styles.button, { backgroundColor: "#FF7A00" }]} onPress={() => navigation.navigate("AdminPostDeal")}>
+            <Text style={styles.buttonText}>📝 Post Deal (Admin)</Text>
+          </TouchableOpacity>
+        )}
         <View style={styles.toggleRow}>
           <Text style={[styles.toggleText, { color: colors.text }]}>{t.settings.pushNotifications}</Text>
           <TogglePill value={notificationsEnabled} onToggle={handleToggleNotifications} />
