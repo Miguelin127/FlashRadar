@@ -19,8 +19,33 @@ export default function AdminPostDealScreen() {
   const [title, setTitle] = useState("");
   const [store, setStore] = useState("Amazon");
   const [price, setPrice] = useState("");
+
+  const handlePickImage = async (source: "camera" | "gallery") => {
+    try {
+      const result = source === "camera"
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+      
+      if (!result.canceled) {
+        setImageUrl(result.assets[0].uri);
+        setImageSource(source);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to pick image");
+    }
+  };
+
+  const handleUrlChange = (text: string) => {
+    setUrl(text);
+    if (text.trim()) {
+      const detected = detectStoreFromUrl(text);
+      if (detected) setStore(detected);
+    }
+  };
   const [originalPrice, setOriginalPrice] = useState("");
   const [url, setUrl] = useState("");
+  const [store, setStore] = useState("");
+  const [imageSource, setImageSource] = useState<"camera" | "gallery" | null>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,6 +71,7 @@ export default function AdminPostDealScreen() {
     if (!title.trim()) { Alert.alert("Missing title"); return; }
     if (!price || isNaN(parseFloat(price))) { Alert.alert("Invalid price"); return; }
     if (!url.trim()) { Alert.alert("Missing URL"); return; }
+    if (!store.trim()) { Alert.alert("Missing Store Name"); return; }
     try {
       setLoading(true);
       const dealId = "MANUAL_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7).toUpperCase();
@@ -63,7 +89,8 @@ export default function AdminPostDealScreen() {
         imageUrl: imageUrl.trim() || null,
         image: imageUrl.trim() || null,
         couponCode: couponCode.trim() || null,
-        source: "manual-entry",
+        storeKey: store.toLowerCase().replace(/[^a-z0-9]/g, ""),
+        store: store,
         live: true,
         isActive: true,
         hot: (discountPercent ?? 0) >= 30,
@@ -123,6 +150,9 @@ export default function AdminPostDealScreen() {
             ))}
           </ScrollView>
 
+          <Text style={styles.label}>Store Name *</Text>
+          <TextInput placeholder="e.g., Sam's Club, Target, Local Store" value={store} onChangeText={setStore} style={styles.input} />
+
           <Text style={styles.label}>Title *</Text>
           <TextInput style={styles.input} placeholder="Deal title..." placeholderTextColor="#555"
             value={title} onChangeText={setTitle} multiline />
@@ -142,7 +172,7 @@ export default function AdminPostDealScreen() {
 
           <Text style={styles.label}>Deal URL *</Text>
           <TextInput style={styles.input} placeholder="https://..." placeholderTextColor="#555"
-            value={url} onChangeText={setUrl} autoCapitalize="none" keyboardType="url" />
+            value={url} onChangeText={handleUrlChange} autoCapitalize="none" keyboardType="url" />
 
           <Text style={styles.label}>Image URL</Text>
           <TextInput style={styles.input} placeholder="https://... (optional)" placeholderTextColor="#555"
@@ -179,6 +209,15 @@ export default function AdminPostDealScreen() {
 }
 
 const styles = StyleSheet.create({
+  imageBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FF7A00",
+    borderRadius: 8,
+    paddingVertical: 10,
+  },
   safe: { flex: 1, backgroundColor: "#000" },
   scroll: { padding: 16, paddingBottom: 60 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
