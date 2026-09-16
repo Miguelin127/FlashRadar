@@ -96,7 +96,6 @@ export default function SettingsScreen() {
       message: "🚀 Join me on FlashRadar and unlock powerful deal alerts: https://flashradarapp.com",
     });
   };
-        </TouchableOpacity>
 
   const handleChangePhoto = async () => {
     if (!user) return;
