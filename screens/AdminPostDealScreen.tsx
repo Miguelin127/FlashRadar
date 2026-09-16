@@ -174,9 +174,18 @@ export default function AdminPostDealScreen() {
           <TextInput style={styles.input} placeholder="https://..." placeholderTextColor="#555"
             value={url} onChangeText={handleUrlChange} autoCapitalize="none" keyboardType="url" />
 
-          <Text style={styles.label}>Image URL</Text>
-          <TextInput style={styles.input} placeholder="https://... (optional)" placeholderTextColor="#555"
-            value={imageUrl} onChangeText={setImageUrl} autoCapitalize="none" keyboardType="url" />
+          <Text style={styles.label}>Image</Text>
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+            <TouchableOpacity style={[styles.imageBtn, { flex: 1 }]} onPress={() => handlePickImage("gallery")}>
+              <Ionicons name="image-outline" size={18} color="#FF7A00" />
+              <Text style={{ color: "#FF7A00", marginLeft: 6 }}>Gallery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.imageBtn, { flex: 1 }]} onPress={() => handlePickImage("camera")}>
+              <Ionicons name="camera-outline" size={18} color="#FF7A00" />
+              <Text style={{ color: "#FF7A00", marginLeft: 6 }}>Camera</Text>
+            </TouchableOpacity>
+          </View>
+          {imageUrl && <Text style={{ color: "#666", fontSize: 12 }}>✓ Image selected</Text>}
 
           <Text style={styles.label}>Coupon Code</Text>
           <TextInput style={styles.input} placeholder="SAVE20 (optional)" placeholderTextColor="#555"
