@@ -144,6 +144,8 @@ export default function ExploreScreen() {
   const { language } = useLanguage();
   const t = getStrings(language);
   const [rawDeals, setRawDeals] = useState<Deal[]>([]);
+  const [dealsLive, setDealsLive] = useState<Deal[]>([]);
+  const [dealsInstore, setDealsInstore] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
@@ -210,28 +212,32 @@ export default function ExploreScreen() {
     }
   };
 
-  useEffect(() => {
-    Promise.all([
-      db.collection("deals_live").orderBy("createdAt", "desc").limit(QUERY_LIMIT).get({ source: "server" }),
-      db.collection("deals_instore").orderBy("createdAt", "desc").limit(QUERY_LIMIT).get({ source: "server" }),
-    ])
-      .then(([snap1, snap2]) => {
-        const merged = [...snap1.docs, ...snap2.docs]
-          .map(mapDoc)
-          .sort((a, b) => (b.createdAt?.toDate?.().getTime() ?? 0) - (a.createdAt?.toDate?.().getTime() ?? 0))
-          .slice(0, QUERY_LIMIT);
-        setRawDeals(merged);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+  
+  const FREE_STORES = ["walmart", "target", "homedepot"];
 
+  const mergeDealCollections = (live: Deal[], instore: Deal[]): Deal[] => {
+    const merged = [...live, ...instore]
+      .reduce((acc, deal) => {
+        if (!acc.find(d => d.id === deal.id && d.source === deal.source)) {
+          acc.push(deal);
+        }
+        return acc;
+      }, [] as Deal[])
+      .sort((a, b) => (b.createdAt?.toDate?.().getTime() ?? 0) - (a.createdAt?.toDate?.().getTime() ?? 0))
+      .slice(0, QUERY_LIMIT);
+    return merged;
+  };
+
+  useEffect(() => {
     const unsub1 = db
       .collection("deals_live")
       .orderBy("createdAt", "desc")
       .limit(QUERY_LIMIT)
       .onSnapshot(
         (snap) => {
-          setRawDeals(snap.docs.map(mapDoc));
+          const live = snap.docs.map(mapDoc);
+          setDealsLive(live);
+          setRawDeals(mergeDealCollections(live, dealsInstore));
           setLoading(false);
           setRefreshing(false);
         },
@@ -244,18 +250,13 @@ export default function ExploreScreen() {
       .limit(QUERY_LIMIT)
       .onSnapshot(
         (snap2) => {
-          setRawDeals((prev) => {
-            const merged = [...prev, ...snap2.docs.map(mapDoc)]
-              .reduce((m, d) => {
-                if (!m.find(x => x.id === d.id)) m.push(d);
-                return m;
-              }, [] as typeof prev)
-              .sort((a, b) => (b.createdAt?.toDate?.().getTime() ?? 0) - (a.createdAt?.toDate?.().getTime() ?? 0))
-              .slice(0, QUERY_LIMIT);
-            return merged;
-          });
+          const instore = snap2.docs.map(mapDoc);
+          setDealsInstore(instore);
+          setRawDeals(mergeDealCollections(dealsLive, instore));
+          setLoading(false);
+          setRefreshing(false);
         },
-        () => {}
+        () => { setLoading(false); setRefreshing(false); }
       );
     return () => { unsub1(); unsub2(); };
   }, []);
@@ -369,12 +370,16 @@ export default function ExploreScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    db.collection("deals_live")
-      .orderBy("createdAt", "desc")
-      .limit(QUERY_LIMIT)
-      .get({ source: "server" })
-      .then((snap) => {
-        setRawDeals(snap.docs.map(mapDoc));
+    Promise.all([
+      db.collection("deals_live").orderBy("createdAt", "desc").limit(QUERY_LIMIT).get({ source: "server" }),
+      db.collection("deals_instore").orderBy("createdAt", "desc").limit(QUERY_LIMIT).get({ source: "server" }),
+    ])
+      .then(([snap1, snap2]) => {
+        const live = snap1.docs.map(mapDoc);
+        const instore = snap2.docs.map(mapDoc);
+        setDealsLive(live);
+        setDealsInstore(instore);
+        setRawDeals(mergeDealCollections(live, instore));
         setRefreshing(false);
       })
       .catch(() => setRefreshing(false));
