@@ -76,7 +76,7 @@ export default function AdminPostDealScreen() {
     try {
       setLoading(true);
       const dealId = "MANUAL_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7).toUpperCase();
-      await db.collection("deals_online_raw").doc(dealId).set({
+      await db.collection("deals_online").doc(dealId).set({
         id: dealId,
         title: title.trim(),
         store,
@@ -85,7 +85,8 @@ export default function AdminPostDealScreen() {
         originalPrice: originalPrice ? parseFloat(originalPrice) : null,
         discountPercent,
         url: url.trim(),
-        affiliateUrl: url.trim(),
+        merchantUrl: url.trim(),
+        affiliateUrl: null,
         merchantUrl: url.trim(),
         imageUrl: imageUrl.trim() || null,
         image: imageUrl.trim() || null,
