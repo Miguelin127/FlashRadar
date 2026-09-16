@@ -90,8 +90,6 @@ export default function AdminPostDealScreen() {
         imageUrl: imageUrl.trim() || null,
         image: imageUrl.trim() || null,
         couponCode: couponCode.trim() || null,
-        storeKey: store.toLowerCase().replace(/[^a-z0-9]/g, ""),
-        store: store,
         live: true,
         isActive: true,
         hot: (discountPercent ?? 0) >= 30,
