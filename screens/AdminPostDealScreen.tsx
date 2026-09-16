@@ -97,7 +97,6 @@ export default function AdminPostDealScreen() {
         url: url.trim(),
         merchantUrl: url.trim(),
         affiliateUrl: null,
-        merchantUrl: url.trim(),
         imageUrl: imageUrl.trim() || null,
         image: imageUrl.trim() || null,
         couponCode: couponCode.trim() || null,
