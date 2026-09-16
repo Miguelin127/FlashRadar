@@ -142,6 +142,7 @@ export default function DealCard({
 
   return (
     <>
+      <View style={cs.card}>
         <TouchableOpacity activeOpacity={0.8} onPress={isLocked ? undefined : (onPress || onViewDeal)} disabled={isLocked}>
           <Image
             source={{ uri: deal.image || deal.imageUrl || "https://via.placeholder.com/150" }}
