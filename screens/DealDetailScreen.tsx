@@ -236,18 +236,14 @@ export default function DealDetailScreen() {
   const shareDeal = async () => {
     try {
       await Share.share({
-        title: deal.title,
         url: `https://flashradarapp.com/deal/${deal.id}`,
         title: deal.title,
-        message: `🎉 Amazing Deal Found!\n\n${deal.title}\n💰 ${price !== null ? `$${price.toFixed(2)}` : "See deal"} ${discountPercent !== null ? `(${discountPercent}% OFF)` : ""}\n🏪 ${storeName}\n\n📱 View on FlashRadar:\nhttps://flashradarapp.com/deal/${deal.id}\n\n💾 Download App: https://flashradarapp.com\n\n⚡ Get exclusive deals before they're gone!`,
-          price !== null ? `$${price.toFixed(2)}` : 'See deal'
-        }${
-          discountPercent !== null
-            ? ` • ${discountPercent}% OFF`
-            : ''
-        }\n\nFound on FlashRadar`,
+        message: `🎉 Amazing Deal Found!\n\n${deal.title}\n💰 ${price !== null ? `$${price.toFixed(2)}` : "See deal"} ${discountPercent !== null ? `(${discountPercent}% OFF)` : ""}\n🏪 ${storeName}\n\n📱 View on FlashRadar: https://flashradarapp.com/deal/${deal.id}`,
       });
     } catch {
+      // User cancelled
+    }
+  };
       // User cancelled or sharing is unavailable.
     }
   };
