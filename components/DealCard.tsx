@@ -132,12 +132,16 @@ export default function DealCard({
 
   const handleShare = async (d: Deal) => {
     try {
-      await Linking.openURL(d.affiliateUrl || d.url || "");
+      const discount = d.discountPercent ? `(${d.discountPercent}% OFF)` : "";
+      await Share.share({
+        url: `https://flashradarapp.com/deal/${d.id}`,
+        title: d.title,
+        message: `🎉 Amazing Deal Found!\n\n${d.title}\n💰 $${(d.price || 0).toFixed(2)} ${discount}\n🏪 ${d.store || "Unknown Store"}\n\n📱 View on FlashRadar: https://flashradarapp.com/deal/${d.id}`,
+      });
     } catch (err) {
       console.error(err);
     }
   };
-
   const safePrice = deal.price || 0;
 
   return (
