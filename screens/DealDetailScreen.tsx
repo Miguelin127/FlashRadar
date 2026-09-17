@@ -244,9 +244,6 @@ export default function DealDetailScreen() {
       // User cancelled
     }
   };
-      // User cancelled or sharing is unavailable.
-    }
-  };
 
   const storeInitial =
     typeof storeName === 'string'
