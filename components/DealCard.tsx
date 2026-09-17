@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Share } from "react-native";
 import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator, Linking, Platform, Modal, TextInput, Alert } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { auth, db } from "../firebaseConfig";
