@@ -86,7 +86,7 @@ export default function AdminPostDealScreen() {
     try {
       setLoading(true);
       const dealId = "MANUAL_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7).toUpperCase();
-      await db.collection("deals_online").doc(dealId).set({
+      await db.collection("deals_live").doc(dealId).set({
         id: dealId,
         title: title.trim(),
         store,
