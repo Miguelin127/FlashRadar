@@ -133,6 +133,9 @@ export default function AdminPostDealScreen() {
             </View>
           </View>
 
+              {imageUrl && (
+                <Image source={{ uri: imageUrl }} style={{ width: "100%", height: 150, borderRadius: 8, marginBottom: 8 }} />
+              )}
           {title.length > 0 && (
             <View style={styles.preview}>
               <Text style={styles.previewStore}>{store.toUpperCase()}</Text>
