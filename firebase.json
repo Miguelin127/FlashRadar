@@ -29,7 +29,7 @@
     }
   },
   "hosting": {
-    "public": "web/dist",
+    "public": "../FlashRadar-Web-2.0/dist",
     "rewrites": [{
       "source": "/deal/**",
       "function": "serveDealPage"
