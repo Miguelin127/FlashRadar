@@ -29,7 +29,7 @@
     }
   },
   "hosting": {
-    "public": "public-legal",
+    "public": "web/dist",
     "rewrites": [{
       "source": "/deal/**",
       "function": "serveDealPage"
