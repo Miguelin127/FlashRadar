@@ -9,14 +9,14 @@ export const serveDealPage = functions.https.onRequest(async (req, res) => {
   const dealId = req.path.split("/deal/")[1]?.split("/")[0];
 
   if (!dealId) {
-    return res.status(404).send("<html><head><title>Deal not found</title></head><body>Deal not found</body></html>");
+    res.status(404).send("<html><head><title>Deal not found</title></head><body>Deal not found</body></html>");
   }
 
   try {
     const dealDoc = await db.collection("deals_online").doc(dealId).get();
 
     if (!dealDoc.exists) {
-      return res.status(404).send("<html><head><title>Deal not found</title></head><body>Deal not found</body></html>");
+      res.status(404).send("<html><head><title>Deal not found</title></head><body>Deal not found</body></html>");
     }
 
     const deal = dealDoc.data();
