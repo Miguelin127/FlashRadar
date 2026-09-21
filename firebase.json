@@ -30,10 +30,16 @@
   },
   "hosting": {
     "public": "public-legal",
-    "rewrites": [{
-      "source": "/deal/**",
-      "function": "serveDealPage"
-    }],
+    "rewrites": [
+      {
+        "source": "/deal/**",
+        "function": "serveDealPage"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
     "ignore": [
       "firebase.json",
       "**/.*",
