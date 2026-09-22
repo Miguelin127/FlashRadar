@@ -45,7 +45,7 @@ type Props = {
   onPress?: () => void;
 };
 
-export default function DealCard({
+function DealCard({
   deal,
   onToggleSave,
   distance,
@@ -261,3 +261,5 @@ const cs = StyleSheet.create({
   cancelBtn: { alignItems: "center", paddingVertical: 10 },
   cancelText: { color: "#666", fontSize: 14 },
 });
+
+export default React.memo(DealCard);

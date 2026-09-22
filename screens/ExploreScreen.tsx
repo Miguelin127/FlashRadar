@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import {
   View, Text, StyleSheet, FlatList, ActivityIndicator,
   TouchableOpacity, TextInput, RefreshControl, Animated, Alert,
@@ -91,7 +91,7 @@ export type Deal = {
 /* ─── Constants ──────────────────────────────────────────────── */
 
 const ACCENT = "#FF7A00";
-const QUERY_LIMIT = 4000;
+const QUERY_LIMIT = 300;
 const PAGE_SIZE = 40;
 
 function interleaveFeed(free: Deal[], premium: Deal[]): Deal[] {
@@ -215,6 +215,27 @@ export default function ExploreScreen() {
   
   const FREE_STORES = ["walmart", "target", "homedepot"];
 
+  const interleaveByStore = (deals: Deal[]): Deal[] => {
+    const buckets = new Map<string, Deal[]>();
+    for (const d of deals) {
+      const k = String((d as any).store || (d as any).source || "other").toLowerCase();
+      if (!buckets.has(k)) buckets.set(k, []);
+      buckets.get(k)!.push(d);
+    }
+    const lists = Array.from(buckets.values());
+    const out: Deal[] = [];
+    let idx = 0;
+    while (out.length < deals.length) {
+      let added = false;
+      for (const list of lists) {
+        if (idx < list.length) { out.push(list[idx]); added = true; }
+      }
+      if (!added) break;
+      idx++;
+    }
+    return out;
+  };
+
   const mergeDealCollections = (live: Deal[], instore: Deal[]): Deal[] => {
     const merged = [...live, ...instore]
       .reduce((acc, deal) => {
@@ -223,9 +244,8 @@ export default function ExploreScreen() {
         }
         return acc;
       }, [] as Deal[])
-      .sort((a, b) => (b.createdAt?.toDate?.().getTime() ?? 0) - (a.createdAt?.toDate?.().getTime() ?? 0))
-      .slice(0, QUERY_LIMIT);
-    return merged;
+      .sort((a, b) => (b.createdAt?.toDate?.().getTime() ?? 0) - (a.createdAt?.toDate?.().getTime() ?? 0));
+    return interleaveByStore(merged).slice(0, QUERY_LIMIT);
   };
 
   useEffect(() => {
@@ -385,7 +405,7 @@ export default function ExploreScreen() {
       .catch(() => setRefreshing(false));
   };
 
-  const renderItem = ({ item }: { item: Deal }) => {
+  const renderItem = useCallback(({ item }: { item: Deal }) => {
     const isLocked = !isPremium && PREMIUM_STORES.includes((item.storeKey || "").toLowerCase());
     return (
       <DealCard
@@ -402,7 +422,7 @@ export default function ExploreScreen() {
         }}
       />
     );
-  };
+  }, [isPremium, dark, gridMode, navigation]);
 
   if (loading) {
     return (
