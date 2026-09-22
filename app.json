@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "buildNumber": "76",
+      "buildNumber": "77",
       "supportsTablet": false,
       "bundleIdentifier": "com.miguelin1.flashradarapp",
       "infoPlist": {
@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "com.miguelin1.flashradarapp",
-      "versionCode": 23,
+      "versionCode": 24,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
