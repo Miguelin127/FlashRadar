@@ -418,6 +418,17 @@ export default function DealDetailScreen() {
             )}
           </View>
 
+          {typeof deal.rakutenRate === "number" && deal.rakutenRate > 0 && price !== null && (
+            <View style={styles.rakutenCard}>
+              <Text style={styles.rakutenTitle}>
+                Stack ~{deal.rakutenRate}% back at Rakuten
+              </Text>
+              <Text style={styles.rakutenBody}>
+                Est. {"$"}{(price * deal.rakutenRate / 100).toFixed(2)} back on top of this deal. Rates change often, confirm on Rakuten before buying.
+              </Text>
+            </View>
+          )}
+
           {/* SAVINGS */}
           {savings !== null && (
             <View
@@ -1021,6 +1032,25 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
+  rakutenCard: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FF7A00",
+    backgroundColor: "rgba(255,122,0,0.08)",
+  },
+  rakutenTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FF7A00",
+    marginBottom: 4,
+  },
+  rakutenBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#8A8A8E",
+  },
   savingsCard: {
     borderRadius: 14,
     padding: 14,
