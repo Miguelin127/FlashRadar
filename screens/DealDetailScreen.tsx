@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { getCouponsForStore, StoreCoupon } from '../utils/storeCoupons';
 import {
   View,
   Text,
@@ -25,6 +26,13 @@ export default function DealDetailScreen() {
 
   const [favorite, setFavorite] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [coupons, setCoupons] = useState<StoreCoupon[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    getCouponsForStore(deal?.storeKey).then((c) => { if (alive) setCoupons(c); });
+    return () => { alive = false; };
+  }, [deal?.storeKey]);
 
   if (!deal) {
     return (
@@ -426,6 +434,17 @@ export default function DealDetailScreen() {
               <Text style={styles.rakutenBody}>
                 Est. {"$"}{(price * deal.rakutenRate / 100).toFixed(2)} back on top of this deal. Rates change often, confirm on Rakuten before buying.
               </Text>
+            </View>
+          )}
+
+          {coupons.length > 0 && (
+            <View style={styles.couponCard}>
+              <Text style={styles.couponTitle}>Stackable offers</Text>
+              {coupons.map((c, i) => (
+                <Text key={i} style={styles.couponBody}>
+                  {c.code ? c.code + " - " : ""}{c.terms}
+                </Text>
+              ))}
             </View>
           )}
 
@@ -1032,6 +1051,25 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
+  couponCard: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2E7D32",
+    backgroundColor: "rgba(46,125,50,0.08)",
+  },
+  couponTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#2E7D32",
+    marginBottom: 6,
+  },
+  couponBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#8A8A8E",
+  },
   rakutenCard: {
     marginTop: 12,
     padding: 14,
