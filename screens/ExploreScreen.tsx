@@ -159,6 +159,12 @@ export default function ExploreScreen() {
   const [gridMode, setGridMode] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const lastLiveDoc = useRef<any>(null);
+  const lastInstoreDoc = useRef<any>(null);
+  const liveExhausted = useRef(false);
+  const instoreExhausted = useRef(false);
+  const fetchingMore = useRef(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const listRef = useRef<FlatList>(null);
   const backToTopAnim = useRef(new Animated.Value(0)).current;
@@ -245,41 +251,65 @@ export default function ExploreScreen() {
         return acc;
       }, [] as Deal[])
       .sort((a, b) => (b.createdAt?.toDate?.().getTime() ?? 0) - (a.createdAt?.toDate?.().getTime() ?? 0));
-    return interleaveByStore(merged).slice(0, QUERY_LIMIT);
+    return interleaveByStore(merged);
   };
 
-  useEffect(() => {
-    const unsub1 = db
-      .collection("deals_live")
-      .orderBy("createdAt", "desc")
-      .limit(QUERY_LIMIT)
-      .onSnapshot(
-        (snap) => {
-          const live = snap.docs.map(mapDoc);
-          setDealsLive(live);
-          setRawDeals(mergeDealCollections(live, dealsInstore));
-          setLoading(false);
-          setRefreshing(false);
-        },
-        () => { setLoading(false); setRefreshing(false); }
-      );
+  const loadNextPage = async (reset: boolean = false) => {
+    if (fetchingMore.current) return;
+    fetchingMore.current = true;
+    if (reset) {
+      lastLiveDoc.current = null;
+      lastInstoreDoc.current = null;
+      liveExhausted.current = false;
+      instoreExhausted.current = false;
+    } else {
+      setLoadingMore(true);
+    }
 
-    const unsub2 = db
-      .collection("deals_instore")
-      .orderBy("createdAt", "desc")
-      .limit(QUERY_LIMIT)
-      .onSnapshot(
-        (snap2) => {
-          const instore = snap2.docs.map(mapDoc);
-          setDealsInstore(instore);
-          setRawDeals(mergeDealCollections(dealsLive, instore));
-          setLoading(false);
-          setRefreshing(false);
-        },
-        () => { setLoading(false); setRefreshing(false); }
-      );
-    return () => { unsub1(); unsub2(); };
+    try {
+      let liveQ = db.collection("deals_live").orderBy("createdAt", "desc").limit(QUERY_LIMIT);
+      if (!reset && lastLiveDoc.current) liveQ = liveQ.startAfter(lastLiveDoc.current);
+      let instoreQ = db.collection("deals_instore").orderBy("createdAt", "desc").limit(QUERY_LIMIT);
+      if (!reset && lastInstoreDoc.current) instoreQ = instoreQ.startAfter(lastInstoreDoc.current);
+
+      const [liveSnap, instoreSnap] = await Promise.all([
+        liveExhausted.current && !reset ? Promise.resolve(null) : liveQ.get(),
+        instoreExhausted.current && !reset ? Promise.resolve(null) : instoreQ.get(),
+      ]);
+
+      const newLive = liveSnap ? liveSnap.docs.map(mapDoc) : [];
+      const newInstore = instoreSnap ? instoreSnap.docs.map(mapDoc) : [];
+
+      if (liveSnap) {
+        if (liveSnap.docs.length > 0) lastLiveDoc.current = liveSnap.docs[liveSnap.docs.length - 1];
+        if (liveSnap.docs.length < QUERY_LIMIT) liveExhausted.current = true;
+      }
+      if (instoreSnap) {
+        if (instoreSnap.docs.length > 0) lastInstoreDoc.current = instoreSnap.docs[instoreSnap.docs.length - 1];
+        if (instoreSnap.docs.length < QUERY_LIMIT) instoreExhausted.current = true;
+      }
+
+      setDealsLive((prev) => (reset ? newLive : [...prev, ...newLive]));
+      setDealsInstore((prev) => (reset ? newInstore : [...prev, ...newInstore]));
+    } catch (e) {
+      // keep whatever is already loaded
+    } finally {
+      fetchingMore.current = false;
+      setLoadingMore(false);
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const allExhausted = () => liveExhausted.current && instoreExhausted.current;
+
+  useEffect(() => {
+    loadNextPage(true);
   }, []);
+
+  useEffect(() => {
+    setRawDeals(mergeDealCollections(dealsLive, dealsInstore));
+  }, [dealsLive, dealsInstore]);
 
   const storeOptions = useMemo(() => {
     const counts = new Map<string, number>();
@@ -363,6 +393,15 @@ export default function ExploreScreen() {
     [visibleDeals, visibleCount]
   );
   const hasMore = visibleCount < visibleDeals.length;
+  const canLoadMore = true;
+
+  const advancePage = () => {
+    const next = visibleCount + PAGE_SIZE;
+    setVisibleCount(next);
+    if (next >= visibleDeals.length - PAGE_SIZE && !allExhausted()) {
+      loadNextPage(false);
+    }
+  };
 
   const lockedCount = useMemo(() => {
     if (isPremium) return 0;
@@ -390,19 +429,8 @@ export default function ExploreScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    Promise.all([
-      db.collection("deals_live").orderBy("createdAt", "desc").limit(QUERY_LIMIT).get({ source: "server" }),
-      db.collection("deals_instore").orderBy("createdAt", "desc").limit(QUERY_LIMIT).get({ source: "server" }),
-    ])
-      .then(([snap1, snap2]) => {
-        const live = snap1.docs.map(mapDoc);
-        const instore = snap2.docs.map(mapDoc);
-        setDealsLive(live);
-        setDealsInstore(instore);
-        setRawDeals(mergeDealCollections(live, instore));
-        setRefreshing(false);
-      })
-      .catch(() => setRefreshing(false));
+    setVisibleCount(PAGE_SIZE);
+    loadNextPage(true);
   };
 
   const renderItem = useCallback(({ item }: { item: Deal }) => {
@@ -617,7 +645,7 @@ export default function ExploreScreen() {
         scrollEventThrottle={16}
         onEndReachedThreshold={0.5}
         onEndReached={() => {
-          if (hasMore) setVisibleCount((c) => c + PAGE_SIZE);
+          if (hasMore) advancePage(); else if (!allExhausted()) loadNextPage(false);
         }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ACCENT} />
@@ -631,10 +659,10 @@ export default function ExploreScreen() {
         }
         ListFooterComponent={
           <View>
-            {hasMore && (
+            {(hasMore || !allExhausted()) && (
               <TouchableOpacity
                 style={styles.loadMoreBtn}
-                onPress={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                onPress={advancePage}
               >
                 <Text style={styles.loadMoreText}>
                   Load More{isAdmin ? ` · ${visibleDeals.length - visibleCount} left` : ""}
