@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { getCouponsForStore, StoreCoupon } from '../utils/storeCoupons';
+import * as ExpoClipboard from 'expo-clipboard';
 import {
   View,
   Text,
@@ -27,6 +28,7 @@ export default function DealDetailScreen() {
   const [favorite, setFavorite] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [coupons, setCoupons] = useState<StoreCoupon[]>([]);
+  const dealCouponCode: string = String((deal as any)?.couponCode || (deal as any)?.promoCode || "").trim();
 
   useEffect(() => {
     let alive = true;
@@ -436,6 +438,20 @@ export default function DealDetailScreen() {
               </Text>
             </View>
           )}
+
+          {dealCouponCode ? (
+            <TouchableOpacity
+              style={styles.couponCard}
+              onPress={() => {
+                ExpoClipboard.setStringAsync(dealCouponCode);
+                Alert.alert("Copied", dealCouponCode + " copied. Paste it at checkout.");
+              }}
+            >
+              <Text style={styles.couponTitle}>Promo code</Text>
+              <Text style={styles.couponCode}>{dealCouponCode}</Text>
+              <Text style={styles.couponBody}>Tap to copy, then paste at checkout.</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {coupons.length > 0 && (
             <View style={styles.couponCard}>
@@ -1058,6 +1074,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#2E7D32",
     backgroundColor: "rgba(46,125,50,0.08)",
+  },
+  couponCode: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    color: "#FFFFFF",
+    marginBottom: 4,
   },
   couponTitle: {
     fontSize: 15,

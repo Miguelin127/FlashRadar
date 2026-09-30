@@ -267,9 +267,14 @@ export default function ExploreScreen() {
     }
 
     try {
-      let liveQ = db.collection("deals_live").orderBy("createdAt", "desc").limit(QUERY_LIMIT);
+      const storeScoped = storeFilter && storeFilter !== "all";
+      let liveQ: any = db.collection("deals_live");
+      if (storeScoped) liveQ = liveQ.where("storeKey", "==", storeFilter);
+      liveQ = liveQ.orderBy("createdAt", "desc").limit(QUERY_LIMIT);
       if (!reset && lastLiveDoc.current) liveQ = liveQ.startAfter(lastLiveDoc.current);
-      let instoreQ = db.collection("deals_instore").orderBy("createdAt", "desc").limit(QUERY_LIMIT);
+      let instoreQ: any = db.collection("deals_instore");
+      if (storeScoped) instoreQ = instoreQ.where("storeKey", "==", storeFilter);
+      instoreQ = instoreQ.orderBy("createdAt", "desc").limit(QUERY_LIMIT);
       if (!reset && lastInstoreDoc.current) instoreQ = instoreQ.startAfter(lastInstoreDoc.current);
 
       const [liveSnap, instoreSnap] = await Promise.all([
@@ -291,7 +296,8 @@ export default function ExploreScreen() {
 
       setDealsLive((prev) => (reset ? newLive : [...prev, ...newLive]));
       setDealsInstore((prev) => (reset ? newInstore : [...prev, ...newInstore]));
-    } catch (e) {
+    } catch (e: any) {
+      console.error("[PAGE ERROR]", e?.message || e);
       // keep whatever is already loaded
     } finally {
       fetchingMore.current = false;
@@ -310,6 +316,13 @@ export default function ExploreScreen() {
   useEffect(() => {
     setRawDeals(mergeDealCollections(dealsLive, dealsInstore));
   }, [dealsLive, dealsInstore]);
+
+  const storeFilterFirstRun = useRef(true);
+  useEffect(() => {
+    if (storeFilterFirstRun.current) { storeFilterFirstRun.current = false; return; }
+    setVisibleCount(PAGE_SIZE);
+    loadNextPage(true);
+  }, [storeFilter]);
 
   const storeOptions = useMemo(() => {
     const counts = new Map<string, number>();
@@ -387,6 +400,7 @@ export default function ExploreScreen() {
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [search, filter, sort, storeFilter, priceRange]);
+
 
   const pagedDeals = useMemo(
     () => visibleDeals.slice(0, visibleCount),
