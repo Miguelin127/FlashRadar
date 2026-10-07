@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { loadStoreIndex } from "../utils/storeIndex";
 import {
   View, Text, StyleSheet, FlatList, ActivityIndicator,
   TouchableOpacity, TextInput, RefreshControl, Animated, Alert,
@@ -324,22 +325,14 @@ export default function ExploreScreen() {
     loadNextPage(true);
   }, [storeFilter]);
 
-  const storeOptions = useMemo(() => {
-    const counts = new Map<string, number>();
-    const labels = new Map<string, string>();
-    for (const d of rawDeals) {
-      const key = (d.storeKey || d.store || "").toLowerCase();
-      if (!key) continue;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-      const label = (d.store || "").trim();
-      if (label && (!labels.has(key) || label.length > (labels.get(key) || "").length === false)) {
-        if (!labels.has(key)) labels.set(key, label);
-      }
-    }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([key]) => ({ key, label: labels.get(key) || key }));
-  }, [rawDeals]);
+  const [storeOptions, setStoreOptions] = useState<{ key: string; label: string }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    loadStoreIndex().then((list) => {
+      if (alive) setStoreOptions(list.map((x) => ({ key: x.key, label: x.label })));
+    });
+    return () => { alive = false; };
+  }, []);
 
   const visibleDeals = useMemo(() => {
     let list = rawDeals.filter((d) => !!(d.imageUrl || d.image) && !d.expired && Number.isFinite(Number(d.price)) && Number(d.price) > 0);
