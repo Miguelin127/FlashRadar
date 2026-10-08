@@ -6,7 +6,8 @@ import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { db, functions } from '../firebaseConfig';
-import { collection, getDocs, doc, getDoc, query, where, limit } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, orderBy, startAt, endAt } from 'firebase/firestore';
+import { geohashQueryBounds, distanceBetween } from 'geofire-common';
 import { httpsCallable } from 'firebase/functions';
 
 const CHAIN_KEYS: { key: string; match: RegExp }[] = [
@@ -40,6 +41,7 @@ interface PhysicalStore {
   latitude: number;
   longitude: number;
   chainKey?: string;
+  distanceM?: number;
 }
 
 interface Deal {
@@ -71,6 +73,8 @@ export default function MapScreen() {
   const [loadingDeals, setLoadingDeals] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [selectedTier, setSelectedTier] = useState<string>('');
+  const [chainCounts, setChainCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     initMap();
@@ -80,36 +84,24 @@ export default function MapScreen() {
     setLoadingDeals(true);
     try {
       const chainKey = store.chainKey || storeNameToKey(store.name);
-      if (chainKey === '') {
-        setSelectedDeals([]);
-        return;
-      }
-      const q = query(
-        collection(db, 'deals_live'),
-        where('storeKey', '==', chainKey),
-        where('live', '==', true),
-        limit(10)
-      );
-      const dealsSnap = await getDocs(q);
-      const deals: Deal[] = dealsSnap.docs.map(d => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          title: data.title,
-          price: data.price,
-          originalPrice: data.originalPrice,
-          discountPercent: data.discountPercent,
-          imageUrl: data.imageUrl,
-          store: data.store,
-          hot: data.hot,
-          rare: data.rare,
-          lightning: data.lightning,
-          affiliateUrl: data.affiliateUrl,
-          merchantUrl: data.merchantUrl,
-          url: data.url,
-        };
-      });
-      setSelectedDeals(deals);
+      if (chainKey === '') { setSelectedDeals([]); setSelectedTier(''); return; }
+      const snap = await getDoc(doc(db, 'chainDeals', chainKey));
+      const data = snap.data() as any;
+      if (data == null) { setSelectedDeals([]); setSelectedTier(''); return; }
+      setSelectedTier(String(data.inventoryTier || 'retailer_only'));
+      const list = (data.deals || []) as any[];
+      setSelectedDeals(list.map((d: any, i: number) => ({
+        id: String(d.dealId || i),
+        title: d.title || '',
+        price: d.price,
+        originalPrice: d.originalPrice,
+        discountPercent: d.discountPercent,
+        imageUrl: d.imageUrl,
+        store: data.label || chainKey,
+        affiliateUrl: d.affiliateUrl,
+        merchantUrl: d.merchantUrl,
+        url: d.url,
+      })));
     } catch (error) {
       console.error('Error fetching deals:', error);
       setSelectedDeals([]);
@@ -118,35 +110,48 @@ export default function MapScreen() {
     }
   };
 
-  // Free path: pins come from the shared Firestore cache. No Places API call.
-  const loadCachedStores = async (latitude: number, longitude: number) => {
+  // Per-chain deal counts, so a marker can show a real number.
+  const loadChainCounts = async () => {
     try {
-      const snap = await getDoc(doc(db, 'config', 'storeLocationCache'));
-      const locations = (snap.data()?.locations ?? {}) as Record<string, any[]>;
-      const pins: PhysicalStore[] = [];
-      Object.keys(locations).forEach(chainKey => {
-        (locations[chainKey] || []).forEach((pl: any) => {
-          const lat = pl?.location?.latitude;
-          const lng = pl?.location?.longitude;
-          if (typeof lat === 'number' && typeof lng === 'number') {
-            if (distanceMeters(latitude, longitude, lat, lng) <= 40000) {
-              pins.push({
-                id: String(pl.id ?? lat + '_' + lng),
-                name: pl?.displayName?.text ?? chainKey,
-                address: pl?.formattedAddress ?? '',
-                latitude: lat,
-                longitude: lng,
-                chainKey,
-              });
-            }
-          }
-        });
-      });
-      setStores(pins);
-      setShowSearchButton(pins.length === 0);
-      console.log('Cached stores loaded:', pins.length);
+      const snap = await getDocs(collection(db, 'chainDeals'));
+      const counts: Record<string, number> = {};
+      snap.docs.forEach(d => { counts[d.id] = Number((d.data() as any).dealCount || 0); });
+      setChainCounts(counts);
     } catch (error) {
-      console.error('Error loading cached stores:', error);
+      console.error('Error loading chain counts:', error);
+    }
+  };
+
+  // Verified stores near the user: geohash bounds, then true distance.
+  const loadNearbyStores = async (latitude: number, longitude: number) => {
+    try {
+      const radiusM = 40000;
+      const bounds = geohashQueryBounds([latitude, longitude], radiusM);
+      const snaps = await Promise.all(bounds.map(b =>
+        getDocs(query(collection(db, 'stores'), orderBy('geohash'), startAt(b[0]), endAt(b[1])))
+      ));
+      const pins: PhysicalStore[] = [];
+      snaps.forEach(snap => snap.docs.forEach(docSnap => {
+        const x = docSnap.data() as any;
+        if (x.active === false || x.verified === false) return;
+        const dMeters = distanceBetween([x.lat, x.lng], [latitude, longitude]) * 1000;
+        if (dMeters > radiusM) return;
+        pins.push({
+          id: docSnap.id,
+          name: x.name,
+          address: x.address + ', ' + x.city + ', ' + x.state,
+          latitude: x.lat,
+          longitude: x.lng,
+          chainKey: x.storeKey,
+          distanceM: dMeters,
+        });
+      }));
+      pins.sort((a, b) => (a.distanceM || 0) - (b.distanceM || 0));
+      setStores(pins.slice(0, 120));
+      setShowSearchButton(pins.length === 0);
+      console.log('Nearby verified stores:', pins.length);
+    } catch (error) {
+      console.error('Error loading nearby stores:', error);
     } finally {
       setLoading(false);
     }
@@ -190,7 +195,7 @@ export default function MapScreen() {
       setRegion(newRegion);
       setMapRegion(newRegion);
 
-      await loadCachedStores(latitude, longitude);
+      await Promise.all([loadNearbyStores(latitude, longitude), loadChainCounts()]);
     } catch (error) {
       console.error('Map error:', error);
       setLoading(false);
@@ -224,7 +229,7 @@ export default function MapScreen() {
   };
 
   const handleViewDeal = (deal: Deal) => {
-    navigation.navigate('Explore', { screen: 'DealDetail', params: { deal } });
+    navigation.navigate('DealDetail', { deal });
   };
 
   const handleShowDeals = async (store: PhysicalStore) => {
@@ -250,18 +255,28 @@ export default function MapScreen() {
         onRegionChangeComplete={handleRegionChange}
         showsUserLocation
       >
-        {stores.map(store => (
-          <Marker
-            key={store.id}
-            coordinate={{ latitude: store.latitude, longitude: store.longitude }}
-            title={store.name}
-            pinColor="#FF7A00"
-            onPress={() => {
-              setSelected(store);
-              handleShowDeals(store);
-            }}
-          />
-        ))}
+        {stores.map(store => {
+          const count = chainCounts[store.chainKey || ''] || 0;
+          return (
+            <Marker
+              key={store.id}
+              coordinate={{ latitude: store.latitude, longitude: store.longitude }}
+              onPress={() => {
+                setSelected(store);
+                handleShowDeals(store);
+              }}
+              tracksViewChanges={false}
+            >
+              {count > 0 ? (
+                <View style={styles.pinBubble}>
+                  <Text style={styles.pinBubbleText}>{count}</Text>
+                </View>
+              ) : (
+                <View style={styles.pinDot} />
+              )}
+            </Marker>
+          );
+        })}
       </MapView>
 
       <View style={[styles.searchContainer, { backgroundColor: darkMode ? '#111' : '#fff' }]}>
@@ -304,15 +319,21 @@ export default function MapScreen() {
           </Text>
           <Text style={[styles.address, { color: darkMode ? '#aaa' : '#666' }]}>
             {selected.address}
+            {selected.distanceM ? '  ·  ' + (selected.distanceM / 1609).toFixed(1) + ' mi' : ''}
           </Text>
 
           <Text style={[styles.dealsHeader, { color: darkMode ? '#fff' : '#000' }]}>
-            🔥 {selectedDeals.length} FlashRadar Deals
+            {selectedDeals.length} deal{selectedDeals.length === 1 ? '' : 's'} at {selected.name}
           </Text>
+          {selectedDeals.length > 0 && selectedTier !== 'verified' && (
+            <Text style={styles.tierNote}>
+              Carried by this retailer. In-store stock is not verified.
+            </Text>
+          )}
 
           {selectedDeals.length === 0 && !loadingDeals && (
             <Text style={[styles.noDeals, { color: darkMode ? '#aaa' : '#666' }]}>
-              No FlashRadar deals found for this retailer.
+              No verified FlashRadar deals for this retailer yet.
             </Text>
           )}
 
@@ -320,9 +341,11 @@ export default function MapScreen() {
             <ActivityIndicator color="#FF7A00" size="small" />
           ) : selectedDeals.length > 0 ? (
             <FlatList
-              data={selectedDeals.slice(0, 3)}
+              data={selectedDeals}
               keyExtractor={item => item.id}
-              scrollEnabled={false}
+              scrollEnabled={true}
+              showsVerticalScrollIndicator={true}
+              style={styles.dealList}
               renderItem={({ item }) => (
                 <TouchableOpacity 
                   style={[styles.dealItem, { borderBottomColor: darkMode ? '#333' : '#eee' }]}
@@ -341,6 +364,9 @@ export default function MapScreen() {
                       </Text>
                     )}
                   </View>
+                  <Text style={[styles.stockNote, selectedTier === 'verified' ? styles.stockOk : styles.stockUnknown]}>
+                    {selectedTier === 'verified' ? '✓ In stock' : 'Online at this retailer'}
+                  </Text>
                 </TouchableOpacity>
               )}
             />
@@ -357,6 +383,31 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
+  dealList: { flexShrink: 1 },
+  pinBubble: {
+    minWidth: 30,
+    height: 30,
+    paddingHorizontal: 7,
+    borderRadius: 15,
+    backgroundColor: '#FF7A00',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  pinBubbleText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  pinDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(120,120,120,0.85)',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  tierNote: { fontSize: 11, color: '#f59e0b', marginBottom: 8 },
+  stockNote: { fontSize: 11, fontWeight: '700', marginTop: 4 },
+  stockOk: { color: '#22c55e' },
+  stockUnknown: { color: '#94a3b8' },
   searchContainer: {
     position: 'absolute',
     top: 12,
@@ -414,7 +465,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 16,
-    maxHeight: '60%',
+    maxHeight: '75%',
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 8,

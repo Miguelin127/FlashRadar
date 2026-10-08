@@ -41,6 +41,7 @@
     "expo-web-browser": "~56.0.5",
     "firebase": "11.10.0",
     "firebase-functions": "^7.2.5",
+    "geofire-common": "^6.0.0",
     "geolib": "3.3.4",
     "metro": "^0.84.2",
     "react": "19.2.3",
