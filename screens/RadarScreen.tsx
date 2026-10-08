@@ -548,7 +548,24 @@ export default function RadarScreen() {
             </View>
 
             {/* ── Radar Scanner ── */}
-            <RadarScanner />
+            <View style={styles.scannerRow}>
+              <RadarScanner />
+              <View style={styles.mapDock}>
+                <Animated.View style={[styles.mapHalo, { transform: [{ scale: scanPulse }] }]} />
+                <TouchableOpacity
+                  style={styles.mapPill}
+                  onPress={() => navigation.navigate("Map")}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="navigate" size={24} color="#fff" />
+                  <Text style={styles.mapPillText}>MAP</Text>
+                </TouchableOpacity>
+                <View style={styles.mapLiveTag}>
+                  <View style={styles.mapLiveDot} />
+                  <Text style={styles.mapLiveText}>NEAR ME</Text>
+                </View>
+              </View>
+            </View>
 
             {/* ── Stat Pills ── */}
             <FlatList
@@ -636,6 +653,69 @@ export default function RadarScreen() {
 /* ─── Styles ─────────────────────────────────────────────────── */
 
 const styles = StyleSheet.create({
+  scannerRow: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapDock: {
+    position: 'absolute',
+    right: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapHalo: {
+    position: 'absolute',
+    top: -10,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: 'rgba(255,122,0,0.20)',
+  },
+  mapPill: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: ACCENT,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.28)',
+    shadowColor: ACCENT,
+    shadowOpacity: 0.75,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 10,
+  },
+  mapPillText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginTop: 1,
+  },
+  mapLiveTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(34,197,94,0.14)',
+  },
+  mapLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22c55e',
+  },
+  mapLiveText: {
+    color: '#22c55e',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   safe: { flex: 1 },
   list: { paddingHorizontal: 12, paddingBottom: 40 },
 

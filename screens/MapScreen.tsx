@@ -1,16 +1,37 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, Linking, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, Linking, ActivityIndicator, TextInput, Alert } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { db } from '../firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
-import { getDealRetailer } from '../utils/getDealRetailer';
+import { db, functions } from '../firebaseConfig';
+import { collection, getDocs, doc, getDoc, query, where, limit } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
-const GOOGLE_API_KEY = 'AIzaSyBeldwLWhSlf0bYzJHBmtce4R1XoEnXBXc';
-const STORE_TYPES = ['Target', 'Walmart', 'Best Buy', 'CVS', 'Home Depot', 'Walgreens', 'Sephora', 'Nike', 'Amazon', 'eBay'];
+const CHAIN_KEYS: { key: string; match: RegExp }[] = [
+  { key: 'walmart', match: /walmart/i },
+  { key: 'target', match: /target/i },
+  { key: 'homedepot', match: /home\s*depot/i },
+  { key: 'bestbuy', match: /best\s*buy/i },
+  { key: 'costco', match: /costco/i },
+];
+
+function storeNameToKey(name: string): string {
+  for (const c of CHAIN_KEYS) {
+    if (c.match.test(name)) return c.key;
+  }
+  return '';
+}
+
+function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const s1 = Math.sin(toRad(bLat - aLat) / 2);
+  const s2 = Math.sin(toRad(bLng - aLng) / 2);
+  const h = s1 * s1 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * s2 * s2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
 
 interface PhysicalStore {
   id: string;
@@ -18,6 +39,7 @@ interface PhysicalStore {
   address: string;
   latitude: number;
   longitude: number;
+  chainKey?: string;
 }
 
 interface Deal {
@@ -54,89 +76,95 @@ export default function MapScreen() {
     initMap();
   }, []);
 
-  const fetchDealsForStore = async (storeName: string) => {
+  const fetchDealsForStore = async (store: PhysicalStore) => {
     setLoadingDeals(true);
     try {
-      const normalizedStore = storeName.toLowerCase().replace(/\.com|\.ca/g, '').trim();
-      const dealsSnap = await getDocs(collection(db, 'deals_live'));
-
-      const deals: Deal[] = [];
-      dealsSnap.forEach(doc => {
-        const data = doc.data();
-        const dealRetailer = getDealRetailer(data);
-
-        if (dealRetailer === normalizedStore) {
-          deals.push({
-            id: doc.id,
-            title: data.title,
-            price: data.price,
-            originalPrice: data.originalPrice,
-            discountPercent: data.discountPercent,
-            imageUrl: data.imageUrl,
-            store: data.store,
-            hot: data.hot,
-            rare: data.rare,
-            lightning: data.lightning,
-            affiliateUrl: data.affiliateUrl,
-            merchantUrl: data.merchantUrl,
-            url: data.url,
-          });
-        }
+      const chainKey = store.chainKey || storeNameToKey(store.name);
+      if (chainKey === '') {
+        setSelectedDeals([]);
+        return;
+      }
+      const q = query(
+        collection(db, 'deals_live'),
+        where('storeKey', '==', chainKey),
+        where('live', '==', true),
+        limit(10)
+      );
+      const dealsSnap = await getDocs(q);
+      const deals: Deal[] = dealsSnap.docs.map(d => {
+        const data = d.data() as any;
+        return {
+          id: d.id,
+          title: data.title,
+          price: data.price,
+          originalPrice: data.originalPrice,
+          discountPercent: data.discountPercent,
+          imageUrl: data.imageUrl,
+          store: data.store,
+          hot: data.hot,
+          rare: data.rare,
+          lightning: data.lightning,
+          affiliateUrl: data.affiliateUrl,
+          merchantUrl: data.merchantUrl,
+          url: data.url,
+        };
       });
-
       setSelectedDeals(deals);
     } catch (error) {
       console.error('Error fetching deals:', error);
+      setSelectedDeals([]);
     } finally {
       setLoadingDeals(false);
     }
   };
 
-  const fetchStoresNearLocation = async (latitude: number, longitude: number, query?: string) => {
+  // Free path: pins come from the shared Firestore cache. No Places API call.
+  const loadCachedStores = async (latitude: number, longitude: number) => {
     try {
-      const allStores: PhysicalStore[] = [];
-      const storeTypesToSearch = query ? [query] : STORE_TYPES;
-
-      for (const storeType of storeTypesToSearch) {
-        const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': GOOGLE_API_KEY,
-            'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.formattedAddress',
-          },
-          body: JSON.stringify({
-            textQuery: storeType,
-            maxResultCount: 5,
-            locationBias: {
-              circle: {
-                center: { latitude, longitude },
-                radius: 20000.0,
-              },
-            },
-          }),
+      const snap = await getDoc(doc(db, 'config', 'storeLocationCache'));
+      const locations = (snap.data()?.locations ?? {}) as Record<string, any[]>;
+      const pins: PhysicalStore[] = [];
+      Object.keys(locations).forEach(chainKey => {
+        (locations[chainKey] || []).forEach((pl: any) => {
+          const lat = pl?.location?.latitude;
+          const lng = pl?.location?.longitude;
+          if (typeof lat === 'number' && typeof lng === 'number') {
+            if (distanceMeters(latitude, longitude, lat, lng) <= 40000) {
+              pins.push({
+                id: String(pl.id ?? lat + '_' + lng),
+                name: pl?.displayName?.text ?? chainKey,
+                address: pl?.formattedAddress ?? '',
+                latitude: lat,
+                longitude: lng,
+                chainKey,
+              });
+            }
+          }
         });
-
-        const data = await res.json();
-        if (data.places) {
-          data.places.forEach((place: any) => {
-            allStores.push({
-              id: place.id,
-              name: place.displayName?.text || storeType,
-              address: place.formattedAddress || '',
-              latitude: place.location?.latitude || 0,
-              longitude: place.location?.longitude || 0,
-            });
-          });
-        }
-      }
-
-      setStores(allStores);
-      setShowSearchButton(false);
-      setLoading(false);
-      console.log('Real stores loaded:', allStores.length);
+      });
+      setStores(pins);
+      setShowSearchButton(pins.length === 0);
+      console.log('Cached stores loaded:', pins.length);
     } catch (error) {
-      console.error('Error fetching stores:', error);
+      console.error('Error loading cached stores:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Paid path: only runs on an explicit user search, behind the callable.
+  const fetchStoresNearLocation = async (latitude: number, longitude: number, searchText?: string) => {
+    try {
+      const call = httpsCallable(functions, 'searchStoresNearby');
+      const res: any = await call({ lat: latitude, lng: longitude, query: searchText ?? '' });
+      const places = (res?.data?.places ?? []) as PhysicalStore[];
+      setStores(places);
+      setShowSearchButton(false);
+      console.log('Stores loaded:', places.length, 'source:', res?.data?.source);
+    } catch (error: any) {
+      console.error('Error fetching stores:', error?.message);
+      Alert.alert('Store search', error?.message || 'Could not search stores right now.');
+    } finally {
       setLoading(false);
     }
   };
@@ -162,7 +190,7 @@ export default function MapScreen() {
       setRegion(newRegion);
       setMapRegion(newRegion);
 
-      await fetchStoresNearLocation(latitude, longitude);
+      await loadCachedStores(latitude, longitude);
     } catch (error) {
       console.error('Map error:', error);
       setLoading(false);
@@ -200,7 +228,7 @@ export default function MapScreen() {
   };
 
   const handleShowDeals = async (store: PhysicalStore) => {
-    await fetchDealsForStore(store.name);
+    await fetchDealsForStore(store);
   };
 
   if (loading && !region) {
@@ -331,7 +359,7 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   searchContainer: {
     position: 'absolute',
-    top: 70,
+    top: 12,
     left: 16,
     right: 16,
     zIndex: 10,
