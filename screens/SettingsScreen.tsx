@@ -135,6 +135,10 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleLoginPress = () => {
+    navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+  };
+
   const handleDeleteAccount = async () => {
     Alert.alert(
       t.settings.deleteAccount,
@@ -316,13 +320,21 @@ export default function SettingsScreen() {
           <Text style={styles.buttonText}>{t.settings.inviteFriends}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.deleteAccount} onPress={handleDeleteAccount}>
+        {user ? (
+          <TouchableOpacity style={[styles.button, { backgroundColor: '#dc2626' }]} onPress={handleLogout}>
+            <Text style={styles.buttonText}>Log Out</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={[styles.button, { backgroundColor: '#FF7A00' }]} onPress={handleLoginPress}>
+            <Text style={styles.buttonText}>Log In</Text>
+          </TouchableOpacity>
+        )}
 
-        <TouchableOpacity style={[styles.button, { backgroundColor: '#dc2626' }]} onPress={handleLogout}>
-          <Text style={styles.buttonText}>Log Out</Text>
-        </TouchableOpacity>
-          <Text style={styles.deleteAccountText}>{t.settings.deleteAccount}</Text>
-        </TouchableOpacity>
+        {user && (
+          <TouchableOpacity style={styles.deleteAccount} onPress={handleDeleteAccount}>
+            <Text style={styles.deleteAccountText}>{t.settings.deleteAccount}</Text>
+          </TouchableOpacity>
+        )}
 
         {loading && <ActivityIndicator color={colors.accent} style={{ marginTop: 16 }} />}
 

@@ -44,8 +44,8 @@ if (Platform.OS !== "web") {
     initializeAuth(modularApp, {
       persistence: getReactNativePersistence(AsyncStorage),
     });
-  } catch (e) {
-    // already initialized (e.g. fast refresh) — safe to ignore
+  } catch (e: any) {
+    console.warn("Firebase Auth init failed:", e?.message);
   }
 }
 
