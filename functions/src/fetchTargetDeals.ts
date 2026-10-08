@@ -18,23 +18,44 @@ function buildTargetAffiliateUrl(tcin: string): string {
   return `https://goto.target.com/c/${TARGET_PUBLISHER_ID}/81938/2092?subId1=flashradar&u=${encodeURIComponent(productUrl)}`;
 }
 
-// Target category IDs for clearance/deals
-const CLEARANCE_CATEGORIES = [
-  { id: "5xt1a", name: "Clearance" },
-  { id: "55lzc", name: "Electronics Deals" },
-  { id: "5xsxk", name: "Toys Clearance" },
-  { id: "5xu1c", name: "Home Clearance" },
+// Deal-dense search terms. Target rotates category IDs; keywords are stable.
+const KEYWORDS = [
+  "tv", "laptop", "headphones", "tablet", "monitor",
+  "air fryer", "coffee maker", "vacuum", "toys", "kitchen",
 ];
 
-// Store IDs to query — high-volume stores
-// These are real Target store IDs across major markets
-const STORE_IDS = [
-  "3991", // Chicago
-  "1286", // Los Angeles
-  "2564", // New York
-  "1408", // Houston
-  "2911", // Phoenix
-];
+const REDSKY_KEY = "ff457966e64d5e877fdbad070f276d18";
+const VISITOR_ID = "0192F3A74C8B4D2E9F1A6B5C3D7E8F90";
+
+// Metro ZIPs. Real store numbers are resolved at runtime, so a retired
+// store never silently zeroes out a whole market.
+const ZIPS = ["60073", "90001", "10001", "77001", "85001"];
+
+async function resolveStoreIds(): Promise<string[]> {
+  const ids: string[] = [];
+  for (const zip of ZIPS) {
+    try {
+      const url =
+        "https://redsky.target.com/redsky_aggregations/v1/web/nearby_stores_v1" +
+        "?key=" + REDSKY_KEY +
+        "&limit=2&within=50&place=" + zip +
+        "&visitor_id=" + VISITOR_ID +
+        "&channel=WEB&page=%2Fsl%2F" + zip;
+      const res = await axios.get(url, { timeout: 10000 });
+      if (res.data?.errors) {
+        console.error("[Target] store lookup errors:", JSON.stringify(res.data.errors).slice(0, 200));
+      }
+      const stores = res.data?.data?.nearby_stores?.stores ?? [];
+      for (const st of stores) {
+        if (st?.store_id) ids.push(String(st.store_id));
+      }
+    } catch (err: any) {
+      console.error("[Target] store lookup failed for " + zip + ":", err?.message);
+    }
+  }
+  return Array.from(new Set(ids));
+}
+
 
 export const fetchTargetDeals = onSchedule(
   {
@@ -47,21 +68,25 @@ export const fetchTargetDeals = onSchedule(
     let written = 0;
     let skipped = 0;
 
-    for (const store of STORE_IDS) {
-      for (const category of CLEARANCE_CATEGORIES) {
+    const storeIds = await resolveStoreIds();
+    console.log("[Target] resolved " + storeIds.length + " real store ids");
+
+    for (const store of storeIds) {
+      for (const keyword of KEYWORDS) {
         try {
           // Target RedSky API — public endpoint
           const url =
-            `https://redsky.target.com/redsky_aggregations/v1/web/plp_search_v2` +
-            `?key=ff457966e64d5e877fdbad070f276d18` +
-            `&category=${category.id}` +
-            `&channel=WEB` +
-            `&count=24` +
-            `&offset=0` +
-            `&pricing_store_id=${store}` +
-            `&scheduled_delivery_store_id=${store}` +
-            `&store_ids=${store}` +
-            `&useragent=Mozilla%2F5.0`;
+            "https://redsky.target.com/redsky_aggregations/v1/web/plp_search_v2" +
+            "?key=" + REDSKY_KEY +
+            "&keyword=" + encodeURIComponent(keyword) +
+            "&channel=WEB&count=24&offset=0" +
+            "&page=%2Fs%2F" + encodeURIComponent(keyword) +
+            "&visitor_id=" + VISITOR_ID +
+            "&pricing_store_id=" + store +
+            "&store_ids=" + store +
+            "&default_purchasability_filter=true&new_search=true" +
+            "&platform=desktop&spellcheck=true&include_sponsored=true" +
+            "&useragent=Mozilla%2F5.0";
 
           const res = await axios.get(url, {
             headers: {
@@ -71,6 +96,9 @@ export const fetchTargetDeals = onSchedule(
             timeout: 10000,
           });
 
+          if (res.data?.errors) {
+            console.error("[Target] redsky errors:", JSON.stringify(res.data.errors).slice(0, 200));
+          }
           const products = res.data?.data?.search?.products ?? [];
 
           const batch = db.batch();
@@ -110,7 +138,7 @@ export const fetchTargetDeals = onSchedule(
                 store: "Target",
                 storeKey: "target",
                 source: "target",
-                category: category.name,
+                category: keyword,
                 storeId: store,
                 affiliateUrl,
                 merchantUrl: `https://www.target.com/p/-/A-${tcin}`,
@@ -139,7 +167,7 @@ export const fetchTargetDeals = onSchedule(
           await new Promise((r) => setTimeout(r, 500));
 
         } catch (err: any) {
-          console.error(`[Target] Error store=${store} cat=${category.id}:`, err?.message);
+          console.error("[Target] Error store=" + store + " kw=" + keyword + ":", err?.message);
         }
       }
     }
