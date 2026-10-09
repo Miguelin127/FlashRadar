@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFunctions } from "firebase/functions";
 // @ts-ignore - getReactNativePersistence exists in the RN bundle, missing from web types
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import { initializeAuth, getReactNativePersistence, getAuth } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 declare const global: any;
@@ -39,13 +39,22 @@ const firebaseConfig = {
 
 // Modular app + persistent auth (MUST init before compat firebase.auth())
 const modularApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+let modularAuth: any = null;
 if (Platform.OS !== "web") {
   try {
-    initializeAuth(modularApp, {
+    modularAuth = initializeAuth(modularApp, {
       persistence: getReactNativePersistence(AsyncStorage),
     });
   } catch (e: any) {
-    console.warn("Firebase Auth init failed:", e?.message);
+    // Auth was already initialized on this app (fast refresh in dev, or a
+    // module that touched auth first). Previously we logged and left
+    // modularAuth null, so getFunctions had no signed-in user and every
+    // callable failed with unauthenticated. Reuse the existing instance.
+    try {
+      modularAuth = getAuth(modularApp);
+    } catch (inner: any) {
+      console.warn("Firebase Auth fallback failed:", inner?.message);
+    }
   }
 }
 
@@ -62,4 +71,4 @@ console.log("🔥 Firestore project ID:", projectOptions.projectId || "unknown")
 
 const functions = getFunctions(modularApp, "us-central1");
 
-export { firebase, auth, db, functions };
+export { firebase, auth, db, functions, modularAuth };
