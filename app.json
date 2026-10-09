@@ -2,12 +2,12 @@
   "expo": {
     "name": "FlashRadar",
     "slug": "flashradar-app",
-    "version": "1.2.3",
+    "version": "1.2.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "buildNumber": "78",
+      "buildNumber": "51",
       "supportsTablet": false,
       "bundleIdentifier": "com.miguelin1.flashradarapp",
       "infoPlist": {
@@ -23,8 +23,7 @@
           }
         ]
       },
-      "requireFullScreen": true,
-      "buildNumber": "51"
+      "requireFullScreen": true
     },
     "android": {
       "package": "com.miguelin1.flashradarapp",
