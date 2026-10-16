@@ -117,13 +117,19 @@ export default function MapScreen() {
       const counts: Record<string, number> = {};
       snap.docs.forEach(d => { counts[d.id] = Number((d.data() as any).dealCount || 0); });
       setChainCounts(counts);
+      return counts;
     } catch (error) {
       console.error('Error loading chain counts:', error);
+      return {} as Record<string, number>;
     }
   };
 
   // Verified stores near the user: geohash bounds, then true distance.
-  const loadNearbyStores = async (latitude: number, longitude: number) => {
+  const loadNearbyStores = async (
+    latitude: number,
+    longitude: number,
+    counts: Record<string, number>
+  ) => {
     try {
       const radiusM = 40000;
       const bounds = geohashQueryBounds([latitude, longitude], radiusM);
@@ -136,6 +142,11 @@ export default function MapScreen() {
         if (x.active === false || x.verified === false) return;
         const dMeters = distanceBetween([x.lat, x.lng], [latitude, longitude]) * 1000;
         if (dMeters > radiusM) return;
+        // Only pin chains that have something to show. Seeded stores for a
+        // chain with no live deals would otherwise consume slots in the 120
+        // cap below and push chains that do have deals off the map.
+        if ((counts[x.storeKey] || 0) === 0) return;
+
         pins.push({
           id: docSnap.id,
           name: x.name,
@@ -195,7 +206,9 @@ export default function MapScreen() {
       setRegion(newRegion);
       setMapRegion(newRegion);
 
-      await Promise.all([loadNearbyStores(latitude, longitude), loadChainCounts()]);
+      // Counts first: the store query needs them to filter before capping.
+      const counts = await loadChainCounts();
+      await loadNearbyStores(latitude, longitude, counts);
     } catch (error) {
       console.error('Map error:', error);
       setLoading(false);
