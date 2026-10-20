@@ -27,7 +27,7 @@
     },
     "android": {
       "package": "com.miguelin1.flashradarapp",
-      "versionCode": 26,
+      "versionCode": 27,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
