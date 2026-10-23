@@ -79,3 +79,6 @@ android/
 /ios
 *.bak
 *.bak
+
+# Web build output (not deployed from this repo)
+web/dist/
