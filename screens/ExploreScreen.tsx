@@ -669,10 +669,18 @@ export default function ExploreScreen() {
             {(hasMore || !allExhausted()) && (
               <TouchableOpacity
                 style={styles.loadMoreBtn}
-                onPress={advancePage}
+                onPress={() => {
+                  // Mirror onEndReached: reveal more of the filtered list if
+                  // there is any, otherwise pull another page from source.
+                  // Calling advancePage alone did nothing once a filter had
+                  // fewer rows than visibleCount.
+                  if (hasMore) advancePage();
+                  else if (!allExhausted()) loadNextPage(false);
+                }}
               >
                 <Text style={styles.loadMoreText}>
-                  Load More{isAdmin ? ` · ${visibleDeals.length - visibleCount} left` : ""}
+                  {/* Only count when rows remain, else it reads "-878 left" */}
+                  Load More{isAdmin && hasMore ? ` · ${visibleDeals.length - visibleCount} left` : ""}
                 </Text>
                 <Ionicons name="chevron-down" size={16} color={ACCENT} />
               </TouchableOpacity>
