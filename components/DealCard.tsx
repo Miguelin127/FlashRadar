@@ -135,9 +135,9 @@ function DealCard({
     try {
       const discount = d.discountPercent ? `(${d.discountPercent}% OFF)` : "";
       await Share.share({
-        url: `https://flashradarapp.com/deal/${d.id}\n\n💾 Download App:\niOS: https://apps.apple.com/us/app/flashradar/id6670786841\nAndroid: https://play.google.com/store/apps/details?id=com.flashradar`,
+        url: `https://flashradarapp.com/deal/${d.id}`,
         title: d.title,
-        message: `🎉 Amazing Deal Found!\n\n${d.title}\n💰 $${(d.price || 0).toFixed(2)} ${discount}\n🏪 ${d.store || "Unknown Store"}\n\n📱 View on FlashRadar: https://flashradarapp.com/deal/${d.id}\n\n💾 Download App:\niOS: https://apps.apple.com/us/app/flashradar/id6670786841\nAndroid: https://play.google.com/store/apps/details?id=com.flashradar`,
+        message: `🎉 Amazing Deal Found!\n\n${d.title}\n💰 $${(d.price || 0).toFixed(2)} ${discount}\n🏪 ${d.store || "Unknown Store"}\n\n💾 Download App:\niOS: https://apps.apple.com/us/app/flashradar/id6755168361\nAndroid: https://play.google.com/store/apps/details?id=com.miguelin1.flashradarapp\n\n📱 View on FlashRadar: https://flashradarapp.com/deal/${d.id}`,
       });
     } catch (err) {
       console.error(err);
