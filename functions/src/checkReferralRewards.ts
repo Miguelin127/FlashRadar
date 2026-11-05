@@ -1,3 +1,11 @@
+/**
+ * SUPERSEDED — production no longer deploys from this file.
+ *
+ * This function now lives in the FlashRadar-Web-2.0 repo under
+ * functions/src/, and was redeployed from there with fixes. Editing
+ * this copy changes nothing, and deploying it would reintroduce the
+ * old behaviour.
+ */
 // functions/src/checkReferralRewards.ts
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as functions from "firebase-functions";
