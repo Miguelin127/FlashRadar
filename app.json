@@ -8,6 +8,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "buildNumber": "51",
+      "appleTeamId": "3ACF3SZ2ZJ",
       "supportsTablet": false,
       "bundleIdentifier": "com.miguelin1.flashradarapp",
       "infoPlist": {
@@ -87,7 +88,8 @@
         {
           "cameraPermission": "FlashRadar uses the camera to scan product barcodes for price lookup and flip analysis."
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ],
     "scheme": "flashradar"
   }
