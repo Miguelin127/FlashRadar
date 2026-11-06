@@ -16,6 +16,8 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from '../firebaseConfig';
 
 const { width } = Dimensions.get('window');
 
@@ -26,8 +28,47 @@ export default function DealDetailScreen() {
   const deal = route.params?.deal;
 
   const [favorite, setFavorite] = useState(false);
+  const [alertOn, setAlertOn] = useState(false);
+  const [alertBusy, setAlertBusy] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [coupons, setCoupons] = useState<StoreCoupon[]>([]);
+
+  // Show whether this deal is already being watched.
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !deal?.id) return;
+    let cancelled = false;
+    db.collection('users').doc(uid).collection('priceAlerts').doc(String(deal.id)).get()
+      .then((snap: any) => { if (!cancelled) setAlertOn(Boolean(snap?.exists)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [deal?.id]);
+
+  const togglePriceAlert = async () => {
+    if (!auth.currentUser) {
+      Alert.alert('Sign in required', 'Sign in to be notified when this price drops.');
+      return;
+    }
+    if (!deal?.id || alertBusy) return;
+
+    const next = !alertOn;
+    setAlertBusy(true);
+    setAlertOn(next); // optimistic; reverted below if the call fails
+    try {
+      await httpsCallable(functions, 'setPriceAlert')({
+        dealId: String(deal.id),
+        enabled: next,
+      });
+      if (next) {
+        Alert.alert('Watching this deal', 'You will get a notification if the price drops.');
+      }
+    } catch (e) {
+      setAlertOn(!next);
+      Alert.alert('Could not update alert', 'Please try again.');
+    } finally {
+      setAlertBusy(false);
+    }
+  };
   const dealCouponCode: string = String((deal as any)?.couponCode || (deal as any)?.promoCode || "").trim();
 
   useEffect(() => {
@@ -300,6 +341,18 @@ export default function DealDetailScreen() {
             </TouchableOpacity>
 
             <View style={styles.heroRightControls}>
+              <TouchableOpacity
+                style={[styles.circleButton, alertOn && { backgroundColor: '#FFE3C4' }]}
+                onPress={togglePriceAlert}
+                disabled={alertBusy}
+              >
+                <Ionicons
+                  name={alertOn ? 'notifications' : 'notifications-outline'}
+                  size={21}
+                  color={alertOn ? '#FF7A00' : '#111'}
+                />
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.circleButton}
                 onPress={shareDeal}
