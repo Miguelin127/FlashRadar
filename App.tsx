@@ -15,6 +15,8 @@ import { UserProvider } from "./context/UserContext";
 import RootNavigator from "./navigation/RootNavigator";
 import UpdatePrompt from "./components/UpdatePrompt";
 import { auth, db } from "./firebaseConfig";
+import { registerForPushToken } from "./utils";
+import { navigationRef, openDealById } from "./utils/navigationRef";
 
 async function captureAndSaveLocation(uid: string) {
   try {
@@ -51,7 +53,7 @@ async function saveFCMToken(uid: string) {
 }
   const { darkMode } = useTheme();
   return (
-    <NavigationContainer theme={darkMode ? DarkTheme : DefaultTheme}>
+    <NavigationContainer ref={navigationRef} theme={darkMode ? DarkTheme : DefaultTheme}>
       <RootNavigator />
     </NavigationContainer>
   );
@@ -88,6 +90,10 @@ export default function App() {
     const unsub = auth.onAuthStateChanged(async (user) => {
       if (user) {
         captureAndSaveLocation(user.uid);
+        // Registering only behind the Settings toggle left 1 of 22
+        // users with a push token, so no notification feature could
+        // reach anyone. Ask once on sign-in instead.
+        registerForPushToken().catch(() => {});
         // Identify user to RevenueCat so billing events carry the Firebase UID
         try { await Purchases.logIn(user.uid); } catch {}
       } else {
@@ -99,6 +105,25 @@ export default function App() {
       clearTimeout(timer);
       unsub();
     };
+  }, []);
+
+  // A notification tap should land on the item, not just open the app.
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data: any = response?.notification?.request?.content?.data ?? {};
+      if (data?.dealId) openDealById(String(data.dealId));
+    });
+
+    // A tap that launched the app from cold is not delivered to the
+    // listener above, only to this.
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        const data: any = response?.notification?.request?.content?.data ?? {};
+        if (data?.dealId) openDealById(String(data.dealId));
+      })
+      .catch(() => {});
+
+    return () => sub.remove();
   }, []);
 
   return (
