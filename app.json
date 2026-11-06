@@ -89,7 +89,8 @@
           "cameraPermission": "FlashRadar uses the camera to scan product barcodes for price lookup and flip analysis."
         }
       ],
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "./plugins/withNotificationServiceSource"
     ],
     "scheme": "flashradar"
   }
