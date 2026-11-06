@@ -18,6 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../firebaseConfig';
+import PriceHistoryChart from '../components/PriceHistoryChart';
 
 const { width } = Dimensions.get('window');
 
@@ -480,6 +481,8 @@ export default function DealDetailScreen() {
               </View>
             )}
           </View>
+
+          {deal.id ? <PriceHistoryChart dealId={deal.id} darkMode={darkMode} /> : null}
 
           {typeof deal.rakutenRate === "number" && deal.rakutenRate > 0 && price !== null && (
             <View style={styles.rakutenCard}>
