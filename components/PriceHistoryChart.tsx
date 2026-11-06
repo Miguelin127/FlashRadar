@@ -8,7 +8,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
 const USD = '\u0024';
@@ -30,8 +29,10 @@ export default function PriceHistoryChart({
     let cancelled = false;
     (async () => {
       try {
-        const snap = await getDoc(doc(db, 'deal_price_history', dealId));
-        const raw = snap.exists() ? snap.data().points : null;
+        // firebaseConfig exports a firebase/compat instance, so the
+        // modular doc()/getDoc() helpers cannot take it.
+        const snap = await db.collection('deal_price_history').doc(dealId).get();
+        const raw = snap.exists ? (snap.data() || {}).points : null;
         const clean: Point[] = Array.isArray(raw)
           ? raw
               .filter((x: any) => x && isFinite(Number(x.p)) && Number(x.p) > 0)
