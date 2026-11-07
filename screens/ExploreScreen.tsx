@@ -271,6 +271,12 @@ export default function ExploreScreen() {
       const storeScoped = storeFilter && storeFilter !== "all";
       let liveQ: any = db.collection("deals_live");
       if (storeScoped) liveQ = liveQ.where("storeKey", "==", storeFilter);
+      // Retired rows live in this collection too and outnumber live ones
+      // roughly 3:2. Without this filter the newest QUERY_LIMIT documents
+      // by createdAt are mostly dead, the client hides them afterwards,
+      // and Explore renders a fraction of a page while Load More counts
+      // rows that will never be shown.
+      liveQ = liveQ.where("live", "==", true);
       liveQ = liveQ.orderBy("createdAt", "desc").limit(QUERY_LIMIT);
       if (!reset && lastLiveDoc.current) liveQ = liveQ.startAfter(lastLiveDoc.current);
       let instoreQ: any = db.collection("deals_instore");
@@ -544,7 +550,7 @@ export default function ExploreScreen() {
             onPress={() => setOpenPanel(openPanel === "filter" ? null : "filter")}
           >
             <Text style={[styles.dropBtnText, { color: dark ? "#fff" : "#111" }]} numberOfLines={1}>
-              {filter === "all" ? "Filter" : filter === "hot" ? "🔥 Hot" : filter === "rare" ? "💎 Rare" : filter === "lightning" ? "⚡ Lightning" : "🏷 Code"}
+              {filter === "all" ? "Filter" : filter === "hot" ? "🔥 Hot" : filter === "rare" ? "💎 Rare" : filter === "lightning" ? "⚡ Lightning" : "🏷 Coupon Deals"}
             </Text>
             <Text style={[styles.dropCaret, { color: dark ? "#aaa" : "#666" }]}>▾</Text>
           </TouchableOpacity>
@@ -576,7 +582,7 @@ export default function ExploreScreen() {
               <TouchableOpacity key={f} onPress={() => { setFilter(f); setOpenPanel(null); }}
                 style={[styles.panelChip, { backgroundColor: filter === f ? ACCENT : dark ? "#242424" : "#fff" }]}>
                 <Text style={[styles.panelChipText, { color: filter === f ? "#000" : dark ? "#ddd" : "#333" }]}>
-                  {f === "all" ? "All" : f === "hot" ? "🔥 Hot" : f === "rare" ? "💎 Rare" : f === "lightning" ? "⚡ Lightning" : "🏷 Get Code"}
+                  {f === "all" ? "All" : f === "hot" ? "🔥 Hot" : f === "rare" ? "💎 Rare" : f === "lightning" ? "⚡ Lightning" : "🏷 Coupon Deals"}
                 </Text>
               </TouchableOpacity>
             ))}
