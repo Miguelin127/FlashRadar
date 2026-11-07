@@ -97,6 +97,7 @@ export default function FlipScannerScreen() {
   };
 
   const [intel, setIntel] = useState<any>(null);
+  const [offers, setOffers] = useState<any>(null);
 
   const handleBarcodeScanned = async ({ data }: BarcodeScanningResult) => {
     if (scanned) return;
@@ -162,6 +163,15 @@ export default function FlipScannerScreen() {
           setIntel(res.data ?? null);
         } catch { setIntel(null); }
       }
+
+      // Cross-retailer prices for the same barcode. Rate limited and
+      // cached server-side, because each uncached lookup spends ShopSavvy
+      // credits. Failure here must never break the flip scan.
+      try {
+        const priceCall = httpsCallable(functions, "scanProduct");
+        const pres: any = await priceCall({ code: data });
+        setOffers(pres.data ?? null);
+      } catch { setOffers(null); }
       await triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
       Animated.timing(successAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
     } catch (err) {
@@ -236,6 +246,29 @@ export default function FlipScannerScreen() {
               </TouchableOpacity>
             )}
 
+            {offers && offers.found && offers.offers && offers.offers.length > 0 && (
+              <View style={{ width: "100%", marginTop: 10, backgroundColor: "#0d0d0d", borderRadius: 10, borderWidth: 1, borderColor: "#222", padding: 10 }}>
+                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Prices at other stores</Text>
+                {offers.offers.slice(0, 6).map((o: any) => (
+                  <TouchableOpacity
+                    key={o.host}
+                    onPress={() => o.url && Linking.openURL(o.url)}
+                    style={{ flexDirection: "row", alignItems: "center", paddingVertical: 7, borderTopWidth: 1, borderTopColor: "#1a1a1a" }}
+                  >
+                    <Text style={{ color: "#ccc", fontSize: 13, flex: 1 }} numberOfLines={1}>{o.retailer}</Text>
+                    <Text style={{ color: "#00FF7F", fontWeight: "800", fontSize: 14, marginLeft: 8 }}>{"$" + Number(o.price).toFixed(2)}</Text>
+                  </TouchableOpacity>
+                ))}
+                <Text style={{ color: "#666", fontSize: 10, marginTop: 6 }}>
+                  {offers.asOf ? "Last seen " + String(offers.asOf).slice(0, 10) + " — prices may have changed" : "Prices may have changed since we last checked"}
+                </Text>
+              </View>
+            )}
+
+            {offers && offers.error === "limit" && (
+              <Text style={{ color: "#888", fontSize: 11, marginTop: 8, textAlign: "center" }}>{offers.message}</Text>
+            )}
+
             <TouchableOpacity
               style={[styles.primaryBtn, { backgroundColor: "#00C853" }]}
               onPress={async () => {
@@ -262,7 +295,7 @@ export default function FlipScannerScreen() {
 
             <TouchableOpacity
               style={styles.scanAgain}
-              onPress={() => { setScanned(false); setProduct(null); setIntel(null); successAnim.setValue(0); }}
+              onPress={() => { setScanned(false); setProduct(null); setIntel(null); setOffers(null); successAnim.setValue(0); }}
             >
               <Ionicons name="scan-outline" size={20} color="#fff" />
               <Text style={styles.scanText}>Scan Again</Text>
