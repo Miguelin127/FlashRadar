@@ -26,7 +26,7 @@ try { Clipboard = require("expo-clipboard"); } catch { Clipboard = null; }
    CONSTANTS
 ───────────────────────────── */
 
-const AMAZON_TAG = "flashradar20e-20";
+const AMAZON_TAG = "flashradar20-20";
 
 /* ─────────────────────────────
    TYPES
