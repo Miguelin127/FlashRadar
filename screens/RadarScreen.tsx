@@ -412,6 +412,9 @@ export default function RadarScreen() {
 
     const unsubs = COLS.map((col) =>
       db.collection(col)
+        // Same reason as Explore: retired rows share this collection and
+        // would otherwise fill the window with deals the UI then hides.
+        .where("live", "==", true)
         .orderBy("createdAt", "desc")
         .limit(QUERY_LIMIT)
         .onSnapshot(
